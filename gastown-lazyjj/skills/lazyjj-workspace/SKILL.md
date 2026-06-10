@@ -106,6 +106,9 @@ jj bookmark set <bookmark> -r @-
 jj git push --bookmark <bookmark>
 ```
 
+For the publish-only workflow, the pack also ships
+[`mol-lazyjj-spr-publish`](../../formulas/mol-lazyjj-spr-publish.toml).
+
 ## Publish Policy
 
 This pack is allowed to publish the formula's review bookmark when the formula
