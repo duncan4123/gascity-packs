@@ -7,3 +7,8 @@ description = "LazyJJ workspace and stack workflow for Gas Town jj workers."
 template = "jedi"
 scope = "rig"
 mode = "on_demand"
+
+[[named_session]]
+template = "tasksmith"
+scope = "rig"
+mode = "on_demand"
