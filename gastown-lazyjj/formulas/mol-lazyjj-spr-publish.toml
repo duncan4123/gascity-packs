@@ -1,0 +1,90 @@
+description = """
+LazyJJ stacked PR publication workflow.
+
+This formula is for a jj workspace that already contains a focused LazyJJ
+stack and needs to publish that stack to GitHub review objects.
+
+The workflow is intentionally stack-first:
+1. inspect the current stack and verify jj + GitHub prerequisites
+2. publish the stack as dependent or independent PRs
+3. record enough context that the next session can resume without guessing
+
+The formula does not create the feature work itself. It assumes the stack is
+already present and the author wants to publish it through jj spr.
+"""
+formula = "mol-lazyjj-spr-publish"
+version = 1
+
+[vars]
+[vars.publish_mode]
+description = "Publication mode: stacked publishes the full dependent stack; independent cherry-picks each change."
+default = "stacked"
+enum = ["stacked", "independent"]
+
+[vars.review_limit]
+description = "Optional limit for the stack review scan."
+default = "40"
+
+[[steps]]
+id = "inspect"
+title = "Inspect the LazyJJ stack before publishing"
+description = """
+Make sure the workspace is ready for publication and the stack shape is what
+you expect.
+
+```bash
+gc prime
+jj git fetch
+jj log -r 'trunk() | stack' --limit {{review_limit}}
+jj log -r 'stack & no_description'
+jj spr init
+jj spr list
+```
+
+If the stack is not ready, stop here and fix the workspace before publishing.
+"""
+
+[[steps]]
+id = "publish"
+title = "Publish the stacked PRs"
+needs = ["inspect"]
+description = """
+Publish the review stack to GitHub.
+
+```bash
+case "{{publish_mode}}" in
+  stacked)
+    jj spr diff --all
+    ;;
+  independent)
+    jj spr diff --cherry-pick
+    ;;
+  *)
+    echo "invalid publish_mode: {{publish_mode}}" >&2
+    exit 1
+    ;;
+esac
+```
+
+If the repository requires a later land step, the published review objects are
+now ready for `jj spr land`.
+"""
+
+[[steps]]
+id = "record"
+title = "Record the publication state"
+needs = ["publish"]
+description = """
+Capture the published stack state for the next session.
+
+```bash
+jj log -r 'trunk() | stack' --limit {{review_limit}}
+jj spr list
+```
+
+Exit criteria:
+
+- the stack is published as PRs
+- the next session can resume from the same jj graph state
+- no extra work is hidden outside the stack
+"""

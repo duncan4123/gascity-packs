@@ -38,5 +38,5 @@ The tutorial this pack follows boils down to:
 - [`pack.toml`](./pack.toml)
 - [`agents/jedi/prompt.template.md`](./agents/jedi/prompt.template.md)
 - [`formulas/mol-polecat-lazyjj-work.toml`](./formulas/mol-polecat-lazyjj-work.toml)
+- [`formulas/mol-lazyjj-spr-publish.toml`](./formulas/mol-lazyjj-spr-publish.toml)
 - [`skills/lazyjj-workspace/SKILL.md`](./skills/lazyjj-workspace/SKILL.md)
-
