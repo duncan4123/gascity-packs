@@ -1,0 +1,156 @@
+description = """
+LazyJJ tutorial workflow for creating a stacked series of PRs.
+
+This formula follows the upstream LazyJJ tutorial:
+`website/src/content/docs/tutorials/create-stack.md`.
+Keep the command sequence aligned with that tutorial.
+"""
+formula = "mol-lazyjj-create-stack"
+version = 1
+
+[[steps]]
+id = "start"
+title = "Start from trunk"
+description = """
+Start a fresh stack from trunk.
+
+```bash
+jj stack-start
+```
+
+Exit criteria:
+
+- the workspace is ready for the first stack commit
+"""
+
+[[steps]]
+id = "database-schema"
+title = "Create the database schema commit"
+needs = ["start"]
+description = """
+Create and bookmark the first commit in the stack.
+
+```bash
+# Make your changes
+vim src/database/schema.sql
+vim src/database/migrations/001_users.sql
+
+# Describe the commit
+jj describe -m "Add user database schema"
+
+# Create a bookmark for this PR
+jj create db-schema
+
+# Start the next commit
+jj new
+```
+
+Exit criteria:
+
+- the schema commit is described
+- the `db-schema` bookmark exists
+- the workspace has moved to the next commit
+"""
+
+[[steps]]
+id = "user-model"
+title = "Create the user model commit"
+needs = ["database-schema"]
+description = """
+Create and bookmark the second commit in the stack.
+
+```bash
+# Make changes that depend on the schema
+vim src/models/user.js
+vim src/models/user.test.js
+
+# Describe it
+jj describe -m "Add user model"
+
+# Create a bookmark
+jj create user-model
+
+# Start the next commit
+jj new
+```
+
+Exit criteria:
+
+- the model commit is described
+- the `user-model` bookmark exists
+- the workspace has moved to the next commit
+"""
+
+[[steps]]
+id = "user-api"
+title = "Create the API commit"
+needs = ["user-model"]
+description = """
+Create and bookmark the third commit in the stack.
+
+```bash
+# Make changes that use the model
+vim src/api/users.js
+vim src/api/users.test.js
+
+# Describe it
+jj describe -m "Add user API endpoints"
+
+# Create a bookmark
+jj create user-api
+```
+
+Exit criteria:
+
+- the API commit is described
+- the `user-api` bookmark exists
+"""
+
+[[steps]]
+id = "inspect"
+title = "View the stack"
+needs = ["user-api"]
+description = """
+Inspect the stack before publishing.
+
+```bash
+jj stack-view
+```
+
+To view stack file changes:
+
+```bash
+jj stack-files
+```
+
+Exit criteria:
+
+- the stack order is understood
+- the stack contains the expected commits and bookmarks
+"""
+
+[[steps]]
+id = "publish"
+title = "Push all PRs"
+needs = ["inspect"]
+description = """
+Create or update PRs for the stack.
+
+```bash
+jj pr-stack-create
+```
+
+After a PR merges, sync and push the updated stack:
+
+```bash
+# Sync with trunk - this rebases your remaining stack
+jj stack-sync
+
+# Push the updated stack
+jj stack-submit
+```
+
+Exit criteria:
+
+- the stack is published or the command reports the reason publication failed
+"""

@@ -1,0 +1,129 @@
+description = """
+LazyJJ tutorial workflow for creating a single PR.
+
+This formula follows the upstream LazyJJ tutorial:
+`website/src/content/docs/tutorials/create-pr.md`.
+Keep the command sequence aligned with that tutorial; do not treat this formula
+as a replacement for the source tutorial.
+"""
+formula = "mol-lazyjj-create-pr"
+version = 1
+
+[[steps]]
+id = "start"
+title = "Start fresh from trunk"
+description = """
+Start a new LazyJJ stack from trunk.
+
+```bash
+jj stack-start
+```
+
+Exit criteria:
+
+- the workspace is on a fresh LazyJJ working commit
+- the stack is ready for the PR change
+"""
+
+[[steps]]
+id = "edit"
+title = "Make and inspect the change"
+needs = ["start"]
+description = """
+Make the tutorial change and inspect it before describing the commit.
+
+```bash
+# Edit files with your favorite editor
+vim src/auth.js
+
+# Check what's changed
+jj status
+
+# See the diff
+jj diff
+```
+
+Exit criteria:
+
+- the intended files have been edited
+- `jj status` and `jj diff` show only the intended PR change
+"""
+
+[[steps]]
+id = "describe"
+title = "Describe the commit"
+needs = ["edit"]
+description = """
+Describe the current LazyJJ commit.
+
+```bash
+jj describe -m "feat: Add user authentication"
+```
+
+Exit criteria:
+
+- the current commit has a PR-ready description
+"""
+
+[[steps]]
+id = "bookmark"
+title = "Create a PR bookmark"
+needs = ["describe"]
+description = """
+Create the bookmark that will become the PR branch.
+
+```bash
+jj create auth-feature
+```
+
+Exit criteria:
+
+- the PR bookmark exists for the described commit
+"""
+
+[[steps]]
+id = "publish"
+title = "Push and create the PR"
+needs = ["bookmark"]
+description = """
+Push the bookmarked commit and create the PR.
+
+```bash
+jj pr-stack-create
+```
+
+Exit criteria:
+
+- the PR exists or the command reports the reason it could not be created
+"""
+
+[[steps]]
+id = "update"
+title = "Respond to review feedback"
+needs = ["publish"]
+description = """
+Apply requested changes and push the update.
+
+```bash
+# Make your changes
+vim src/auth.js
+
+# Changes are automatically in your commit!
+# Just push the update
+jj stack-submit
+```
+
+Useful follow-up commands from the tutorial:
+
+```bash
+# View PR details in terminal
+jj pr-view
+
+# Open PR in browser
+jj pr-open
+```
+
+Exit criteria:
+
+- review updates are pushed to the existing PR
+"""

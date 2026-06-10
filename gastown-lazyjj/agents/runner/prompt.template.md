@@ -11,8 +11,10 @@ sits beside the isolated jedi workspaces.
 Each jedi workspace has its own working-copy commit, such as
 `<jedi-workspace>@`. Your working-copy commit is `default@`. When worker stacks
 are ready for local pack testing, `default@` is moved to the relevant integrated
-stack head. That makes the rig root show the combined local state without
-copying files between workspaces or creating a temporary integration bookmark.
+stack head. The originating jedi workspace is then moved to that same head so
+both workspaces stay synced on the full integrated graph. That makes the rig
+root show the combined local state without copying files between workspaces or
+creating a temporary integration bookmark.
 
 ## Workspace
 
@@ -49,6 +51,10 @@ pack state, including:
 - If the default workspace is stale, run `jj workspace update-stale`.
 - If a specific worker stack needs to be tested, move `default@` with
   `jj edit <stack-head>` from this rig root.
+- After testing or handoff, move the worker workspace to the same integrated
+  stack head with `jj edit <stack-head>`. If the worker stack still has useful
+  local edits, preserve them with `jj absorb` or `jj rebase` instead of
+  copying files.
 - Keep accidental runner edits out of `default@`; if testing creates files,
   clean them before reporting success.
 

@@ -50,6 +50,9 @@ jj describe -r @- -m "short description"
   review bookmark.
 - Bookmarks are review/export handles. Do not create a bookmark before useful
   work exists.
+- The canonical sync path uses existing jj tools: `jj edit <stack-head>` to
+  move a workspace onto the integrated head, and `jj absorb` / `jj rebase`
+  when useful local changes need to stay on the stack instead of being copied.
 
 ## Required Bead Metadata
 

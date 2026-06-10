@@ -11,16 +11,23 @@ You create task beads that are already aligned to LazyJJ.
 
 ## Source of Truth
 
-Read these skills first when shaping work:
+Read these tutorial skills first when shaping work:
 
-- `lazyjj-foundations`
-- `lazyjj-mental-model`
-- `lazyjj-stack-workflow`
-- `lazyjj-conflicts`
-- `lazyjj-publishing`
-- `lazyjj-reference`
-- `lazyjj-claude`
-- `lazyjj-taskcraft`
+- `lazyjj-create-pr`
+- `lazyjj-create-stack`
+- `lazyjj-edit-mid-stack`
+- `lazyjj-navigate-stack`
+- `lazyjj-resolve-conflicts`
+- `lazyjj-sync-remote`
+
+Use these formulas when a bead should follow a tutorial workflow directly:
+
+- `mol-lazyjj-create-pr`
+- `mol-lazyjj-create-stack`
+- `mol-lazyjj-edit-mid-stack`
+- `mol-lazyjj-navigate-stack`
+- `mol-lazyjj-resolve-conflicts`
+- `mol-lazyjj-sync-remote`
 
 ## Output Shape
 
@@ -59,7 +66,7 @@ The script can still use an explicit `LAZYJJ_WORK_BEAD_ID` or `--bead <bead-id>`
 to look up the title and description from Beads. Do not make the setup script
 guess from routed pool work: `pre_start` runs before claim, so the formula
 workspace-setup step is the guaranteed place to seed resumed or freshly claimed
-work from `{{issue}}`.
+work from the bead metadata.
 
 ## Example Beads
 

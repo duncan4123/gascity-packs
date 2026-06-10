@@ -1,79 +1,40 @@
 schema = 1
 
 [[pack]]
-name = "gascity"
-description = "Gas City planning and implementation workflow pack."
-source = "https://github.com/gastownhall/gascity-packs/tree/main/gascity"
+name = "gascity-jj"
+description = "Gas City planning and implementation workflow pack for jj-backed work."
+source = "https://github.com/gastownhall/gascity-packs/tree/main/gascity-jj"
 source_kind = "git"
 
   [[pack.release]]
-  version = "0.1.1"
+  version = "0.1.0"
   ref = "main"
-  commit = "788b6e8ec224a8951c728ef6da74dab8bc04d474"
-  hash = "sha256:d97b8830f959a688f4cb3c61497f630adc4815bb76c11afefb2907f3163a7796"
-  description = "Refresh Gas City planning pack release pin."
+  commit = "91e2106f5d74e4b528adc77c52bb525adb602b87"
+  hash = "sha256:a5d2beb0074b1cb4635e1b698ea52864e11c382edbb5d4d09e6af6bbaa3c9586"
+  description = "Initial Gas City jj workflow pack release."
 
 [[pack]]
-name = "gastown"
-description = "Default Gas Town coding workflow pack."
-source = "https://github.com/gastownhall/gascity-packs/tree/main/gastown"
+name = "gastown-lazyjj"
+description = "LazyJJ workspace and stack workflow for Gas Town jj workers."
+source = "https://github.com/gastownhall/gascity-packs/tree/main/gastown-lazyjj"
 source_kind = "git"
 
   [[pack.release]]
-  version = "0.1.1"
+  version = "0.1.0"
   ref = "main"
-  commit = "788b6e8ec224a8951c728ef6da74dab8bc04d474"
-  hash = "sha256:275565384903ae22bf9187aa821df135724bd4a639be18e4b4e76f739a555cc4"
-  description = "Refresh Gas Town workflow pack release pin."
+  commit = "91e2106f5d74e4b528adc77c52bb525adb602b87"
+  hash = "sha256:fd3b43696e3c61d06624e9a7b96031d3015dbb90c03108cf0ad0d4861e285595"
+  description = "Initial LazyJJ workflow pack release."
 
 [[pack]]
-name = "cass"
-description = "Coding Agent Session Search prompt fragments and skill overlays for Gas City."
-source = "https://github.com/gastownhall/gascity-packs/tree/main/cass"
+name = "packer"
+description = "Pack development and testing toolkit for live Gas City environments."
+source = "https://github.com/gastownhall/gascity-packs/tree/main/packer"
 source_kind = "git"
 
   [[pack.release]]
-  version = "0.1.1"
+  version = "0.1.0"
   ref = "main"
-  commit = "788b6e8ec224a8951c728ef6da74dab8bc04d474"
-  hash = "sha256:b2b0ca765403fcdfdf3b22bed4752c8983e549bde98cd5f5f4467c92189cebdd"
-  description = "Refresh CASS session-search pack release pin."
-
-[[pack]]
-name = "discord"
-description = "Discord services, commands, and prompt fragments for Gas City."
-source = "https://github.com/gastownhall/gascity-packs/tree/main/discord"
-source_kind = "git"
-
-  [[pack.release]]
-  version = "0.1.1"
-  ref = "main"
-  commit = "788b6e8ec224a8951c728ef6da74dab8bc04d474"
-  hash = "sha256:17885fe177070d563299ced50b9e43f5ae2aab43f95483822f7bee0a8383191f"
-  description = "Refresh Discord pack release pin."
-
-[[pack]]
-name = "github"
-description = "GitHub webhook intake services and commands for Gas City."
-source = "https://github.com/gastownhall/gascity-packs/tree/main/github"
-source_kind = "git"
-
-  [[pack.release]]
-  version = "0.1.1"
-  ref = "main"
-  commit = "788b6e8ec224a8951c728ef6da74dab8bc04d474"
-  hash = "sha256:53652fd1261adbcff8995fa815750f953fd692ccc2032139d874e9e9a555df73"
-  description = "Refresh GitHub intake pack release pin."
-
-[[pack]]
-name = "slack-full"
-description = "Slack services, commands, and adapter integration for Gas City."
-source = "https://github.com/gastownhall/gascity-packs/tree/main/slack-full"
-source_kind = "git"
-
-  [[pack.release]]
-  version = "0.0.2"
-  ref = "main"
-  commit = "788b6e8ec224a8951c728ef6da74dab8bc04d474"
-  hash = "sha256:8b9d25324fe9af487398a6237a6f8d1614a5b32e85fceec935450c7b4d523d00"
-  description = "Refresh Slack pack release pin."
+  commit = "91e2106f5d74e4b528adc77c52bb525adb602b87"
+  hash = "sha256:ddff09c419c36404672f708a0d8c7d7d5d28cbae4a4918d4d551277cca89d8a1"
+  description = "Initial pack development toolkit release."

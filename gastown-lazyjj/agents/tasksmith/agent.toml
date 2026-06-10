@@ -1,9 +1,8 @@
 scope = "rig"
 provider = "codex-mini"
-wake_mode = "fresh"
+wake_mode = "resume"
 work_dir = ".gc/workspaces/{{.Rig}}/tasksmith/{{.AgentBase}}"
 nudge = "Create LazyJJ-aligned task beads from tutorial skills and stack-aware requirements."
-pre_start = ["{{.ConfigDir}}/assets/scripts/workspace-setup.sh {{.RigRoot}} {{.WorkDir}} {{.AgentBase}} --sync"]
 idle_timeout = "2h"
-min_active_sessions = 0
+min_active_sessions = 1
 max_active_sessions = 1

@@ -75,23 +75,24 @@ on their hook, they execute. No confirmation. No questions. No waiting.
 
 **The handoff contract:**
 When work is assigned to you:
-1. You will find it on your hook
+1. You will find it via `gc bd list --assignee="$GC_SESSION_NAME" --status=in_progress`
 2. You will understand what it is (`gc bd show <id>`)
 3. You will begin immediately
 
-Hooked work is an assignment. If `gc hook "{{ .AgentName }}"` returns work,
+Hooked work is an assignment. If `gc hook` or `{{ .WorkQuery }}` returns work,
 execute it.
 
 ## Your Role: A Piston
 
 **Your startup behavior:**
-1. Check for assigned recovery work or routed pool work with `gc hook "{{ .AgentName }}"`
-2. Work found -> claim immediately if needed, then EXECUTE
-3. No work found -> check mail, then wait for assignment
+1. Check for work (`gc bd list --assignee="$GC_SESSION_NAME" --status=in_progress`)
+2. If nothing assigned -> `{{ .WorkQuery }}` to find pool work
+3. Work found -> claim immediately if needed, then EXECUTE
+4. No work found -> check mail, then wait for assignment
 
-If you were nudged rather than freshly spawned, run `gc hook "{{ .AgentName }}"`.
-That lookup checks assigned work first and only falls through to pool work
-routed to this exact agent.
+If you were nudged rather than freshly spawned, run `gc hook` or
+`{{ .WorkQuery }}`. That lookup checks assigned work first (session bead ID,
+runtime session name, then alias) and only falls through to routed pool work.
 
 You were spawned with work. There is no extra decision to make. Run it.
 
@@ -197,8 +198,9 @@ Your formula: `mol-polecat-lazyjj-work`
 > Jedi-vs-jedi races are the #1 source of churn — close the window.
 
 ```bash
-# Step 1a: Find assigned recovery work or pool-routed work.
-gc hook "{{ .AgentName }}"
+# Step 1a: Check for assigned recovery work.
+gc bd list --assignee="$GC_SESSION_NAME" --status=in_progress
+{{ .WorkQuery }}                                             # Find pool work
 
 # Step 1b: If the returned bead is open/unassigned, CLAIM IMMEDIATELY.
 gc bd update <id> --claim                                       # Atomic CAS
@@ -214,10 +216,10 @@ gc mail inbox
 # Step 4: Execute — read formula steps and work through them in order
 ```
 
-When nudged after dispatch, run `gc hook "{{ .AgentName }}"`. That lookup
+When nudged after dispatch, run `gc hook` or `{{ .WorkQuery }}`. That lookup
 checks assigned work first (session bead ID, runtime session name, then
-alias) and only falls through to unassigned pool work routed to
-`{{ .AgentName }}`.
+alias) and only falls through to unassigned pool work routed to the current
+session.
 
 **Hook/work query -> Read formula steps -> Follow in order -> formula submit.**
 

@@ -1,0 +1,151 @@
+description = """
+LazyJJ tutorial workflow for resolving conflicts.
+
+This formula follows the upstream LazyJJ tutorial:
+`website/src/content/docs/tutorials/resolve-conflicts.md`.
+Keep the command sequence aligned with that tutorial.
+"""
+formula = "mol-lazyjj-resolve-conflicts"
+version = 1
+
+[[steps]]
+id = "inspect"
+title = "View conflicts"
+description = """
+Inspect the current conflict state.
+
+```bash
+# Check current commit
+jj status
+
+# View all commits - conflicted ones are marked
+jj log -r stack
+
+# See the conflict markers
+cat file.txt
+```
+
+To list conflicted commits:
+
+```bash
+jj log -r "conflict()"
+```
+
+Exit criteria:
+
+- conflicted files and commits are identified
+"""
+
+[[steps]]
+id = "resolve"
+title = "Resolve the conflicted commit"
+needs = ["inspect"]
+description = """
+Navigate to the conflicted commit and open the resolver.
+
+```bash
+# Navigate to the conflicted commit
+jj edit <conflicted-commit-id>
+
+# Open the conflict resolver
+jj resolve
+```
+
+Exit criteria:
+
+- the resolver has been run for the conflicted commit
+"""
+
+[[steps]]
+id = "sync-conflicts"
+title = "Resolve conflicts from sync"
+description = """
+Use this path when sync introduces conflicts.
+
+```bash
+# Sync brings in changes that conflict
+jj stack-sync
+
+# Resolve before pushing
+jj resolve
+jj stack-submit
+```
+
+Exit criteria:
+
+- sync conflicts are resolved
+- the updated stack is pushed
+"""
+
+[[steps]]
+id = "mid-stack-conflicts"
+title = "Resolve mid-stack conflicts"
+description = """
+Use this path when editing a stack commit creates descendant conflicts.
+
+```bash
+# You have a stack
+jj log
+# @  commit-3 "Add API"
+# ○  commit-2 "Add models"
+# ○  commit-1 "Add database schema"
+# ○  main
+
+# Edit the middle commit
+jj edit commit-2
+vim src/models.js  # Make breaking changes
+
+# This might conflict with commit-3 since it uses the models
+# JJ automatically rebases commit-3 and marks conflicts if any
+
+# Go to commit-3 to see
+jj edit commit-3
+jj status
+# May show conflicts if your changes to models break the API
+
+# Resolve
+jj resolve
+# Fix the conflicts in the API to match new model
+
+# Done! The stack is consistent
+```
+
+Exit criteria:
+
+- descendant conflicts are resolved where they occur
+"""
+
+[[steps]]
+id = "recover"
+title = "Recover from a bad resolution"
+description = """
+Undo a bad resolution and resolve again.
+
+```bash
+# Resolved conflicts
+jj resolve
+# ... made wrong choices ...
+
+# Undo the resolution
+jj undo
+# Conflict state restored, can resolve again
+```
+
+For AI-assisted conflict resolution:
+
+```bash
+# AI-assisted conflict resolution
+jj claude-resolve
+```
+
+If Claude's resolution is wrong:
+
+```bash
+jj undo  # Undo Claude's resolution
+jj resolve  # Resolve manually
+```
+
+Exit criteria:
+
+- the conflict state is correct or restored for another resolution attempt
+"""
