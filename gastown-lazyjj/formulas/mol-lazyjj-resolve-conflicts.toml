@@ -1,12 +1,24 @@
 description = """
-LazyJJ tutorial workflow for resolving conflicts.
+LazyJJ workflow for real work that resolves LazyJJ stack conflicts.
 
-This formula follows the upstream LazyJJ tutorial:
+Use this when the assigned bead is an actual conflict-resolution job. The bead
+supplies the conflicted stack, expected outcome, affected files, and
+verification. This formula supplies the LazyJJ procedure.
+
+This formula stays aligned with the upstream LazyJJ tutorial:
 `website/src/content/docs/tutorials/resolve-conflicts.md`.
-Keep the command sequence aligned with that tutorial.
 """
 formula = "mol-lazyjj-resolve-conflicts"
 version = 1
+
+[vars]
+[vars.conflicted_change_id]
+description = "Conflicted change ID to edit directly."
+required = true
+
+[vars.verification_command]
+description = "Focused command that proves the resolved stack."
+default = ""
 
 [[steps]]
 id = "inspect"
@@ -21,8 +33,7 @@ jj status
 # View all commits - conflicted ones are marked
 jj log -r stack
 
-# See the conflict markers
-cat file.txt
+jj diff
 ```
 
 To list conflicted commits:
@@ -45,10 +56,11 @@ Navigate to the conflicted commit and open the resolver.
 
 ```bash
 # Navigate to the conflicted commit
-jj edit <conflicted-commit-id>
+jj edit "{{conflicted_change_id}}"
 
 # Open the conflict resolver
 jj resolve
+{{verification_command}}
 ```
 
 Exit criteria:
@@ -84,30 +96,11 @@ description = """
 Use this path when editing a stack commit creates descendant conflicts.
 
 ```bash
-# You have a stack
 jj log
-# @  commit-3 "Add API"
-# ○  commit-2 "Add models"
-# ○  commit-1 "Add database schema"
-# ○  main
-
-# Edit the middle commit
-jj edit commit-2
-vim src/models.js  # Make breaking changes
-
-# This might conflict with commit-3 since it uses the models
-# JJ automatically rebases commit-3 and marks conflicts if any
-
-# Go to commit-3 to see
-jj edit commit-3
+jj edit <conflicted-descendant-change-id>
 jj status
-# May show conflicts if your changes to models break the API
-
-# Resolve
 jj resolve
-# Fix the conflicts in the API to match new model
-
-# Done! The stack is consistent
+{{verification_command}}
 ```
 
 Exit criteria:

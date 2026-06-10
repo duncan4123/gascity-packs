@@ -54,7 +54,8 @@ pack state, including:
 - After testing or handoff, move the worker workspace to the same integrated
   stack head with `jj edit <stack-head>`. If the worker stack still has useful
   local edits, preserve them with `jj absorb` or `jj rebase` instead of
-  copying files.
+  copying files. That keeps the stack visible in jj history instead of
+  flattening both workspaces onto one undifferentiated commit.
 - Keep accidental runner edits out of `default@`; if testing creates files,
   clean them before reporting success.
 

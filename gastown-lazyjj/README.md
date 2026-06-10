@@ -8,9 +8,11 @@ LazyJJ workspace and stack workflow pack for Gas Town jj workers.
 - `tasksmith` named sessions for LazyJJ-aligned task and bead authoring
 - the `mol-polecat-lazyjj-work` formula for workspace-bound stack work
 - the `lazyjj-workspace` skill for implementation and handoff rules
-- tutorial formulas and matching skill wrappers for LazyJJ create-PR,
+- specialized workflow formulas and matching skill wrappers for LazyJJ create-PR,
   create-stack, edit-mid-stack, navigate-stack, resolve-conflicts, and
   sync-remote workflows
+- tasksmith defaults normal pack work to `mol-polecat-lazyjj-work` and keeps
+  the specialized workflow formulas for real beads that need those operations
 - reusable template fragments for JJ mental-model and stack workflow guidance
 
 ## Why it exists
@@ -55,7 +57,9 @@ stack head. When work moves from one workspace to the other:
    `jj absorb` or `jj rebase` instead of copying files manually
 
 That keeps the next round of work in either workspace based on the full,
-current stack instead of a partial local view.
+current stack instead of a partial local view. The goal is graph ancestry, not
+file copying: the shared head should visibly advance, and the other workspace
+should follow by jj history operations.
 
 ## Pack entry points
 

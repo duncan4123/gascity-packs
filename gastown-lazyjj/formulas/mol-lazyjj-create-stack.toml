@@ -1,12 +1,25 @@
 description = """
-LazyJJ tutorial workflow for creating a stacked series of PRs.
+LazyJJ workflow for real work that should become a stacked series of PRs.
 
-This formula follows the upstream LazyJJ tutorial:
+Use this when the assigned bead is an actual job with dependent slices that
+should review as a stack. The bead supplies the concrete scope, stack slices,
+acceptance criteria, and verification. This formula supplies the LazyJJ
+procedure.
+
+This formula stays aligned with the upstream LazyJJ tutorial:
 `website/src/content/docs/tutorials/create-stack.md`.
-Keep the command sequence aligned with that tutorial.
 """
 formula = "mol-lazyjj-create-stack"
 version = 1
+
+[vars]
+[vars.stack_plan]
+description = "Ordered summary of the stack slices this job should create."
+required = true
+
+[vars.verification_command]
+description = "Focused command to run for each slice or before publication."
+default = ""
 
 [[steps]]
 id = "start"
@@ -25,85 +38,69 @@ Exit criteria:
 
 [[steps]]
 id = "database-schema"
-title = "Create the database schema commit"
+title = "Create the first stack commit"
 needs = ["start"]
 description = """
-Create and bookmark the first commit in the stack.
+Create and bookmark the first coherent slice from the bead's stack plan.
 
 ```bash
-# Make your changes
-vim src/database/schema.sql
-vim src/database/migrations/001_users.sql
-
-# Describe the commit
-jj describe -m "Add user database schema"
-
-# Create a bookmark for this PR
-jj create db-schema
-
-# Start the next commit
+jj status
+jj diff
+{{verification_command}}
+jj describe -m "<first slice summary>"
+jj create <first-slice-bookmark>
 jj new
 ```
 
 Exit criteria:
 
-- the schema commit is described
-- the `db-schema` bookmark exists
+- the first stack commit is described
+- the first stack bookmark exists
 - the workspace has moved to the next commit
 """
 
 [[steps]]
 id = "user-model"
-title = "Create the user model commit"
+title = "Create the second stack commit"
 needs = ["database-schema"]
 description = """
-Create and bookmark the second commit in the stack.
+Create and bookmark the second coherent slice from the bead's stack plan.
 
 ```bash
-# Make changes that depend on the schema
-vim src/models/user.js
-vim src/models/user.test.js
-
-# Describe it
-jj describe -m "Add user model"
-
-# Create a bookmark
-jj create user-model
-
-# Start the next commit
+jj status
+jj diff
+{{verification_command}}
+jj describe -m "<second slice summary>"
+jj create <second-slice-bookmark>
 jj new
 ```
 
 Exit criteria:
 
-- the model commit is described
-- the `user-model` bookmark exists
+- the second stack commit is described
+- the second stack bookmark exists
 - the workspace has moved to the next commit
 """
 
 [[steps]]
 id = "user-api"
-title = "Create the API commit"
+title = "Create the final stack commit"
 needs = ["user-model"]
 description = """
-Create and bookmark the third commit in the stack.
+Create and bookmark the final coherent slice from the bead's stack plan.
 
 ```bash
-# Make changes that use the model
-vim src/api/users.js
-vim src/api/users.test.js
-
-# Describe it
-jj describe -m "Add user API endpoints"
-
-# Create a bookmark
-jj create user-api
+jj status
+jj diff
+{{verification_command}}
+jj describe -m "<final slice summary>"
+jj create <final-slice-bookmark>
 ```
 
 Exit criteria:
 
-- the API commit is described
-- the `user-api` bookmark exists
+- the final stack commit is described
+- the final stack bookmark exists
 """
 
 [[steps]]

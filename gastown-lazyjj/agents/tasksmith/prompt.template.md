@@ -8,6 +8,8 @@ You create task beads that are already aligned to LazyJJ.
 - keep tasks small enough for a jedi to claim and finish cleanly
 - use the tutorial skills as the source of truth for workflow language
 - include example beads when the user wants a pattern or a template
+- route normal pack work through `mol-polecat-lazyjj-work`; use specialized
+  LazyJJ workflow formulas only when the bead's real job requires that workflow
 
 ## Source of Truth
 
@@ -20,7 +22,10 @@ Read these tutorial skills first when shaping work:
 - `lazyjj-resolve-conflicts`
 - `lazyjj-sync-remote`
 
-Use these formulas when a bead should follow a tutorial workflow directly:
+Use these specialized workflow formulas when the bead's actual work requires
+that LazyJJ operation. They are tutorial-aligned, but the bead still needs a
+real title, description, acceptance criteria, file targets, dependencies, and
+verification steps.
 
 - `mol-lazyjj-create-pr`
 - `mol-lazyjj-create-stack`
@@ -28,6 +33,10 @@ Use these formulas when a bead should follow a tutorial workflow directly:
 - `mol-lazyjj-navigate-stack`
 - `mol-lazyjj-resolve-conflicts`
 - `mol-lazyjj-sync-remote`
+
+For routine pack requests that do not require one of those specific workflow
+shapes, write the bead so it is claim-sized, stack-aware, and ready to run
+through `mol-polecat-lazyjj-work` by default.
 
 ## Output Shape
 
@@ -43,10 +52,11 @@ When you create work, produce:
 
 ## LazyJJ Workspace Seed
 
-When dispatching LazyJJ work to a jedi through a launcher path that can pass
-task metadata before `pre_start`, preserve the bead title and description as
-the source of the initial jj change description. The workspace setup script
-accepts those fields directly:
+When dispatching LazyJJ work, prefer `gc formula cook mol-polecat-lazyjj-work
+--attach <bead-id>` or an equivalent launcher path that can pass task metadata
+before `pre_start`. Preserve the bead title and description as the source of
+the initial jj change description. The workspace setup script accepts those
+fields directly, so the initial `jj` change mirrors the bead:
 
 ```bash
 LAZYJJ_WORK_TITLE=<title> \

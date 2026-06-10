@@ -53,6 +53,8 @@ jj describe -r @- -m "short description"
 - The canonical sync path uses existing jj tools: `jj edit <stack-head>` to
   move a workspace onto the integrated head, and `jj absorb` / `jj rebase`
   when useful local changes need to stay on the stack instead of being copied.
+  The two live workspaces should converge on the same head through history
+  operations, not file copying.
 
 ## Required Bead Metadata
 

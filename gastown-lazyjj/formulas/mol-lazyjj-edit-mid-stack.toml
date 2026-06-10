@@ -1,12 +1,29 @@
 description = """
-LazyJJ tutorial workflow for editing a commit in the middle of a stack.
+LazyJJ workflow for real work that edits a commit in the middle of a stack.
 
-This formula follows the upstream LazyJJ tutorial:
+Use this when the assigned bead is an actual job whose fix belongs in an
+existing stack commit rather than at the stack head. The bead supplies the
+target change, files, acceptance criteria, and verification. This formula
+supplies the LazyJJ procedure.
+
+This formula stays aligned with the upstream LazyJJ tutorial:
 `website/src/content/docs/tutorials/edit-mid-stack.md`.
-Keep the command sequence aligned with that tutorial.
 """
 formula = "mol-lazyjj-edit-mid-stack"
 version = 1
+
+[vars]
+[vars.target_change_id]
+description = "Change ID of the stack commit to edit."
+required = true
+
+[vars.target_files]
+description = "Human-readable list of files or areas expected to change."
+required = true
+
+[vars.verification_command]
+description = "Focused command that proves the mid-stack edit."
+default = ""
 
 [[steps]]
 id = "navigate"
@@ -15,7 +32,7 @@ description = """
 Move to the commit that needs the edit.
 
 ```bash
-jj edit abc
+jj edit "{{target_change_id}}"
 ```
 
 Exit criteria:
@@ -28,11 +45,12 @@ id = "edit"
 title = "Make the mid-stack change"
 needs = ["navigate"]
 description = """
-Make the intended change in the selected commit.
+Make the assigned bead's intended change in the selected commit. Use
+`{{target_files}}` as the expected file/area hint when it is set.
 
 ```bash
-vim src/models/user.js
-vim src/models/user.test.js
+jj status
+jj diff
 ```
 
 Exit criteria:
@@ -48,8 +66,9 @@ description = """
 Inspect the current commit and overall status.
 
 ```bash
-jj diff      # See changes in current commit
-jj status    # See overall status
+jj diff
+jj status
+{{verification_command}}
 ```
 
 Exit criteria:

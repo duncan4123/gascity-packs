@@ -27,6 +27,10 @@ enum = ["stacked", "independent"]
 description = "Optional limit for the stack review scan."
 default = "40"
 
+[vars.review_bookmark]
+description = "Bookmark name to expose as the review branch."
+default = "lazyjj-publish"
+
 [[steps]]
 id = "inspect"
 title = "Inspect the LazyJJ stack before publishing"
@@ -39,9 +43,9 @@ gc prime
 jj git fetch
 jj log -r 'trunk() | stack' --limit {{review_limit}}
 jj log -r 'stack & no_description'
-jj bookmark set lazyjj-publish -r @-
-jj git push --bookmark lazyjj-publish
-gh pr list --head lazyjj-publish
+jj bookmark set "{{review_bookmark}}" -r @-
+jj git push --bookmark "{{review_bookmark}}"
+gh pr list --head "{{review_bookmark}}"
 ```
 
 If the stack is not ready, stop here and fix the workspace before publishing.
@@ -55,8 +59,8 @@ description = """
 Publish the review stack to GitHub.
 
 ```bash
-jj bookmark set lazyjj-publish -r @-
-jj git push --bookmark lazyjj-publish
+jj bookmark set "{{review_bookmark}}" -r @-
+jj git push --bookmark "{{review_bookmark}}"
 gh pr create --fill
 ```
 
@@ -73,7 +77,7 @@ Capture the published stack state for the next session.
 
 ```bash
 jj log -r 'trunk() | stack' --limit {{review_limit}}
-gh pr list --head lazyjj-publish
+gh pr list --head "{{review_bookmark}}"
 ```
 
 Exit criteria:

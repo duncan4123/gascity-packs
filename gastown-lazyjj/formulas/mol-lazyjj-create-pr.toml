@@ -1,13 +1,33 @@
 description = """
-LazyJJ tutorial workflow for creating a single PR.
+LazyJJ workflow for real work that should become a single PR.
 
-This formula follows the upstream LazyJJ tutorial:
+Use this when the assigned bead is an actual job whose right shape is one
+focused change, one bookmark, and one PR. The bead supplies the concrete files,
+acceptance criteria, and verification. This formula supplies the LazyJJ
+procedure.
+
+This formula stays aligned with the upstream LazyJJ tutorial:
 `website/src/content/docs/tutorials/create-pr.md`.
-Keep the command sequence aligned with that tutorial; do not treat this formula
-as a replacement for the source tutorial.
 """
 formula = "mol-lazyjj-create-pr"
 version = 1
+
+[vars]
+[vars.job_summary]
+description = "Short summary for the PR change. Defaults to the attached bead title when rendered by a launcher."
+required = true
+
+[vars.target_files]
+description = "Human-readable list of files or areas the bead expects this PR to touch."
+required = true
+
+[vars.verification_command]
+description = "Focused command that proves this PR change. Empty means record the manual verification performed."
+default = ""
+
+[vars.review_bookmark]
+description = "Bookmark name to expose as the PR branch."
+default = "lazyjj-pr"
 
 [[steps]]
 id = "start"
@@ -30,23 +50,21 @@ id = "edit"
 title = "Make and inspect the change"
 needs = ["start"]
 description = """
-Make the tutorial change and inspect it before describing the commit.
+Apply the assigned bead's requested change. Use `{{target_files}}` as the
+expected file/area hint when it is set, but inspect the repo before editing and
+keep the diff scoped to the bead.
 
 ```bash
-# Edit files with your favorite editor
-vim src/auth.js
-
-# Check what's changed
 jj status
-
-# See the diff
 jj diff
+{{verification_command}}
 ```
 
 Exit criteria:
 
-- the intended files have been edited
+- the bead's acceptance criteria are implemented
 - `jj status` and `jj diff` show only the intended PR change
+- focused verification passed or the reason it could not run is recorded
 """
 
 [[steps]]
@@ -57,7 +75,7 @@ description = """
 Describe the current LazyJJ commit.
 
 ```bash
-jj describe -m "feat: Add user authentication"
+jj describe -m "{{job_summary}}"
 ```
 
 Exit criteria:
@@ -73,7 +91,7 @@ description = """
 Create the bookmark that will become the PR branch.
 
 ```bash
-jj create auth-feature
+jj create "{{review_bookmark}}"
 ```
 
 Exit criteria:
@@ -105,11 +123,9 @@ description = """
 Apply requested changes and push the update.
 
 ```bash
-# Make your changes
-vim src/auth.js
-
-# Changes are automatically in your commit!
-# Just push the update
+jj status
+jj diff
+{{verification_command}}
 jj stack-submit
 ```
 

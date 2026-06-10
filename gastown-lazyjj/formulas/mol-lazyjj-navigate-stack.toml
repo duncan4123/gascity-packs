@@ -1,12 +1,21 @@
 description = """
-LazyJJ tutorial workflow for navigating a stack.
+LazyJJ workflow for real work that requires stack navigation.
 
-This formula follows the upstream LazyJJ tutorial:
+Use this when an agent needs to inspect or move through existing LazyJJ stack
+state to answer or prepare an actual bead. The bead supplies the question,
+target stack or change ID, and any follow-up verification. This formula
+supplies the LazyJJ procedure.
+
+This formula stays aligned with the upstream LazyJJ tutorial:
 `website/src/content/docs/tutorials/navigate-stack.md`.
-Keep the command sequence aligned with that tutorial.
 """
 formula = "mol-lazyjj-navigate-stack"
 version = 1
+
+[vars]
+[vars.target_change_id]
+description = "Optional change ID to inspect or edit after viewing the stack."
+required = true
 
 [[steps]]
 id = "view"
@@ -47,8 +56,7 @@ description = """
 Move to a specific stack commit by change ID.
 
 ```bash
-# From jj stack-view, note the change ID (like "abc")
-jj edit abc
+jj edit "{{target_change_id}}"
 ```
 
 Exit criteria:

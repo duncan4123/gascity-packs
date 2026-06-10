@@ -1,12 +1,24 @@
 description = """
-LazyJJ tutorial workflow for syncing with remote trunk.
+LazyJJ workflow for real work that syncs a stack with remote trunk.
 
-This formula follows the upstream LazyJJ tutorial:
+Use this when the assigned bead is an actual remote-sync job for a LazyJJ stack.
+The bead supplies the stack context, expected post-sync state, and
+verification. This formula supplies the LazyJJ procedure.
+
+This formula stays aligned with the upstream LazyJJ tutorial:
 `website/src/content/docs/tutorials/sync-remote.md`.
-Keep the command sequence aligned with that tutorial.
 """
 formula = "mol-lazyjj-sync-remote"
 version = 1
+
+[vars]
+[vars.verification_command]
+description = "Focused command that proves the synced stack."
+default = ""
+
+[vars.publish_after_sync]
+description = "Whether this job should push stack updates after sync."
+default = "true"
 
 [[steps]]
 id = "sync"
@@ -16,6 +28,7 @@ Sync the current stack with trunk.
 
 ```bash
 jj stack-sync
+{{verification_command}}
 ```
 
 The tutorial expands this to:
