@@ -12,3 +12,8 @@ mode = "on_demand"
 template = "tasksmith"
 scope = "rig"
 mode = "on_demand"
+
+[[named_session]]
+template = "runner"
+scope = "rig"
+mode = "always"
