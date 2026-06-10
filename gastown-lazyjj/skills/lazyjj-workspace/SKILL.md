@@ -11,7 +11,9 @@ Use this skill when a Gas Town jj jedi is assigned work through
 `mol-polecat-lazyjj-work`.
 
 For the tutorial-oriented overview, also see [`README.md`](../../README.md).
-The pack now ships reusable template fragments for the mental model, stack
+The pack now ships tutorial skills for LazyJJ foundations, mental model,
+stack workflow, conflicts, publishing, reference, Claude integration, and
+taskcraft, plus reusable template fragments for the mental model, stack
 workflow, and PR workflow.
 
 ## Requirements
@@ -93,18 +95,22 @@ jj split/squash UI.
 For independent PRs that can land in any order:
 
 ```bash
-jj spr init
-jj spr diff --cherry-pick
-jj spr list
-jj spr land --cherry-pick -r <change-id>
+jj bookmark set lazyjj-publish -r @-
+jj git push --bookmark lazyjj-publish
+gh pr create --fill
 ```
 
-For a dependent LazyJJ stack, use the workspace handoff path:
+For a dependent LazyJJ stack, use the workspace handoff path and create PRs
+from the published branch chain:
 
 ```bash
 jj bookmark set <bookmark> -r @-
 jj git push --bookmark <bookmark>
+gh pr create --fill
 ```
+
+For the publish-only workflow, the pack also ships
+[`mol-lazyjj-publish`](../../formulas/mol-lazyjj-publish.toml).
 
 ## Publish Policy
 

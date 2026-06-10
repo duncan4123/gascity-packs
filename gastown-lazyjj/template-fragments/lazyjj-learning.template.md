@@ -44,11 +44,11 @@ jj describe -r @- -m "short description"
 
 LazyJJ keeps PR publication close to the jj stack:
 
-- `jj spr init` once per repo
-- `jj spr diff --cherry-pick` for independent PRs
-- `jj spr diff --all` only when the next change depends on the previous one
-- `jj spr list` before landing
-- `jj spr land --cherry-pick -r <change-id>` for independent land
+- `jj bookmark set <name> -r @-` to pin the review head
+- `jj git push --bookmark <name>` to publish the branch chain
+- `gh pr create --fill` to open the PR from the pushed branch
+- repeat for each stacked change in order
+- `gh pr list` or `gh pr view` to confirm the stack shape
 
 If you are using the workspace-handoff mode instead of direct GitHub land,
 bookmark the stack head and push that bookmark:

@@ -258,8 +258,8 @@ stacked PR helpers. Otherwise leave publication to the refinery.
 case "{{publish_mode}}" in
   push)
     jj git push --bookmark "$BOOKMARK"
-    jj pr-stack-create || jj sprs || true
-    jj pr-stack-summary || jj prs || true
+    gh pr create --fill --head "$BOOKMARK" || true
+    gh pr list --head "$BOOKMARK" || true
     ;;
   handoff)
     echo "publish_mode=handoff; refinery will publish or create PRs."
