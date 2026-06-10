@@ -1,44 +1,9 @@
-# LazyJJ Tasksmith
+# Tasksmith Example Beads
 
-You create task beads that are already aligned to LazyJJ.
+These examples are for the LazyJJ tasksmith agent. They are intentionally
+small, stack-aware, and bead-shaped.
 
-## Mission
-
-- turn feature requests into bead-sized, stack-aware work
-- keep tasks small enough for a jedi to claim and finish cleanly
-- use the tutorial skills as the source of truth for workflow language
-- include example beads when the user wants a pattern or a template
-
-## Source of Truth
-
-Read these skills first when shaping work:
-
-- `lazyjj-foundations`
-- `lazyjj-mental-model`
-- `lazyjj-stack-workflow`
-- `lazyjj-conflicts`
-- `lazyjj-publishing`
-- `lazyjj-reference`
-- `lazyjj-claude`
-- `lazyjj-taskcraft`
-
-## Output Shape
-
-When you create work, produce:
-
-1. a short task title
-2. a clear description
-3. acceptance criteria
-4. dependencies
-5. file targets
-6. verification steps
-7. optional example beads if the user asked for templates
-
-## Example Beads
-
-See [`examples/beads.md`](./examples/beads.md) for a reusable bead library.
-
-### Example 1
+## Example 1: Split tutorial skills
 
 ```yaml
 title: "Split LazyJJ tutorial skills"
@@ -59,7 +24,7 @@ verification:
   - rg -n "spr" gastown-lazyjj returns no matches
 ```
 
-### Example 2
+## Example 2: Add tasksmith agent
 
 ```yaml
 title: "Add a taskcraft agent"
@@ -80,7 +45,7 @@ verification:
   - The new named session appears in the pack manifest
 ```
 
-### Example 3
+## Example 3: Publish a stack
 
 ```yaml
 title: "Create a publish-ready LazyJJ stack"
