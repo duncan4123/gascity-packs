@@ -78,6 +78,36 @@ explicit_bead_id() {
     return 1
 }
 
+log_step() {
+    printf 'workspace-setup: %s\n' "$*" >&2
+}
+
+run_best_effort() {
+    step="${1:?missing step}"
+    shift
+    set +e
+    "$@"
+    rc=$?
+    set -e
+    if [ "$rc" -ne 0 ]; then
+        log_step "$step failed (exit $rc)"
+    fi
+    return 0
+}
+
+run_required() {
+    step="${1:?missing step}"
+    shift
+    set +e
+    "$@"
+    rc=$?
+    set -e
+    if [ "$rc" -ne 0 ]; then
+        log_step "$step failed (exit $rc)"
+    fi
+    return "$rc"
+}
+
 write_bead_change_description() {
     bead_id="${1:-}"
     out="${2:?missing output path}"
@@ -264,7 +294,7 @@ restore_stage() {
 
 resolve_base_revset() {
     # Fetch latest from remotes before resolving remote fallback revsets.
-    jj -R "$RIG_ROOT" git fetch 2>/dev/null || true
+    run_best_effort "fetch latest rig state" jj -R "$RIG_ROOT" git fetch 2>/dev/null
 
     # Prefer default@, which LazyJJ uses as the local integration target.
     # Fall back through common remote bookmark names, then the rig's current @.
@@ -304,15 +334,15 @@ refresh_existing_workspace() {
 
     write_workspace_runtime_files
     install_workspace_excludes
-    jj -R "$WT" workspace update-stale >/dev/null 2>&1 || true
+    run_best_effort "update stale workspace state" jj -R "$WT" workspace update-stale >/dev/null 2>&1
 
     if [ "$SYNC" = "--sync" ]; then
-        jj -R "$WT" git fetch 2>/dev/null || true
+        run_best_effort "sync workspace git state" jj -R "$WT" git fetch 2>/dev/null
     fi
 
     if workspace_stack_nonempty "$base"; then
         stack_roots="roots($base..@ & ~empty() & mutable())"
-        if ! jj -R "$WT" rebase -s "$stack_roots" -d "$base" >/dev/null; then
+        if ! run_required "rebase existing workspace stack onto $base" jj -R "$WT" rebase -s "$stack_roots" -d "$base" >/dev/null; then
             echo "workspace-setup: failed to rebase existing workspace stack onto $base" >&2
             echo "workspace-setup: create a temporary megamerge with: jj new $base @ -m \"megamerge: inspect workspace refresh\"" >&2
             exit 1
@@ -320,7 +350,7 @@ refresh_existing_workspace() {
     elif workspace_is_empty_child_of_base "$base"; then
         :
     else
-        jj -R "$WT" new "$base" -m "workspace: refresh from $base" >/dev/null
+        run_required "create refreshed workspace commit from $base" jj -R "$WT" new "$base" -m "workspace: refresh from $base" >/dev/null
     fi
 
     describe_workspace_change_from_bead
@@ -354,7 +384,7 @@ if workspace_name_exists_elsewhere "$WORKSPACE_NAME"; then
     exit 1
 fi
 
-if ! jj -R "$RIG_ROOT" workspace add --name "$WORKSPACE_NAME" "$WT" -r "$REVSET" --sparse-patterns full; then
+if ! run_required "create jj workspace at $WT from $RIG_ROOT (revset $REVSET)" jj -R "$RIG_ROOT" workspace add --name "$WORKSPACE_NAME" "$WT" -r "$REVSET" --sparse-patterns full >/dev/null; then
     echo "workspace-setup: failed to create jj workspace at $WT from $RIG_ROOT (revset $REVSET)" >&2
     restore_stage
     exit 1
