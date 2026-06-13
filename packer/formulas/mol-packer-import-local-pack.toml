@@ -1,0 +1,121 @@
+description = """
+Import a local pack into a target rig and verify that its live Gas City surface
+is discoverable.
+
+This formula records the general workflow. It does not assume a specific city
+root, rig name, pack name, or filesystem layout.
+"""
+formula = "mol-packer-import-local-pack"
+version = 1
+
+[vars]
+[vars.rig_name]
+description = "Target rig name whose [rigs.imports] map should receive the pack."
+required = true
+
+[vars.binding_name]
+description = "Import binding name, for example packer or gastown-lazyjj."
+required = true
+
+[vars.pack_source]
+description = "Pack source written into city.toml, for example ./packs/packer or a GitHub tree URL."
+required = true
+
+[vars.formula_name]
+description = "Optional formula expected after reload."
+default = ""
+
+[vars.agent]
+description = "Optional agent expected after reload."
+default = ""
+
+[[steps]]
+id = "prepare-source"
+title = "Prepare pack source"
+description = """
+Make the pack source resolvable by the city.
+
+Examples:
+
+```bash
+# Local development example:
+ln -sfn <dev-pack-path> <city-root>/packs/{{binding_name}}
+```
+
+Exit criteria:
+
+- `{{pack_source}}` resolves from the city root or is a supported remote source
+- the pack contains `pack.toml`
+"""
+
+[[steps]]
+id = "edit-import"
+title = "Add rig import"
+needs = ["prepare-source"]
+description = """
+Add the import under the target rig in `city.toml`.
+
+Template:
+
+```toml
+[[rigs]]
+name = "{{rig_name}}"
+
+[rigs.imports]
+[rigs.imports.{{binding_name}}]
+source = "{{pack_source}}"
+```
+
+Do not hard-code absolute paths in reusable docs unless the operator explicitly
+chooses a machine-local development source.
+
+Exit criteria:
+
+- target rig imports `{{binding_name}}`
+"""
+
+[[steps]]
+id = "reload"
+title = "Reload city config"
+needs = ["edit-import"]
+description = """
+Reload the active city.
+
+```bash
+gc reload
+```
+
+Exit criteria:
+
+- reload completes
+- config revision advances or reports no changes when already loaded
+"""
+
+[[steps]]
+id = "verify"
+title = "Verify imported pack surface"
+needs = ["reload"]
+description = """
+Verify that the imported pack is available to the active rig.
+
+```bash
+gc import list
+gc formula list
+```
+
+If `{{formula_name}}` is non-empty:
+
+```bash
+gc formula show "{{formula_name}}"
+```
+
+If `{{agent}}` is non-empty:
+
+```bash
+gc prime "{{agent}}" --strict
+```
+
+Exit criteria:
+
+- expected formulas and agents are discoverable
+"""

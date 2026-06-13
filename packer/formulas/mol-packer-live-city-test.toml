@@ -1,0 +1,79 @@
+description = """
+Exercise a pack in a live Gas City environment after it has been imported.
+
+This formula verifies that city reload/import state exposes the pack surface.
+It is intentionally non-destructive unless the operator explicitly supplies a
+formula to cook in a controlled test bead store.
+"""
+formula = "mol-packer-live-city-test"
+version = 1
+
+[vars]
+[vars.pack_name]
+description = "Pack import/binding name expected in the active city."
+required = true
+
+[vars.agent]
+description = "Optional agent to render with gc prime --strict."
+default = ""
+
+[vars.formula_name]
+description = "Optional formula expected from this pack."
+default = ""
+
+[[steps]]
+id = "reload"
+title = "Reload active city config"
+description = """
+Reload the current city and inspect import state.
+
+```bash
+gc reload
+gc import list
+gc import check
+```
+
+Exit criteria:
+
+- reload completes
+- import state is visible
+"""
+
+[[steps]]
+id = "discover"
+title = "Confirm pack surface is discoverable"
+needs = ["reload"]
+description = """
+Inspect formulas and commands exposed to the active city.
+
+```bash
+gc formula list
+gc --help
+```
+
+If `{{formula_name}}` is non-empty, verify it compiles:
+
+```bash
+gc formula show "{{formula_name}}"
+```
+
+Exit criteria:
+
+- expected formula is visible and compiles, or no formula was requested
+"""
+
+[[steps]]
+id = "render-agent"
+title = "Render optional pack agent"
+needs = ["discover"]
+description = """
+If `{{agent}}` is non-empty, render it strictly:
+
+```bash
+gc prime "{{agent}}" --strict
+```
+
+Exit criteria:
+
+- requested agent renders, or no agent was requested
+"""

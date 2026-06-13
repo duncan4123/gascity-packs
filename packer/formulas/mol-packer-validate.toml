@@ -1,0 +1,118 @@
+description = """
+Validate a Gas City pack in the current city context.
+
+This formula is for pack-development work. It performs non-destructive checks:
+pack lint, optional prompt rendering, optional formula compilation, and optional
+targeted tests.
+"""
+formula = "mol-packer-validate"
+version = 1
+
+[vars]
+[vars.pack_path]
+description = "Pack path or pack name accepted by gc lint."
+required = true
+
+[vars.pack_name]
+description = "Human-readable pack name for reports."
+default = ""
+
+[vars.agent]
+description = "Optional agent template to render with gc prime --strict."
+default = ""
+
+[vars.formula_name]
+description = "Optional formula to compile with gc formula show."
+default = ""
+
+[vars.test_command]
+description = "Optional targeted test command."
+default = ""
+
+[[steps]]
+id = "inspect"
+title = "Inspect pack inputs"
+description = """
+Resolve the pack path/name and record the intended validation scope.
+
+```bash
+test -n "{{pack_path}}"
+gc status
+gc import list
+```
+
+Exit criteria:
+
+- pack path/name is known
+- active city and imports are visible
+"""
+
+[[steps]]
+id = "lint"
+title = "Lint the pack"
+needs = ["inspect"]
+description = """
+Run the pack linter.
+
+```bash
+gc lint "{{pack_path}}"
+```
+
+Exit criteria:
+
+- linter passes or reports concrete failures
+"""
+
+[[steps]]
+id = "render"
+title = "Render optional agent prompt"
+needs = ["lint"]
+description = """
+If `{{agent}}` is empty, record that prompt rendering was skipped.
+
+Otherwise render the agent prompt strictly:
+
+```bash
+gc prime "{{agent}}" --strict
+```
+
+Exit criteria:
+
+- prompt renders without template errors, or no agent was requested
+"""
+
+[[steps]]
+id = "compile-formula"
+title = "Compile optional formula"
+needs = ["lint"]
+description = """
+If `{{formula_name}}` is empty, record that formula compilation was skipped.
+
+Otherwise compile the formula without creating beads:
+
+```bash
+gc formula show "{{formula_name}}"
+```
+
+Exit criteria:
+
+- formula compiles, or no formula was requested
+"""
+
+[[steps]]
+id = "tests"
+title = "Run optional targeted tests"
+needs = ["render", "compile-formula"]
+description = """
+If `{{test_command}}` is empty, record that tests were skipped.
+
+Otherwise run the exact test command:
+
+```bash
+{{test_command}}
+```
+
+Exit criteria:
+
+- targeted tests pass, or no test command was requested
+"""

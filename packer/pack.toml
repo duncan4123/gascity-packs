@@ -1,0 +1,10 @@
+[pack]
+name = "packer"
+version = "0.1.0"
+schema = 2
+description = "Pack development and testing toolkit for live Gas City environments."
+
+[[named_session]]
+template = "packer"
+scope = "rig"
+mode = "on_demand"

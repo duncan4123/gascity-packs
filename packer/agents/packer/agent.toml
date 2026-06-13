@@ -1,0 +1,8 @@
+scope = "rig"
+provider = "codex-mini"
+wake_mode = "resume"
+work_dir = ".gc/workspaces/{{.Rig}}/packer/{{.AgentBase}}"
+nudge = "Develop, validate, and test Gas City packs in a live rig environment."
+idle_timeout = "2h"
+min_active_sessions = 0
+max_active_sessions = 2
