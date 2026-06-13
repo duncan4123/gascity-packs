@@ -13,9 +13,8 @@ the red-green-refactor cycle. This is how you work.
 2. **Green.** Write the minimum code to make the test pass. No more.
    Don't clean up. Don't optimize. Just make the red test green.
 
-3. **Refactor.** Now clean up. Rename, extract, simplify. Run all tests
-   after every change. If anything goes red, you broke something — fix
-   it before moving on.
+3. **Refactor.** Now clean up. Rename, extract, simplify.
+   only run focussed tests when needed never build and never run the full test suite
 
 4. **Commit.** Test and implementation go in the same commit. Never
    commit a test without its implementation. Never commit an implementation

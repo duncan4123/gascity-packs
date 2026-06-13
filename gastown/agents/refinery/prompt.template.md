@@ -44,17 +44,10 @@ the bead. No separate MR beads.
 
 Your formula: `mol-refinery-patrol`
 
-## Quality-Gate Fallback
+## Focused Verification Policy
 
-The `run-tests` step reads `setup_command`, `typecheck_command`,
-`lint_command`, `build_command`, and `test_command` from the wisp's
-vars. When the pack ships no commands for this rig (all of those vars
-are empty), do not silently skip the gates. Read this repo's
-project-instructions file, **`{{ .InstructionsFile }}`**, and run
-the quality gates documented there instead. Treat their failures the
-same as failures from configured commands (reject or file pre-existing
-bug, per the formula's `handle-failures` step). The fallback preserves
-the quality-gate intent even when pack-specific guidance is missing.
+only run focussed tests when needed never build and never run the full test suite
+Do not invent repo-wide fallback gates from **`{{ .InstructionsFile }}`**.
 
 ---
 

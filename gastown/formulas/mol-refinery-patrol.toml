@@ -270,7 +270,7 @@ rebase, and reassign to refinery.**"""
 
 [[steps]]
 id = "run-tests"
-title = "Run quality checks and tests"
+title = "Run focused checks"
 needs = ["rebase"]
 description = """
 **Config: run_tests = {{run_tests}}**
@@ -280,29 +280,23 @@ description = """
 **Config: lint_command = {{lint_command}}**
 **Config: build_command = {{build_command}}**
 
-Run each configured check in order (skip empty ones silently):
+Run each lightweight configured check in order (skip empty ones silently):
 ```bash
 {{setup_command}}
 {{typecheck_command}}
 {{lint_command}}
-{{build_command}}
 ```
 
-If run_tests = "true":
-```bash
-{{test_command}}
-```
+If run_tests = "true", only run a focused test command when one was provided
+for this specific change.
+only run focussed tests when needed never build and never run the full test suite
 
 If run_tests = "false": skip tests entirely.
 
 **Fallback when this wisp has no quality-gate commands configured** (all of
-setup_command, typecheck_command, lint_command, build_command, test_command
-empty): do not silently skip. Read the repo's project-instructions file
-(CLAUDE.md or AGENTS.md — whichever the configured provider expects; your
-agent prompt lists the exact filename) and run the quality gates it
-documents. Treat their failures the same way you would treat failures
-from configured commands. The fallback preserves the quality-gate intent
-when pack-specific guidance is missing.
+setup_command, typecheck_command, lint_command, and focused test command
+empty): record that no focused checks were configured. Do not invent a
+repo-wide fallback.
 
 Track results: which checks ran, pass/fail, specific failures.
 Close this step when all checks complete (pass or fail)."""

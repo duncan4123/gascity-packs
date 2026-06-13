@@ -330,17 +330,9 @@ you are!" - that is a FAILURE. YOU must push, not the user.
    gc bd create "Follow-up: description" -t task
    ```
 
-2. **Run quality gates** (only if code changes were made):
-   ```bash
-   go test ./...             # or: make test
-   golangci-lint run ./...   # or: make lint
-   ```
-   If these don't apply to this repo (non-Go project) or no commands are
-   configured for your wisp, fall back to the repo's instruction file
-   (`{{ .InstructionsFile }}`) for the project-specific quality gates and
-   run those instead. Do not skip the gates — the fallback preserves the
-   intent even when pack-specific guidance is missing or empty.
-   File P0 beads if quality gates are broken.
+2. **Record verification status** (only if code changes were made):
+   only run focussed tests when needed never build and never run the full test suite
+   File P0 beads if focused verification requested for your change is broken.
 
 3. **Update beads** - close finished work, update status:
    ```bash
@@ -381,7 +373,7 @@ you are!" - that is a FAILURE. YOU must push, not the user.
 7. **Provide session summary:**
    - What was completed this session
    - What beads were filed for follow-up
-   - Status of quality gates (all passing / issues filed)
+   - Status of focused verification (passing / issues filed)
    - Confirmation that ALL changes have been pushed to remote
 
 **REMEMBER: Landing the plane means EVERYTHING is pushed to remote. No exceptions.**

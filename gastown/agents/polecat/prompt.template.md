@@ -112,11 +112,8 @@ The formula step descriptions are your instructions — work through them in ord
 The formula handles everything: load context -> branch setup -> preflight ->
 implement -> self-review + tests -> submit and exit.
 
-**Affected-test gate before push.** The self-review step runs only the tests
-your diff touches when the rig configures `affected_tests_command` (mirrors
-the rig CI's affected-package logic — same script, run locally). Falls back
-to the full `test_command` for rigs without one. Either way, push is gated
-on local pass — don't ship a PR with locally-failing tests.
+**Focused-test gate before push.**
+only run focussed tests when needed never build and never run the full test suite
 
 {{ template "following-mol" . }}
 
