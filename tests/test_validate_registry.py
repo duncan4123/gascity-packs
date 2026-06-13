@@ -58,6 +58,45 @@ def test_validate_tree_url_source_checks_pack_toml_name(tmp_path) -> None:
     assert "cass: registry name does not match cass/pack.toml name 'wrong'" in errors
 
 
+def test_validate_allows_authored_pack_subset(tmp_path) -> None:
+    pack_dir = tmp_path / "gastown-lazyjj"
+    pack_dir.mkdir()
+    (pack_dir / "pack.toml").write_text(
+        textwrap.dedent(
+            """\
+            [pack]
+            name = "gastown-lazyjj"
+            schema = 2
+            """
+        ),
+        encoding="utf-8",
+    )
+    registry = tmp_path / "registry.toml"
+    registry.write_text(
+        textwrap.dedent(
+            """\
+            schema = 1
+
+            [[pack]]
+            name = "gastown-lazyjj"
+            description = "LazyJJ workflow pack."
+            source = "https://github.com/gastownhall/gascity-packs/tree/main/gastown-lazyjj"
+            source_kind = "git"
+
+              [[pack.release]]
+              version = "0.1.0"
+              ref = "main"
+              commit = "d3617d1319a1206ac85f69ba024ec395c49c6f4b"
+              hash = "sha256:9849675daa3ba8a792fc1c68c727542936400687d529e5d4d231afde29d4a341"
+              description = "Initial LazyJJ workflow pack release."
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    assert validate_registry.validate(registry) == []
+
+
 def test_pack_content_hash_uses_relative_paths_modes_and_blob_hashes(tmp_path) -> None:
     run_git(tmp_path, "init")
     run_git(tmp_path, "config", "user.email", "test@example.com")

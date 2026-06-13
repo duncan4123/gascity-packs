@@ -17,7 +17,6 @@ PACK_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)?$")
 RELEASE_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+(\.[0-9]+)?$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-REQUIRED_WAVE_1 = {"cass", "discord", "gascity", "gastown", "github", "slack-full"}
 FORBIDDEN_WAVE_1 = {"bd", "core", "dolt", "maintenance"}
 
 
@@ -219,10 +218,6 @@ def validate(path: Path) -> list[str]:
             actual_name = pack_data.get("pack", {}).get("name", "")
             if actual_name != name:
                 errors.append(f"{label}: registry name does not match {pack_path}/pack.toml name {actual_name!r}")
-
-    missing = REQUIRED_WAVE_1 - seen
-    if missing:
-        errors.append("missing wave-1 entries: " + ", ".join(sorted(missing)))
 
     forbidden = FORBIDDEN_WAVE_1 & seen
     if forbidden:

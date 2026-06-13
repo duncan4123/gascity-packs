@@ -77,7 +77,7 @@ Skip any step = lying, not verifying
 
 **Tests:**
 ```
-✅ [Run test command] [See: 34/34 pass] "All tests pass"
+✅ [Focused test command when needed] [See: pass] "Focused tests pass"
 ❌ "Should pass now" / "Looks correct"
 ```
 

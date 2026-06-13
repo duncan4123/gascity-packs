@@ -953,7 +953,7 @@ Once root cause is confirmed:
    - **Fails** without the fix (proves the test is meaningful)
    - **Passes** with the fix (proves the fix works)
 
-4. **Run the full test suite.** Paste the output. No regressions allowed.
+4. only run focussed tests when needed never build and never run the full test suite
 
 5. **If the fix touches >5 files:** Use AskUserQuestion to flag the blast radius:
    ```
@@ -1024,7 +1024,7 @@ already knows. A good test: would this insight save time in a future session? If
 
 - **3+ failed fix attempts → STOP and question the architecture.** Wrong architecture, not failed hypothesis.
 - **Never apply a fix you cannot verify.** If you can't reproduce and confirm, don't ship it.
-- **Never say "this should fix it."** Verify and prove it. Run the tests.
+- **Never say "this should fix it."** Verify with focused tests only when needed.
 - **If fix touches >5 files → AskUserQuestion** about blast radius before proceeding.
 - **Completion status:**
   - DONE — root cause found, fix applied, regression test written, all tests pass

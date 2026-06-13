@@ -241,7 +241,8 @@ id = "quality-gate"
 title = "Run quality gate on the finished fix"
 needs = ["implement-fix"]
 description = """
-Before you open a PR, check the diff and run the relevant quality gates.
+Before you open a PR, check the diff and use focused verification only.
+only run focussed tests when needed never build and never run the full test suite
 
 **1. Review the final diff:**
 ```bash
@@ -250,10 +251,10 @@ git diff --stat origin/{{github_default_branch}}...HEAD
 git log --oneline origin/{{github_default_branch}}..HEAD
 ```
 
-**2. Run the relevant tests and checks for the changed area.**
-- the regression test must still pass
-- run broader tests if the change touches shared logic
-- if lint/build/typecheck are appropriate for this repo, run them too
+**2. Run focused tests only when needed.**
+- the regression test must still pass when one exists for this change
+- do not run broader tests because the change touches shared logic
+- do not run build commands
 
 **3. Ensure the tree is clean before submission:**
 ```bash

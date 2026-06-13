@@ -39,7 +39,7 @@ This structure informs the task decomposition. Each task should produce self-con
 - "Write the failing test" - step
 - "Run it to make sure it fails" - step
 - "Implement the minimal code to make the test pass" - step
-- "Run the tests and make sure they pass" - step
+- "only run focussed tests when needed never build and never run the full test suite" - step
 - "Commit" - step
 
 ## Plan Document Header

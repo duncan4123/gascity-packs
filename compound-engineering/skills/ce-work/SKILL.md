@@ -158,7 +158,7 @@ Determine how to proceed based on what was provided in `<input_document>`.
    **Shared-directory fallback constraints** — apply only when worktree isolation is unavailable:
    - Instruct each subagent: "Do not stage files (`git add`), create commits, or run the project test suite. The orchestrator handles testing, staging, and committing after all parallel units complete."
    - These constraints prevent git index contention and test interference between concurrent subagents.
-   - With worktree isolation active, omit these constraints — subagents may stage, commit, and run their unit's tests within their own worktree branch.
+   - With worktree isolation active, omit these constraints — subagents may stage and commit within their own worktree branch. only run focussed tests when needed never build and never run the full test suite
 
    **Permission mode:** Omit the `mode` parameter when dispatching subagents so the user's configured permission settings apply. Do not pass `mode: "auto"` — it overrides user-level settings like `bypassPermissions`.
 
@@ -173,7 +173,7 @@ Determine how to proceed based on what was provided in `<input_document>`.
    1. Wait for every subagent in the current parallel batch to finish.
    2. For each completed subagent, in dependency order: review the worktree's diff against the orchestrator's branch. If the subagent did not commit its own work, stage and commit it inside that worktree.
    3. Merge each subagent's branch into the orchestrator's branch sequentially in dependency order. **If a merge conflict surfaces, abort the merge (`git merge --abort`) and re-dispatch the conflicting unit serially against the now-merged tree** — hand-resolving silently picks a side and discards one unit's intent. (Predicted overlap from the Parallel Safety Check surfaces here as a conflict, not as silent data loss in shared-directory mode.)
-   4. After each merge, run the relevant test suite. If tests fail, diagnose and fix before merging the next branch.
+   4. After each merge, only run focussed tests when needed never build and never run the full test suite. If focused tests fail, diagnose and fix before merging the next branch.
    5. Update the task list (progress is carried by the merge commits).
    6. After merging, remove each subagent's worktree and delete its branch. Use the absolute path and branch name returned in the subagent's result.
       - Unlock the worktree first — the harness locks per-subagent worktrees: `git worktree unlock <absolute-path>`
@@ -205,7 +205,7 @@ Determine how to proceed based on what was provided in `<input_document>`.
      - Implement following existing conventions
      - Add, update, or remove tests to match implementation changes (see Test Discovery below)
      - Run System-Wide Test Check (see below)
-     - Run tests after changes
+     - only run focussed tests when needed never build and never run the full test suite
      - Assess testing coverage: did this task change behavior? If yes, were tests written or updated? If no tests were added, is the justification deliberate (e.g., pure config, no behavioral change)?
      - Mark task as completed
      - Evaluate for incremental commit (see below)
@@ -263,7 +263,7 @@ Determine how to proceed based on what was provided in `<input_document>`.
    **Commit workflow:**
    ```bash
    # 1. Verify tests pass (use project's test command)
-   # Examples: bin/rails test, npm test, pytest, go test, etc.
+   # only run focussed tests when needed never build and never run the full test suite
 
    # 2. Stage only files related to this logical unit (not `git add .`)
    git add <files related to this logical unit>
@@ -290,7 +290,7 @@ Determine how to proceed based on what was provided in `<input_document>`.
 
 4. **Test Continuously**
 
-   - Run relevant tests after each significant change
+   - only run focussed tests when needed never build and never run the full test suite
    - Don't wait until the end to test
    - Fix failures immediately
    - Add new tests for new behavior, update tests for changed behavior, remove tests for deleted behavior
@@ -352,7 +352,7 @@ Tier 1 harness-native review may still fix inline; Tier 2 always separates revie
 
 ### Test As You Go
 
-- Run tests after each change, not at the end
+- only run focussed tests when needed never build and never run the full test suite
 - Fix failures immediately
 - Continuous testing prevents big surprises
 

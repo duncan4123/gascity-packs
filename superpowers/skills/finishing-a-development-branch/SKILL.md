@@ -21,7 +21,7 @@ Guide completion of development work by presenting clear options and handling ch
 
 ```bash
 # Run project's test suite
-npm test / cargo test / pytest / go test ./...
+only run focussed tests when needed never build and never run the full test suite
 ```
 
 **If tests fail:**

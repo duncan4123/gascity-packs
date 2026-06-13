@@ -985,7 +985,7 @@ Never import secrets, API keys, or credentials in test files. Use environment va
 ### B5. Verify
 
 ```bash
-# Run the full test suite to confirm everything works
+only run focussed tests when needed never build and never run the full test suite
 {detected test command}
 ```
 
@@ -1015,7 +1015,7 @@ First check: If TESTING.md already exists → read it and update/append rather t
 Write TESTING.md with:
 - Philosophy: "100% test coverage is the key to great vibe coding. Tests let you move fast, trust your instincts, and ship with confidence — without them, vibe coding is just yolo coding. With tests, it's a superpower."
 - Framework name and version
-- How to run tests (the verified command from B5)
+- How to run focused tests when needed (the verified command from B5)
 - Test layers: Unit tests (what, where, when), Integration tests, Smoke tests, E2E tests
 - Conventions: file naming, assertion style, setup/teardown patterns
 

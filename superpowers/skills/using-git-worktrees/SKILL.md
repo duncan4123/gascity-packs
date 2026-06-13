@@ -109,7 +109,7 @@ git worktree add "$path" -b "$BRANCH_NAME"
 cd "$path"
 ```
 
-**Sandbox fallback:** If `git worktree add` fails with a permission error (sandbox denial), tell the user the sandbox blocked worktree creation and you're working in the current directory instead. Then run setup and baseline tests in place.
+**Sandbox fallback:** If `git worktree add` fails with a permission error (sandbox denial), tell the user the sandbox blocked worktree creation and you're working in the current directory instead. Then apply focused verification policy in place.
 
 ## Step 3: Project Setup
 
@@ -132,11 +132,11 @@ if [ -f go.mod ]; then go mod download; fi
 
 ## Step 4: Verify Clean Baseline
 
-Run tests to ensure workspace starts clean:
+Use focused verification only when needed:
 
 ```bash
 # Use project-appropriate command
-npm test / cargo test / pytest / go test ./...
+only run focussed tests when needed never build and never run the full test suite
 ```
 
 **If tests fail:** Report failures, ask whether to proceed or investigate.

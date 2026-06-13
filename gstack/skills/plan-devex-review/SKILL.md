@@ -1105,7 +1105,7 @@ Persona examples by product type (pick the 3 most relevant):
 - **Platform engineer at Series C** -- thorough evaluator, cares about security/SLAs/CI integration
 - **Frontend dev adding a feature** -- TypeScript types, bundle size, React/Vue/Svelte examples
 - **Backend dev integrating an API** -- cURL examples, auth flow clarity, rate limit docs
-- **OSS contributor from GitHub** -- git clone && make test, CONTRIBUTING.md, issue templates
+- **OSS contributor from GitHub** -- clone, focused verification policy, CONTRIBUTING.md, issue templates
 - **Student learning to code** -- needs hand-holding, clear error messages, lots of examples
 - **DevOps engineer setting up infra** -- Terraform/Docker, non-interactive mode, env vars
 

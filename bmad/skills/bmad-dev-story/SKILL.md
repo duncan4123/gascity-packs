@@ -320,8 +320,8 @@ Activation is complete. If `activation_steps_prepend` or `activation_steps_appen
     <action>Confirm tests fail before implementation - this validates test correctness</action>
 
     <!-- GREEN PHASE -->
-    <action>Implement MINIMAL code to make tests pass</action>
-    <action>Run tests to confirm they now pass</action>
+    <action>Implement MINIMAL code to satisfy focused verification</action>
+    <action>only run focussed tests when needed never build and never run the full test suite</action>
     <action>Handle error conditions and edge cases as specified in task/subtask</action>
 
     <!-- REFACTOR PHASE -->
@@ -347,10 +347,9 @@ Activation is complete. If `activation_steps_prepend` or `activation_steps_appen
     <action>Cover edge cases and error handling scenarios identified in story Dev Notes</action>
   </step>
 
-  <step n="7" goal="Run validations and tests">
-    <action>Determine how to run tests for this repo (infer test framework from project structure)</action>
-    <action>Run all existing tests to ensure no regressions</action>
-    <action>Run the new tests to verify implementation correctness</action>
+  <step n="7" goal="Run focused validation only when needed">
+    <action>only run focussed tests when needed never build and never run the full test suite</action>
+    <action>Run only the new or directly affected tests needed to verify implementation correctness</action>
     <action>Run linting and code quality checks if configured in project</action>
     <action>Validate implementation meets ALL story acceptance criteria; enforce quantitative thresholds explicitly</action>
     <action if="regression tests fail">STOP and fix before continuing - identify breaking changes immediately</action>
@@ -364,7 +363,7 @@ Activation is complete. If `activation_steps_prepend` or `activation_steps_appen
     <action>Verify ALL tests for this task/subtask ACTUALLY EXIST and PASS 100%</action>
     <action>Confirm implementation matches EXACTLY what the task/subtask specifies - no extra features</action>
     <action>Validate that ALL acceptance criteria related to this task are satisfied</action>
-    <action>Run full test suite to ensure NO regressions introduced</action>
+    <action>only run focussed tests when needed never build and never run the full test suite</action>
 
     <!-- REVIEW FOLLOW-UP HANDLING -->
     <check if="task is review follow-up (has [AI-Review] prefix)">
