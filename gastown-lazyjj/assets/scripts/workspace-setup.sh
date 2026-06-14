@@ -1,7 +1,7 @@
 #!/bin/sh
 # workspace-setup.sh — idempotent jj workspace creation for Gas City agents.
 #
-# Usage: workspace-setup.sh <rig-root> <target-dir> <agent-name> [--sync] [--bead <id>] [--title <title>] [--description <text>|--description-file <path>]
+# Usage: workspace-setup.sh <rig-root> <target-dir> <agent-name> [--sync]
 #
 # Creates a jj workspace at <target-dir> linked to the rig repo at <rig-root>.
 # Workspaces share the rig's commit graph so agents work in isolated sandboxes
@@ -16,51 +16,16 @@
 
 set -eu
 
-RIG_ROOT="${1:?usage: workspace-setup.sh <rig-root> <target-dir> <agent-name> [--sync] [--bead <id>] [--title <title>] [--description <text>|--description-file <path>]}"
+RIG_ROOT="${1:?usage: workspace-setup.sh <rig-root> <target-dir> <agent-name> [--sync]}"
 WT="${2:?missing target-dir}"
 AGENT="${3:?missing agent-name}"
 shift 3
 
 SYNC=""
-WORK_BEAD_ID="${LAZYJJ_WORK_BEAD_ID:-}"
-WORK_TITLE="${LAZYJJ_WORK_TITLE:-}"
-WORK_DESCRIPTION="${LAZYJJ_WORK_DESCRIPTION:-}"
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --sync)
             SYNC="--sync"
-            shift
-            ;;
-        --bead)
-            WORK_BEAD_ID="${2:?--bead requires an id}"
-            shift 2
-            ;;
-        --bead=*)
-            WORK_BEAD_ID="${1#--bead=}"
-            shift
-            ;;
-        --title)
-            WORK_TITLE="${2:?--title requires text}"
-            shift 2
-            ;;
-        --title=*)
-            WORK_TITLE="${1#--title=}"
-            shift
-            ;;
-        --description)
-            WORK_DESCRIPTION="${2:?--description requires text}"
-            shift 2
-            ;;
-        --description=*)
-            WORK_DESCRIPTION="${1#--description=}"
-            shift
-            ;;
-        --description-file)
-            WORK_DESCRIPTION="$(cat "${2:?--description-file requires a path}")"
-            shift 2
-            ;;
-        --description-file=*)
-            WORK_DESCRIPTION="$(cat "${1#--description-file=}")"
             shift
             ;;
         *)
@@ -69,14 +34,6 @@ while [ "$#" -gt 0 ]; do
             ;;
     esac
 done
-
-explicit_bead_id() {
-    if [ -n "$WORK_BEAD_ID" ]; then
-        printf '%s\n' "$WORK_BEAD_ID"
-        return 0
-    fi
-    return 1
-}
 
 log_step() {
     printf 'workspace-setup: %s\n' "$*" >&2
@@ -106,63 +63,6 @@ run_required() {
         log_step "$step failed (exit $rc)"
     fi
     return "$rc"
-}
-
-write_bead_change_description() {
-    bead_id="${1:-}"
-    out="${2:?missing output path}"
-
-    if [ -n "$WORK_TITLE" ]; then
-        title=$(printf '%s' "$WORK_TITLE" | tr '\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//')
-        body=$(printf '%s' "$WORK_DESCRIPTION" | sed '/^[[:space:]]*$/d')
-        {
-            printf 'work: %s\n' "$title"
-            if [ -n "$body" ]; then
-                printf '\n%s\n' "$body"
-            fi
-        } > "$out"
-        return 0
-    fi
-
-    if [ -z "$bead_id" ] || ! command -v bd >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
-        return 1
-    fi
-
-    bead_json=$(bd show "$bead_id" --json 2>/dev/null || true)
-    if [ -z "$bead_json" ]; then
-        return 1
-    fi
-
-    title=$(printf '%s' "$bead_json" | jq -r '.[0].title // .title // empty' 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//')
-    body=$(printf '%s' "$bead_json" | jq -r '.[0].description // .[0].notes // .description // .notes // empty' 2>/dev/null | sed '/^[[:space:]]*$/d')
-    if [ -z "$title" ]; then
-        title="$bead_id"
-    fi
-
-    {
-        printf 'work: %s %s\n' "$bead_id" "$title"
-        if [ -n "$body" ]; then
-            printf '\n%s\n' "$body"
-        fi
-    } > "$out"
-}
-
-describe_workspace_change_from_bead() {
-    if ! bead_id=$(explicit_bead_id); then
-        return 0
-    fi
-
-    is_empty=$(jj -R "$WT" log -r @ --no-graph --template 'if(empty, "1", "0")' 2>/dev/null || printf '0')
-    current_desc=$(jj -R "$WT" log -r @ --no-graph --template 'description.first_line()' 2>/dev/null || true)
-    if [ "$is_empty" != "1" ] && [ -n "$current_desc" ]; then
-        return 0
-    fi
-
-    desc_file=$(mktemp)
-    if write_bead_change_description "$bead_id" "$desc_file"; then
-        jj -R "$WT" describe --stdin < "$desc_file" >/dev/null 2>&1 || true
-    fi
-    rm -f "$desc_file"
 }
 
 write_workspace_runtime_files() {
@@ -353,7 +253,6 @@ refresh_existing_workspace() {
         run_required "create refreshed workspace commit from $base" jj -R "$WT" new "$base" -m "workspace: refresh from $base" >/dev/null
     fi
 
-    describe_workspace_change_from_bead
 }
 
 REVSET=$(resolve_base_revset)
@@ -409,7 +308,6 @@ trap - EXIT HUP INT TERM
 
 write_workspace_runtime_files
 install_workspace_excludes
-describe_workspace_change_from_bead
 
 if [ "$SYNC" = "--sync" ]; then
     jj -R "$WT" git fetch 2>/dev/null || true
