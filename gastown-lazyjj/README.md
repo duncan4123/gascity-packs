@@ -7,6 +7,8 @@ LazyJJ workspace and stack workflow pack for Gas Town jj workers.
 - `jedi` named sessions for rig-scoped LazyJJ workers
 - `tasksmith` named sessions for LazyJJ-aligned task and bead authoring
 - the `mol-polecat-lazyjj-work` formula for workspace-bound stack work
+- the `mol-lazyjj-release` formula for publishing a pack release from a jedi
+  workspace and refreshing the city import
 - the `mol-lazyjj-runtime-verify` formula for live `.gc` runtime/import checks
 - the `lazyjj-workspace` skill for implementation and handoff rules
 - jedi prompts that expose runtime workspace details and the `GC_*` identity
@@ -78,6 +80,7 @@ cross-workspace sync formula before starting new work.
 - [`agents/tasksmith/prompt.template.md`](./agents/tasksmith/prompt.template.md)
 - [`formulas/mol-polecat-lazyjj-work.toml`](./formulas/mol-polecat-lazyjj-work.toml)
 - [`formulas/mol-lazyjj-publish.toml`](./formulas/mol-lazyjj-publish.toml)
+- [`formulas/mol-lazyjj-release.toml`](./formulas/mol-lazyjj-release.toml)
 - [`formulas/mol-lazyjj-create-pr.toml`](./formulas/mol-lazyjj-create-pr.toml)
 - [`formulas/mol-lazyjj-create-stack.toml`](./formulas/mol-lazyjj-create-stack.toml)
 - [`formulas/mol-lazyjj-edit-mid-stack.toml`](./formulas/mol-lazyjj-edit-mid-stack.toml)
