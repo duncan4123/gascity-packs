@@ -71,6 +71,32 @@ Manual edits to runtime files (`.gc/system/packs/`, wrapper scripts, installed b
 - Worker workspaces are temporary and should be treated as staging areas for individual tasks, not as permanent branches.
 - If a change belongs in the shared city model, it should land in the shared default chain so the runner and other agents can pick it up consistently.
 
+### Workspace Map
+
+| Workspace | Location | What it is for |
+|-----------|----------|----------------|
+| `gascity/default` | `./gascity/` | Controller integration head for code that runs the city itself |
+| `gascity-packs/default` | `./gascity-packs/` | Shared pack integration head for pack fragments, commands, and formulas |
+| `gascity-packs/gastown-lazyjj.furiosa` | `.gc/workspaces/gascity-packs/jedi/gastown-lazyjj.furiosa` | Worker workspace for isolated lazyjj work and recovery |
+
+### How They Work Together
+
+The city uses a simple chain:
+
+1. A task lands in a worker workspace when an agent needs isolation.
+2. The agent makes the smallest useful change there.
+3. The change is rebased onto the `default@` tip in the repo that owns it.
+4. The default workspace becomes the shared handoff point.
+5. Origin and the runner pick up the default-chain commit, not the worker scratch commit.
+
+For this city:
+
+- controller changes belong in `gascity/default`
+- pack changes belong in `gascity-packs/default`
+- worker investigation and recovery happen in `gascity-packs/gastown-lazyjj.furiosa`
+
+The important mental model is that a worker workspace is not another branch of truth. It is a place to shape a change before it is moved back into the default chain.
+
 ### Build Pipeline
 
 ```
