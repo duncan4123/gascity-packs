@@ -20,6 +20,11 @@ WT="${2:?missing target-dir}"
 AGENT="${3:?missing agent-name}"
 SYNC="${4:-}"
 
+# pre_start may launch with cwd already set to WT. First-time setup can
+# temporarily remove WT while staging runtime files, so move to a stable repo
+# directory before any jj command runs.
+cd "$RIG_ROOT"
+
 write_workspace_runtime_files() {
     # Bead redirect: point .beads at the rig's bead store so bd commands work
     # from inside the workspace without a separate bead database.
