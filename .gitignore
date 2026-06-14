@@ -4,6 +4,8 @@
 *.db
 .beads-credential-key
 .gc/
+.jjw/
+.jjw.yaml
 
 # Gas City
 .beads/*

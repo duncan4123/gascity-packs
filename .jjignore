@@ -1,6 +1,8 @@
 .beads/redirect
 .beads/hooks/
 .beads/formulas/
+.jjw/
+.jjw.yaml
 .logs/
 .claude/
 .codex/
