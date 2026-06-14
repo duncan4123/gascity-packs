@@ -10,10 +10,30 @@ The city is the **primary development and testing ground** for running Gas Town 
 ### Repo and Workspace Layout
 
 - City root: `/data/projects/doltlite-gascity`
-- `gascity/` is the main controller repo. Its `default@` workspace is the integration baseline.
-- `gascity-packs/` is the pack repo. Pack edits should land here, then be rebased onto the `default@` tip before publish.
+- `gascity/` is the main controller repo. Its `default@` workspace is the integration baseline for city behavior.
+- `gascity-packs/` is the pack repo. Pack edits should land here, then be rebased onto the `default@` tip before publish or handoff.
 - Worker workspaces live under `.gc/workspaces/...` and are for isolated work. They are not the canonical source of pack changes.
 - The `beads-doltlite` pack was copied from `gascity/examples/beads-doltlite/` into `gascity-packs/beads-doltlite/` so the pack can evolve in the pack repo without touching the source example.
+- The default workspace in `gascity-packs/` is the place to integrate pack changes before they are handed off; worker workspaces are for drafting, not for inventing a second source of truth.
+
+### How The Workspaces Fit Together
+
+Think of the city as one graph with a few named entry points:
+
+- `gascity/default` is where the controller repo keeps the canonical integration tip.
+- `gascity-packs/default` is where shared pack edits are merged before they are published.
+- `gascity-packs/gastown-lazyjj.furiosa` is a worker workspace for doing isolated pack work without disturbing the default integration tip.
+- Other worker workspaces may exist for other agents, but they should converge back to the same tested default head before handoff.
+
+The normal flow is:
+
+1. Inspect the city root and identify the right repo for the change.
+2. Work in a worker workspace if the task is isolated.
+3. Commit the change in `gascity-packs/` or `gascity/` as appropriate.
+4. Rebase that change onto the current `default@` tip.
+5. Push or hand off from the default chain, not from a scratch workspace.
+
+The important rule is that the worker workspace is not a competing source of truth. It is a drafting area that should feed the shared default chain.
 
 ### The Ship-It Principle
 
@@ -35,6 +55,21 @@ Manual edits to runtime files (`.gc/system/packs/`, wrapper scripts, installed b
 | `dolthub/doltlite` | `./doltlite/` | C library: prolly-tree SQLite fork (libdoltlite.so) |
 | `gascity-packs` | `./gascity-packs/` | Pack repository; this is where shared pack changes are committed and rebased to `default@` |
 | `duncan4123/beads-doltlite` | `./beads-doltlite/` | `bd` CLI: beads issue tracker with doltlite storage backend |
+
+### Workspace Roles
+
+| Workspace | Role |
+|-----------|------|
+| `gascity/default` | Integration tip for controller behavior and repo-wide coordination |
+| `gascity-packs/default` | Integration tip for packs and fragments |
+| `gascity-packs/gastown-lazyjj.furiosa` | Worker workspace used for isolated editing and recovery |
+
+### Collaboration Pattern
+
+- The controller repo (`gascity/`) and the pack repo (`gascity-packs/`) are related but distinct.
+- Packs are authored in `gascity-packs/`, then pushed from the `default` chain once they are clean.
+- Worker workspaces are temporary and should be treated as staging areas for individual tasks, not as permanent branches.
+- If a change belongs in the shared city model, it should land in the shared default chain so the runner and other agents can pick it up consistently.
 
 ### Build Pipeline
 
@@ -96,6 +131,7 @@ beads-doltlite/.beads/ → Rig-level beads store
 
 | Rig | Prefix | Repo | Role |
 |-----|--------|------|------|
-| gascity | `gc-` | `gastownhall/gascity` | Gas Town source, packs, CLI |
+| gascity | `gc-` | `gastownhall/gascity` | Gas Town source, CLI, and controller integration |
+| gascity-packs | `pack-` | `gascity-packs` | Shared pack repository and published pack changes |
 | beads-doltlite | `bd-` | `duncan4123/beads-doltlite` | Beads CLI with doltlite backend |
 {{ end }}
