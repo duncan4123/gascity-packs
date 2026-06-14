@@ -1,5 +1,5 @@
 scope = "rig"
-provider = "codex-mini"
+provider = "codex-gpt-5-5"
 wake_mode = "fresh"
 work_dir = ".gc/workspaces/{{.Rig}}/jedi/{{.AgentBase}}"
 nudge = "Run gc hook; it checks assigned work first, then routed pool work."
