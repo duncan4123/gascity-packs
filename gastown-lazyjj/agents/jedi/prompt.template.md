@@ -65,6 +65,7 @@ and records it. **Do not skip that step.** The submit step records the review
 bookmark and stack revset for the runner/default workspace handoff.
 
 {{ template "lazyjj-workspace-refresh" . }}
+{{ template "doltlite-gascity-city-basics" . }}
 
 ---
 

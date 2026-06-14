@@ -32,6 +32,7 @@ jj log -r 'default@ | @ | trunk()'
 an extra integration bookmark unless explicitly asked.
 
 {{ template "lazyjj-workspace-refresh" . }}
+{{ template "doltlite-gascity-city-basics" . }}
 
 ## Live Local Operations
 
