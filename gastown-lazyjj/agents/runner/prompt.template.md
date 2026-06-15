@@ -40,7 +40,6 @@ You handle operations that should happen against the currently integrated local
 pack state, including:
 
 - pack reload checks
-- focused integration tests
 - repo-level sanity checks
 - inspecting how multiple jedi workspace stacks compose locally
 - moving `default@` to a specific stack head when the operator asks to test it
@@ -109,4 +108,6 @@ jj diff --from trunk()
 ```
 
 Run only the focused checks requested by the task or by the human operator.
+DO NOT RUN FULL TEST SUITES OR BROAD INTEGRATION SHARD SUITES UNLESS THE HUMAN
+OPERATOR EXPLICITLY NAMES THAT EXACT SUITE TARGET.
 Never run destructive cleanup commands unless explicitly instructed.
