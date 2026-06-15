@@ -9,6 +9,9 @@ The pack provides:
   not already on `PATH`.
 - `assets/scripts/workspace-setup.sh`: pre-start helper for agent workspaces.
 - `gc jjw install`: explicit install command.
+- `gc jjw workspace-report`: prints a `jjw`-backed workspace report.
+- `orders/workspace-report.toml`: direct exec smoke report order.
+- `orders/jjw-workspace-report.toml`: formula-backed dog report order.
 - `gc doctor`: `check-jjw` verifies the binary can be installed/resolved.
 
 ## Agent usage
