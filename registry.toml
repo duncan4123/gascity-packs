@@ -194,3 +194,16 @@ schema = 1
     commit = "788b6e8ec224a8951c728ef6da74dab8bc04d474"
     hash = "sha256:fff2523a9ab32e0812815c8d2addb08e6349d3885052d095bd76600eec87921a"
     description = "Initial Slack mini pack release with canonical content hash."
+
+[[pack]]
+name = "gascity-jj"
+description = "Gas City planning and implementation workflow pack for jj-backed work."
+source = "https://github.com/gastownhall/gascity-packs/tree/main/gascity-jj"
+source_kind = "git"
+
+  [[pack.release]]
+  version = "0.1.0"
+  ref = "main"
+  commit = "828745f368f7cd0e983bc2720c2968f20437bf76"
+  hash = "sha256:a5d2beb0074b1cb4635e1b698ea52864e11c382edbb5d4d09e6af6bbaa3c9586"
+  description = "Initial Gas City jj workflow pack release."
