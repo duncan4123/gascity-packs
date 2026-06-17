@@ -1,0 +1,120 @@
+description = """
+Repair related jj lines with the Gas City megamerge workflow.
+"""
+formula = "mol-megamerge-work"
+version = 1
+
+[[steps]]
+id = "inventory-lines"
+title = "Inventory related lines"
+description = """
+List the relevant jj lines, their descriptions, and the behavior each line owns.
+
+Use `jj log --no-pager` with explicit revsets. Prefer change IDs over commit
+hashes. Record which line owns each behavior before editing.
+
+Exit criteria:
+
+- all related lines are listed
+- intended ownership is written down
+- obsolete or duplicate candidate lines are identified
+"""
+
+[[steps]]
+id = "create-or-enter-megamerge"
+title = "Create or enter megamerge"
+needs = ["inventory-lines"]
+description = """
+Create a multi-parent merge if one does not exist, or edit the existing one.
+
+```bash
+jj new <line-a> <line-b> <line-c> -m "merge: reconcile <topic>"
+```
+
+Resolve conflicts in the merge until the integrated view is coherent. Then
+create an empty scratch child above it:
+
+```bash
+jj new @ -m "wip: continue <topic> reconciliation"
+```
+
+Exit criteria:
+
+- merge commit has every relevant line as a parent
+- scratch child is empty and current `@`
+- `jj status` shows the scratch child has no changes
+"""
+
+[[steps]]
+id = "repair-in-scratch"
+title = "Repair in scratch child"
+needs = ["create-or-enter-megamerge"]
+description = """
+Make remaining fixes in the scratch child, not by copying files to an unrelated
+linear branch.
+
+Use `jj-hunk list` to inspect hunk groups as work accumulates.
+
+Exit criteria:
+
+- fixes compile locally enough for hunk routing
+- each hunk has an intended owning line
+"""
+
+[[steps]]
+id = "route-hunks"
+title = "Route hunks to owner lines"
+needs = ["repair-in-scratch"]
+description = """
+Move hunks back into the parent line that owns them.
+
+Use `jj absorb` when blame can route cleanly. Use `jj-hunk` or explicit
+`jj squash --from @ --into <line> -m ...` when ownership is hunk-level or
+ambiguous.
+
+Exit criteria:
+
+- scratch child is empty or contains only intentionally unresolved work
+- owner lines contain their own fixes
+- merge commit remains the integrated validation surface
+"""
+
+[[steps]]
+id = "verify"
+title = "Verify integrated view"
+needs = ["route-hunks"]
+description = """
+Run focused build and tests from the integrated view.
+
+Minimum build:
+
+```bash
+go build ./cmd/gc
+```
+
+For DoltLite bead work:
+
+```bash
+CGO_ENABLED=1 go test -tags gascity_doltlite_lib ./internal/beads -run 'TestDoltliteReadStore' -count=1 -timeout=120s
+```
+
+Exit criteria:
+
+- build/test results are recorded
+- remaining failing tests are attributed to either this work or existing repo state
+"""
+
+[[steps]]
+id = "handoff"
+title = "Handoff"
+needs = ["verify"]
+description = """
+Summarize:
+
+- merge change ID
+- scratch child change ID
+- parent lines and ownership
+- hunks moved or intentionally left in scratch
+- build/test results
+- obsolete lines to abandon later
+"""

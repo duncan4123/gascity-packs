@@ -1,0 +1,104 @@
+description = """
+Route broad pack-maintenance work into pack-scoped jj workspaces.
+
+Use this formula from a rig-root router session. The router inspects the request
+with the full packs repository visible, identifies target packs, creates one
+child bead per target pack, and dispatches those beads to pack agents that run
+`mol-packer-work` from sparse jj workspaces.
+"""
+formula = "mol-packer-route"
+version = 1
+
+[[steps]]
+id = "load-request"
+title = "Load request from rig root"
+description = """
+Run `gc hook`, read the assigned bead, and inspect the pack repository from the
+rig root.
+
+```bash
+gc hook
+pwd
+jj status
+```
+
+Exit criteria:
+
+- the request is understood
+- the target pack or packs are explicit
+- shared registry/test/doc surfaces are identified
+"""
+
+[[steps]]
+id = "plan-pack-routes"
+title = "Plan pack routes"
+needs = ["load-request"]
+description = """
+For each target pack, decide the pack route and pack root. In `gascity-packs`,
+the usual route for `jj-hunk` is:
+
+```toml
+pack = "jj-hunk"
+pack_root = "{{.Pack}}"
+```
+
+If a target pack agent is not configured, record the missing route and stop
+before creating implementation beads.
+
+Exit criteria:
+
+- every target pack has a matching pack agent route
+- route target names are recorded
+- any missing worker configuration is reported clearly
+"""
+
+[[steps]]
+id = "create-pack-beads"
+title = "Create pack-scoped beads"
+needs = ["plan-pack-routes"]
+description = """
+Create one child bead per target pack. Each child bead should include:
+
+- target pack name
+- resolved pack root if it differs from the pack name
+- formula `mol-packer-work`
+- acceptance criteria
+- verification command, usually `gc lint <pack>`
+- dependencies on other child beads when order matters
+
+Use metadata or notes to preserve the route decision. Example metadata keys:
+
+```text
+gc.pack=<pack>
+gc.pack_root=<pack-root>
+```
+
+Exit criteria:
+
+- child beads are claim-sized
+- target pack is visible in each bead
+- dependencies encode only real ordering constraints
+"""
+
+[[steps]]
+id = "dispatch-pack-beads"
+title = "Dispatch pack beads"
+needs = ["create-pack-beads"]
+description = """
+Dispatch each child bead to the configured pack agent and formula.
+
+Typical shape:
+
+```bash
+gc sling <pack-agent-target> <child-bead-id> --on mol-packer-work
+```
+
+The pack agent must have a `pack` route matching the child bead target. Do not
+dispatch to a generic or mismatched worker just to get the bead moving.
+
+Exit criteria:
+
+- every child bead is routed to the correct pack agent
+- the parent bead notes list child beads and targets
+- any unrouted pack is explicitly recorded
+"""

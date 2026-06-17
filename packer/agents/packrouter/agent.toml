@@ -1,0 +1,9 @@
+scope = "rig"
+provider = "omp-packrouter"
+wake_mode = "fresh"
+formula = "mol-packer-route"
+work_dir = "{{.RigRoot}}"
+nudge = "Run gc hook; inspect the request from the rig root, choose target packs, create pack-scoped beads, and route them to pack agents."
+idle_timeout = "2h"
+min_active_sessions = 0
+max_active_sessions = 2
