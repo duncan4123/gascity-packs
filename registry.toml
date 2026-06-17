@@ -194,3 +194,16 @@ schema = 1
     commit = "788b6e8ec224a8951c728ef6da74dab8bc04d474"
     hash = "sha256:fff2523a9ab32e0812815c8d2addb08e6349d3885052d095bd76600eec87921a"
     description = "Initial Slack mini pack release with canonical content hash."
+
+[[pack]]
+  name = "jjw"
+  description = "Jujutsu workspace setup helpers backed by aranw/jjw."
+  source = "https://github.com/gastownhall/gascity-packs/tree/main/jjw"
+  source_kind = "git"
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "main"
+    commit = "010081c97f713d2f3886fc21a79167736b7d9bda"
+    hash = "sha256:77b673cbdea869320175739bc1b7d93c17d8a0a354c7f327bfdc0a929c39529a"
+    description = "Initial jjw workspace helper pack release."
