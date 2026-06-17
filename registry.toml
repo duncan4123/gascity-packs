@@ -246,3 +246,16 @@ source_kind = "git"
     commit = "010081c97f713d2f3886fc21a79167736b7d9bda"
     hash = "sha256:77b673cbdea869320175739bc1b7d93c17d8a0a354c7f327bfdc0a929c39529a"
     description = "Initial jjw workspace helper pack release."
+
+[[pack]]
+  name = "jj-hunk"
+  description = "Agent-safe jj hunk selection workflows and subagent workspace tasking."
+  source = "https://github.com/gastownhall/gascity-packs/tree/main/jj-hunk"
+  source_kind = "git"
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "main"
+    commit = "55df48a7bb8e099c9098b7e799edff335e606f5e"
+    hash = "sha256:f02b003a667bbced8184137f182df13483844d40a753b3e643080a93e96c4b29"
+    description = "Initial jj-hunk workflow pack release."

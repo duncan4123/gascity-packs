@@ -1,0 +1,7 @@
+scope = "rig"
+provider = "omp-surgeon"
+wake_mode = "fresh"
+formula = "mol-jj-hunk-work"
+work_dir = "{{.RigRoot}}"
+nudge = "Run gc hook; it checks assigned hunk-surgery work first, then routed pool work."
+idle_timeout = "2h"
