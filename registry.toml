@@ -259,3 +259,16 @@ source_kind = "git"
     commit = "55df48a7bb8e099c9098b7e799edff335e606f5e"
     hash = "sha256:f02b003a667bbced8184137f182df13483844d40a753b3e643080a93e96c4b29"
     description = "Initial jj-hunk workflow pack release."
+
+[[pack]]
+name = "lazyjj-implementation"
+description = "Gas City planning and implementation workflow pack for LazyJJ-backed work."
+source = "https://github.com/gastownhall/gascity-packs/tree/main/lazyjj-implementation"
+source_kind = "git"
+
+  [[pack.release]]
+  version = "0.1.0"
+  ref = "main"
+  commit = "828745f368f7cd0e983bc2720c2968f20437bf76"
+  hash = "sha256:4d1a51a85ada26e8b75812e624302cc19ba3d182ca38229285d8d3fc94044106"
+  description = "Initial LazyJJ implementation workflow pack release."
