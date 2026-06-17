@@ -1,5 +1,5 @@
 scope = "rig"
-provider = "codex-gpt-5-5"
+provider = "omp-tasksmith"
 wake_mode = "fresh"
 formula = "mol-jj-hunk-subagent-task"
 work_dir = ".gc/workspaces/{{.Rig}}/jj-hunk-tasksmith/{{.AgentBase}}"
