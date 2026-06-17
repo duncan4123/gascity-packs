@@ -1,0 +1,137 @@
+description = """
+LazyJJ pack release workflow for a jedi workspace.
+
+Use this when a jedi workspace already contains the release candidate and you
+need to turn it into a published pack release, then refresh the city import so
+the live runtime follows the released pack instead of a temporary tree pin.
+
+The formula is intentionally workspace-first:
+- it does not create or switch workspaces
+- it assumes the current jedi workspace owns the release candidate
+- it keeps the release graph visible through jj history operations
+"""
+formula = "mol-lazyjj-release"
+version = 1
+
+[vars]
+[vars.release_version]
+description = "Release version to write into gastown-lazyjj/pack.toml."
+required = true
+
+[vars.city_root]
+description = "Path to the city root that owns city.toml and packs.lock."
+default = ".."
+
+[vars.release_bookmark]
+description = "Bookmark used to publish the release commit on the pack repo."
+default = "main"
+
+[vars.release_source]
+description = "Import source to write into city.toml for the released pack."
+default = "https://github.com/duncan4123/gascity-packs.git//gastown-lazyjj"
+
+[[steps]]
+id = "inspect"
+title = "Inspect the release candidate"
+description = """
+Make sure the workspace contains the intended release candidate before changing
+the release metadata.
+
+```bash
+jj status
+jj diff --git
+jj log -r 'trunk() | stack' --limit 40
+sed -n '1,40p' gastown-lazyjj/pack.toml
+```
+
+Exit criteria:
+
+- the release candidate stack is visible
+- the pack version file is the one that will be released
+- no unexpected workspace edits are hidden
+"""
+
+[[steps]]
+id = "bump-version"
+title = "Bump the pack version"
+needs = ["inspect"]
+description = """
+Write the requested release version into the pack manifest and describe the
+release commit.
+
+```bash
+perl -0pi -e 's/^version = ".*"$/version = "{{release_version}}"/m' gastown-lazyjj/pack.toml
+jj describe -m "Release gastown-lazyjj {{release_version}}"
+```
+
+Exit criteria:
+
+- `gastown-lazyjj/pack.toml` records `{{release_version}}`
+- the working copy commit is described as the release
+"""
+
+[[steps]]
+id = "publish"
+title = "Publish the release commit"
+needs = ["bump-version"]
+description = """
+Move the release bookmark to the current commit and publish it to the remote.
+
+```bash
+jj bookmark set "{{release_bookmark}}" -r @
+jj git push -b "{{release_bookmark}}"
+gh release create "v{{release_version}}" --title "gastown-lazyjj {{release_version}}" --notes ""
+```
+
+Exit criteria:
+
+- the release commit is published on the pack repo
+- the remote release/tag exists or the exact publish failure is recorded
+"""
+
+[[steps]]
+id = "refresh-city-import"
+title = "Refresh the city import to the released pack"
+needs = ["publish"]
+description = """
+Update the city import to point at the released pack source and reinstall the
+import so the city lockfile tracks the new release.
+
+```bash
+cd "{{city_root}}"
+perl -0pi -e 's#\\[rigs\\.imports\\.gastown-lazyjj\\]\\nsource = \".*\"\\nversion = \"sha:[^\"]+\"\\n#\\[rigs.imports.gastown-lazyjj]\\nsource = \"{{release_source}}\"\\n#s' city.toml
+gc import install
+gc import check
+```
+
+If the import source already matches the release source, `gc import install`
+still refreshes `packs.lock` to the release commit.
+
+Exit criteria:
+
+- `city.toml` points at the released pack source
+- `packs.lock` pins the released commit
+- the city import check passes
+"""
+
+[[steps]]
+id = "verify"
+title = "Verify the released pack from the city"
+needs = ["refresh-city-import"]
+description = """
+Reload the city and render the affected LazyJJ prompts strictly from the
+released import.
+
+```bash
+gc reload --soft
+gc prime jedi --strict
+gc prime tasksmith --strict
+gc prime runner --strict
+```
+
+Exit criteria:
+
+- the live city reload succeeds
+- the key LazyJJ prompts render strictly
+- the release is visible through the city runtime
+"""
