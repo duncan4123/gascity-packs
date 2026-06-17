@@ -220,3 +220,16 @@ source_kind = "git"
   commit = "341c99e9a1c7c50a35022f0424433bb67640dadd"
   hash = "sha256:9e3b911fdce82122f24e77f68dbbf99ab776870cd25f532d5066e9cd55c1c19c"
   description = "Initial Gastown jj runtime pack release."
+
+[[pack]]
+name = "jj-spr"
+description = "SPR workflow pack for Jujutsu-backed pull request review."
+source = "https://github.com/gastownhall/gascity-packs/tree/main/jj-spr"
+source_kind = "git"
+
+  [[pack.release]]
+  version = "0.1.0"
+  ref = "main"
+  commit = "46064a761ed361038b371f65129f6c69ae5ea34c"
+  hash = "sha256:7d401df7b1dbffa87256b9bb3527c3202118bcbd0b4fdd223b5cce8f65e91046"
+  description = "Initial jj-spr workflow pack release."
