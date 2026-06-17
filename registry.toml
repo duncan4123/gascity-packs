@@ -292,3 +292,16 @@ source_kind = "git"
   commit = "57c4cc5c24d7d410ac9a5eebffcfae52aaeb4d84"
   hash = "sha256:3d0810822090d38bbbd1301907366a87d0f3ad5d8c4578b1c6ab2053dd4671f4"
   description = "LazyJJ workspace sync coherence release."
+
+[[pack]]
+name = "packer"
+description = "Pack development and testing toolkit for live Gas City environments."
+source = "https://github.com/gastownhall/gascity-packs/tree/main/packer"
+source_kind = "git"
+
+  [[pack.release]]
+  version = "0.1.0"
+  ref = "main"
+  commit = "828745f368f7cd0e983bc2720c2968f20437bf76"
+  hash = "sha256:b5c5f2cc6f1b00f8c2c115cd4c68bab3206bf70bb498f6b54437a28e5ffb709a"
+  description = "Initial pack development toolkit release."
