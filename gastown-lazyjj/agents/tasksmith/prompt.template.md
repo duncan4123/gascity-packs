@@ -174,13 +174,13 @@ description directly, so the initial `jj` change mirrors the bead:
 LAZYJJ_WORK_BEAD_ID=<bead-id> \
 LAZYJJ_WORK_TITLE=<title> \
 LAZYJJ_WORK_DESCRIPTION=<description> \
-  <config-dir>/assets/scripts/workspace-setup.sh <rig-root> <workspace-dir> <agent-name> --sync
+  <config-dir>/../jjw/assets/scripts/workspace-setup.sh <rig-root> <workspace-dir> <agent-name> --sync
 ```
 
 If shell quoting is awkward, write the description to a file and pass:
 
 ```bash
-<config-dir>/assets/scripts/workspace-setup.sh <rig-root> <workspace-dir> <agent-name> --sync \
+<config-dir>/../jjw/assets/scripts/workspace-setup.sh <rig-root> <workspace-dir> <agent-name> --sync \
   --bead <bead-id> \
   --title "<title>" \
   --description-file <description-file>

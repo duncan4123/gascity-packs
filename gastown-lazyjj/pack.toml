@@ -4,6 +4,9 @@ version = "0.1.2"
 schema = 2
 description = "LazyJJ workspace and stack workflow for Gas Town jj workers."
 
+[imports.jjw]
+source = "../jjw"
+
 [global]
 session_live = [
     "{{.ConfigDir}}/assets/scripts/tmux-scroll.sh {{.Session}}",
