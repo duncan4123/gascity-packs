@@ -10,8 +10,9 @@ one pack at a time.
 - `pack` is the route key and workspace name, such as `jj-hunk`.
 - `pack_root` is the pack directory inside the rig. In `gascity-packs`, the
   default layout is `pack_root = "{{.Pack}}"`.
-- `work_dir` is the jj workspace created for the agent, usually
-  `.gc/workspaces/{{.Rig}}/packs/{{.Pack}}`.
+- `work_dir` is the jj workspace created for the agent. It must resolve inside
+  the `workspace_dir` declared by `jjw` for this rig. In `gascity-packs` that is
+  `../.gc/workspaces/{{.Rig}}/jedi/{{.AgentBase}}`.
 - `pre_start` delegates workspace creation to `jjw`, then sparse-checks out the
   target pack directory plus shared registry/test files.
 
@@ -45,8 +46,8 @@ Define or patch an agent per target pack:
 ```toml
 pack = "jj-hunk"
 pack_root = "{{.Pack}}"
-work_dir = ".gc/workspaces/{{.Rig}}/packs/{{.Pack}}"
-pre_start = ["GC_PACKER_PACK={{.Pack}} {{.ConfigDir}}/assets/scripts/pack-workspace-setup.sh {{.RigRoot}} {{.WorkDir}} {{.AgentBase}} {{.PackRoot}} --sync"]
+work_dir = "../.gc/workspaces/{{.Rig}}/jedi/{{.AgentBase}}"
+pre_start = ["GC_PACKER_PACK={{.Pack}} {{.PackRoot}}/assets/scripts/pack-workspace-setup.sh {{.RigRoot}} {{.WorkDir}} {{.AgentBase}} {{.PackRoot}} --sync"]
 ```
 
 For repos that nest packs, use a different root:

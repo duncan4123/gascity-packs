@@ -1,6 +1,6 @@
 [pack]
 name = "jj-hunk"
-version = "0.1.0"
+version = "0.1.2"
 schema = 2
 description = "Agent-safe jj hunk selection workflows and subagent workspace tasking."
 

@@ -11,24 +11,36 @@ description = """
 List the relevant jj lines, their descriptions, and the behavior each line owns.
 
 Use `jj log --no-pager` with explicit revsets. Prefer change IDs over commit
-hashes. Record which line owns each behavior before editing.
+hashes. Record which line owns each behavior before editing. Treat every stack
+that must compile or behave together as in-scope, even if it is not a direct
+topic parent yet.
 
 Exit criteria:
 
 - all related lines are listed
+- each line has a named head revision to include in the megamerge
 - intended ownership is written down
 - obsolete or duplicate candidate lines are identified
 """
 
 [[steps]]
-id = "create-or-enter-megamerge"
-title = "Create or enter megamerge"
+id = "create-or-restage-megamerge"
+title = "Create or restage megamerge"
 needs = ["inventory-lines"]
 description = """
-Create a multi-parent merge if one does not exist, or edit the existing one.
+Create a multi-parent merge if one does not exist, or restage the existing one
+so it composes every relevant stack head. A graph drawing near the merge is not
+proof that a stack is included; check ancestry explicitly.
 
 ```bash
 jj new <line-a> <line-b> <line-c> -m "merge: reconcile <topic>"
+```
+
+When updating an existing megamerge, include the current megamerge parents plus
+any missing stack heads:
+
+```bash
+jj new <existing-parent-a> <existing-parent-b> <missing-stack-head> -m "merge: reconcile <topic>"
 ```
 
 Resolve conflicts in the merge until the integrated view is coherent. Then
@@ -40,15 +52,41 @@ jj new @ -m "wip: continue <topic> reconciliation"
 
 Exit criteria:
 
-- merge commit has every relevant line as a parent
+- every relevant stack head is an ancestor of the merge
+- direct parents are current stack heads, not stale interior commits
 - scratch child is empty and current `@`
 - `jj status` shows the scratch child has no changes
 """
 
 [[steps]]
+id = "prove-megamerge-membership"
+title = "Prove megamerge membership"
+needs = ["create-or-restage-megamerge"]
+description = """
+Before repair or verification, prove each intended stack is actually in the
+megamerge ancestry.
+
+```bash
+jj log --no-pager -r '<stack-head> & ::<megamerge>'
+jj log --no-pager -r '<megamerge> & <stack-head>::'
+jj log --no-pager -r '<megamerge>-'
+```
+
+The first command must print the stack head. If it does not, that stack is not
+in the megamerge. Restage the megamerge with the missing stack head included
+before doing more repair work.
+
+Exit criteria:
+
+- every intended stack head is proven present in `::<megamerge>`
+- the direct parent list is recorded
+- any intentionally excluded stack is called out with the reason
+"""
+
+[[steps]]
 id = "repair-in-scratch"
 title = "Repair in scratch child"
-needs = ["create-or-enter-megamerge"]
+needs = ["prove-megamerge-membership"]
 description = """
 Make remaining fixes in the scratch child, not by copying files to an unrelated
 linear branch.
@@ -113,7 +151,8 @@ Summarize:
 
 - merge change ID
 - scratch child change ID
-- parent lines and ownership
+- parent stack heads and ownership
+- proof that each intended stack head is in `::<merge>`
 - hunks moved or intentionally left in scratch
 - build/test results
 - obsolete lines to abandon later

@@ -6,9 +6,11 @@ formula = "mol-packer-work"
 # this pack; cities can patch or override it per target pack, for example
 # pack = "jj-hunk" and pack_root = "{{.Pack}}" in gascity-packs.
 pack = "packer"
-work_dir = ".gc/workspaces/{{.Rig}}/packs/{{.Pack}}"
+work_dir = "../.gc/workspaces/{{.Rig}}/jedi/{{.AgentBase}}"
 nudge = "Run gc hook; claim pack maintenance work, then keep the workspace sparse to the target pack plus shared pack infrastructure."
-pre_start = ["GC_PACKER_PACK={{.Pack}} {{.ConfigDir}}/assets/scripts/pack-workspace-setup.sh {{.RigRoot}} {{.WorkDir}} {{.AgentBase}} {{.PackRoot}} --sync"]
+pre_start = [
+  "GC_PACKER_PACK={{.Pack}} {{.PackRoot}}/assets/scripts/pack-workspace-setup.sh {{.RigRoot}} {{.WorkDir}} {{.AgentBase}} {{.PackRoot}} --sync",
+]
 idle_timeout = "2h"
 min_active_sessions = 0
-max_active_sessions = 4
+max_active_sessions = 6
