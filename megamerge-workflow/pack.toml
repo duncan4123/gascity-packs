@@ -13,8 +13,3 @@ command = "/home/ubuntu/.bun/bin/omp"
 prompt_mode = "arg"
 ready_delay_ms = 1000
 path_check = "/home/ubuntu/.bun/bin/omp"
-
-[[named_session]]
-template = "megamerge"
-scope = "rig"
-mode = "on_demand"

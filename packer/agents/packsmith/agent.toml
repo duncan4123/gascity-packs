@@ -2,14 +2,12 @@ scope = "rig"
 provider = "omp-packsmith"
 wake_mode = "fresh"
 formula = "mol-packer-work"
-# `pack` is the route key and workspace name. The bundled default points at
-# this pack; cities can patch or override it per target pack, for example
-# pack = "jj-hunk" and pack_root = "{{.Pack}}" in gascity-packs.
-pack = "packer"
-work_dir = ".gc/workspaces/{{.Rig}}/packs/{{.Pack}}"
-nudge = "Run gc hook; claim pack maintenance work, then keep the workspace sparse to the target pack plus shared pack infrastructure."
+# Shared packsmith is a neutral pool template. Routed beads select the actual
+# pack with gc.pack/gc.pack_root metadata before pre_start runs.
+work_dir = ".gc/workspaces/{{.Rig}}/packs/__packsmith__"
+nudge = "Check jj log & list packs"
 pre_start = [
-  "GC_PACKER_PACK=packer \"$GC_RIG_ROOT/packer/assets/scripts/pack-workspace-setup.sh\" --sync",
+  "\"$GC_RIG_ROOT/packer/assets/scripts/pack-workspace-setup.sh\" --sync",
 ]
 idle_timeout = "2h"
 min_active_sessions = 0

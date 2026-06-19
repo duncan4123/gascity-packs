@@ -25,8 +25,3 @@ path_check = "/home/ubuntu/.bun/bin/omp"
 template = "tasksmith"
 scope = "rig"
 mode = "always"
-
-[[named_session]]
-template = "surgeon"
-scope = "rig"
-mode = "on_demand"
