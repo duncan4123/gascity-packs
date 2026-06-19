@@ -208,6 +208,12 @@ for key, val in imports.items():
         abs_source = os.path.realpath(abs_source)
     except OSError:
         continue
+    # Skip self-references: the pack itself is already sparse-checked out.
+    try:
+        if abs_source == pack_dir or os.path.commonpath([pack_dir, abs_source]) == pack_dir:
+            continue
+    except ValueError:
+        continue
     # Validate that resolved local import paths live inside the rig root.
     try:
         common = os.path.commonpath([rig_root, abs_source])
