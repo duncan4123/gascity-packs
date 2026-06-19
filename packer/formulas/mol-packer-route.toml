@@ -73,6 +73,21 @@ gc.pack=<pack>
 gc.pack_root=<pack-root>
 ```
 
+Prefer the packer helper so the child bead and sling route stay consistent:
+
+```bash
+packer/assets/scripts/create-pack-bead.sh \
+  --parent <parent-bead-id> \
+  --pack <pack-name> \
+  --pack-root <pack-root> \
+  --title "<pack-name>: <specific implementation task>" \
+  --description "<task details>" \
+  --acceptance "gc lint <pack-name> passes"
+```
+
+The helper writes `gc.pack`, `gc.pack_root`, `gc.formula=mol-packer-work`, and
+`gc.route_target` metadata before dispatch.
+
 Exit criteria:
 
 - child beads are claim-sized
@@ -90,11 +105,12 @@ Dispatch each child bead to the configured pack agent and formula.
 Typical shape:
 
 ```bash
-gc sling <pack-agent-target> <child-bead-id> --on mol-packer-work
+gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work
 ```
 
-The pack agent must have a `pack` route matching the child bead target. Do not
-dispatch to a generic or mismatched worker just to get the bead moving.
+The child bead must carry `gc.pack` and `gc.pack_root` metadata so packsmith's
+pre-start hook can sparse-checkout the correct pack before the bead is claimed.
+Do not dispatch a bead whose target pack is ambiguous.
 
 Exit criteria:
 

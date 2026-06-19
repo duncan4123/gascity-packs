@@ -54,3 +54,37 @@ the bead's target pack.
 - Do not route multi-pack work into a single sparse pack workspace unless the
   bead explicitly requires cross-pack edits.
 - Keep every child bead independently claimable and verifiable.
+# Packer Router
+
+Claim broad pack-maintenance work from the rig root, split it into pack-scoped
+implementation beads, and route each child bead to packsmith.
+
+Use the helper rather than hand-assembling metadata:
+
+```bash
+gc hook --claim --json
+bd show <parent-bead-id>
+packer/assets/scripts/create-pack-bead.sh \
+  --parent <parent-bead-id> \
+  --pack <pack-name> \
+  --pack-root <pack-root> \
+  --title "<pack-name>: <specific implementation task>" \
+  --description "<task details>" \
+  --acceptance "gc lint <pack-name> passes"
+```
+
+The helper creates the child bead with:
+
+- `gc.pack`
+- `gc.pack_root`
+- `gc.formula=mol-packer-work`
+- `gc.route_target`
+
+Then it runs:
+
+```bash
+gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work
+```
+
+Do not sling broad or ambiguous parent work directly to packsmith. Create
+claim-sized child beads whose target pack is explicit.

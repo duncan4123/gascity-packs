@@ -43,6 +43,7 @@ esac
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PACK_NAME="${GC_PACKER_PACK:-${PACKER_PACK:-$AGENT_NAME}}"
 EXTRA_PATTERNS="${GC_PACKER_SPARSE_ADD:-}"
+TRIGGER_TITLE=""
 
 show_trigger_bead_json() {
     bead_id="$1"
@@ -61,6 +62,7 @@ if [ -n "${GC_TRIGGER_BEAD_ID:-}" ]; then
         if trigger_json=$(show_trigger_bead_json "$GC_TRIGGER_BEAD_ID"); then
             trigger_pack=$(printf '%s' "$trigger_json" | jq -r '((if type == "array" then .[0] else . end).metadata // {})["gc.pack"] // empty' 2>/dev/null || printf '')
             trigger_pack_root=$(printf '%s' "$trigger_json" | jq -r '((if type == "array" then .[0] else . end).metadata // {})["gc.pack_root"] // empty' 2>/dev/null || printf '')
+            TRIGGER_TITLE=$(printf '%s' "$trigger_json" | jq -r '(if type == "array" then .[0] else . end).title // empty' 2>/dev/null || printf '')
             if [ -n "$trigger_pack" ]; then
                 PACK_NAME="$trigger_pack"
             fi
@@ -82,8 +84,23 @@ case "$PACK_NAME" in
         ;;
 esac
 
+PACK_WORKSPACE_DIR="$(dirname "$TARGET_DIR")/$PACK_NAME"
+PACK_WORKSPACE_PARENT=$(python3 - "$RIG_ROOT" "$(dirname "$PACK_WORKSPACE_DIR")" <<'PY'
+import os, sys
+print(os.path.relpath(os.path.abspath(sys.argv[2]), os.path.abspath(sys.argv[1])))
+PY
+)
+
 workspace_setup="$SCRIPT_DIR/../../../jjw/assets/scripts/workspace-setup.sh"
-"$workspace_setup" "$RIG_ROOT" "$TARGET_DIR" "$AGENT_NAME" "$@"
+if [ -n "${GC_TRIGGER_BEAD_ID:-}" ]; then
+	if [ -n "$TRIGGER_TITLE" ]; then
+		GC_JJW_WORKSPACE_DIR="$PACK_WORKSPACE_PARENT" "$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_NAME" --bead "$GC_TRIGGER_BEAD_ID" --title "$TRIGGER_TITLE" "$@"
+	else
+		GC_JJW_WORKSPACE_DIR="$PACK_WORKSPACE_PARENT" "$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_NAME" --bead "$GC_TRIGGER_BEAD_ID" "$@"
+	fi
+else
+	GC_JJW_WORKSPACE_DIR="$PACK_WORKSPACE_PARENT" "$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_NAME" "$@"
+fi
 
 # `PACK_NAME` is the route/workspace key. `PACK_ROOT` is the resolved pack
 # directory from Gas City's {{.PackRoot}} template. Convert it back into a jj
@@ -143,10 +160,44 @@ if [ -n "$EXTRA_PATTERNS" ]; then
     printf '%s\n' "$EXTRA_PATTERNS" >>"$patterns_file"
 fi
 
+# Add imported pack directories to the sparse checkout so `gc lint` can resolve
+# pack.toml imports and helper scripts can reference sibling pack assets.
+pack_toml="$RIG_ROOT/$PACK_PATTERN/pack.toml"
+if [ -f "$pack_toml" ]; then
+    python3 - "$RIG_ROOT" "$PACK_PATTERN" "$pack_toml" <<'PY' >>"$patterns_file"
+import os, sys, tomllib
+rig_root = sys.argv[1]
+pack_pattern = sys.argv[2].rstrip('/')
+pack_toml = sys.argv[3]
+pack_dir = os.path.dirname(os.path.abspath(pack_toml))
+try:
+    with open(pack_toml, 'rb') as f:
+        data = tomllib.load(f)
+except Exception:
+    sys.exit(0)
+imports = data.get('imports', {})
+for key, val in imports.items():
+    source = val.get('source', '') if isinstance(val, dict) else val
+    if not source:
+        continue
+    if source.startswith('/'):
+        abs_source = source
+    else:
+        abs_source = os.path.normpath(os.path.join(pack_dir, source))
+    try:
+        rel = os.path.relpath(abs_source, os.path.abspath(rig_root))
+    except ValueError:
+        continue
+    if rel.startswith('..'):
+        continue
+    print(rel.rstrip('/') + '/')
+PY
+fi
+
 set -- --clear
 while IFS= read -r pattern; do
     [ -n "$pattern" ] || continue
     set -- "$@" --add "$pattern"
 done <"$patterns_file"
 
-jj -R "$TARGET_DIR" sparse set "$@"
+jj -R "$PACK_WORKSPACE_DIR" sparse set "$@"

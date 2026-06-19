@@ -344,10 +344,17 @@ if [ -d "$WT" ] && [ "$(find "$WT" -mindepth 1 -maxdepth 1 | head -n 1)" ]; then
 fi
 rmdir "$WT" 2>/dev/null || true
 
-if ! jjw create "$WORKSPACE_NAME" --revision "$REVSET" >/dev/null; then
-    echo "jjw workspace-setup: failed to create workspace $WORKSPACE_NAME at $WT from $RIG_ROOT (revset $REVSET)" >&2
-    restore_stage
-    exit 1
+BOOKMARK=$(printf '%s\n' "$bookmark_pattern" | sed "s/{name}/$WORKSPACE_NAME/g")
+if jj -R "$RIG_ROOT" log -r "$BOOKMARK" --no-graph -T '' >/dev/null 2>&1; then
+    if ! jjw create "$WORKSPACE_NAME" --revision "$REVSET" --bookmark "$BOOKMARK" >/dev/null; then
+		echo "jjw workspace-setup: failed to create workspace $WORKSPACE_NAME at $WT from $RIG_ROOT (revset $REVSET, bookmark $BOOKMARK)" >&2
+        restore_stage
+        exit 1
+    fi
+elif ! jjw create "$WORKSPACE_NAME" --revision "$REVSET" >/dev/null; then
+	echo "jjw workspace-setup: failed to create workspace $WORKSPACE_NAME at $WT from $RIG_ROOT (revset $REVSET)" >&2
+	restore_stage
+	exit 1
 fi
 
 if [ ! -d "$WT/.jj" ]; then

@@ -12,7 +12,8 @@ one pack at a time.
   default layout is `pack_root = "{{.Pack}}"`.
 - `work_dir` is the jj workspace created for the agent. It must resolve inside
   the `workspace_dir` declared by `jjw` for this rig. In `gascity-packs` that is
-  `../.gc/workspaces/{{.Rig}}/jedi/{{.AgentBase}}`.
+  `.gc/workspaces/{{.Rig}}/packs/{{.Pack}}`. The workspace name is the pack
+  name, so the default bookmark is `gc/<pack>`.
 - `pre_start` delegates workspace creation to `jjw`, then sparse-checks out the
   target pack directory plus shared registry/test files.
 
@@ -46,8 +47,8 @@ Define or patch an agent per target pack:
 ```toml
 pack = "jj-hunk"
 pack_root = "{{.Pack}}"
-work_dir = "../.gc/workspaces/{{.Rig}}/jedi/{{.AgentBase}}"
-pre_start = ["GC_PACKER_PACK={{.Pack}} {{.PackRoot}}/assets/scripts/pack-workspace-setup.sh {{.RigRoot}} {{.WorkDir}} {{.AgentBase}} {{.PackRoot}} --sync"]
+work_dir = ".gc/workspaces/{{.Rig}}/packs/{{.Pack}}"
+pre_start = ["GC_PACKER_PACK=packer \"$GC_RIG_ROOT/packer/assets/scripts/pack-workspace-setup.sh\" --sync"]
 ```
 
 For repos that nest packs, use a different root:
@@ -66,6 +67,21 @@ child beads should be assigned or slung to pack agents running
 Every implementation bead should name the target pack in the title, notes,
 formula context, or metadata. `mol-packer-work` expects the claimed bead target
 to match the session's `pack` route before editing.
+
+Use the router helper to create implementation beads:
+
+```bash
+packer/assets/scripts/create-pack-bead.sh \
+  --parent <parent-bead-id> \
+  --pack jj-hunk \
+  --pack-root jj-hunk \
+  --title "jj-hunk: fix sparse hunk workspace setup" \
+  --description "Make the hunk workspace setup deterministic." \
+  --acceptance "gc lint jj-hunk passes"
+```
+
+The helper creates the bead with `gc.pack` / `gc.pack_root` metadata, then runs
+`gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work`.
 
 When the target does not match the current sparse workspace, reroute the bead to
 the correct pack agent instead of editing from the wrong checkout.
