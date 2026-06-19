@@ -166,29 +166,61 @@ pack_toml="$RIG_ROOT/$PACK_PATTERN/pack.toml"
 if [ -f "$pack_toml" ]; then
     python3 - "$RIG_ROOT" "$PACK_PATTERN" "$pack_toml" <<'PY' >>"$patterns_file"
 import os, sys, tomllib
-rig_root = sys.argv[1]
+rig_root = os.path.realpath(sys.argv[1])
 pack_pattern = sys.argv[2].rstrip('/')
 pack_toml = sys.argv[3]
-pack_dir = os.path.dirname(os.path.abspath(pack_toml))
+pack_dir = os.path.dirname(os.path.realpath(pack_toml))
+
+def is_remote_source(source):
+    # Skip remote/URL imports explicitly. Anything with a URL scheme or git SSH
+    # form is not a local pack directory and must not become a sparse pattern.
+    if '://' in source:
+        return True
+    if source.startswith('git@'):
+        return True
+    return False
+
 try:
     with open(pack_toml, 'rb') as f:
         data = tomllib.load(f)
 except Exception:
     sys.exit(0)
+
 imports = data.get('imports', {})
+if not isinstance(imports, dict):
+    sys.exit(0)
 for key, val in imports.items():
-    source = val.get('source', '') if isinstance(val, dict) else val
-    if not source:
+    if isinstance(val, dict):
+        source = val.get('source', '')
+    elif isinstance(val, str):
+        source = val
+    else:
+        continue
+    if not isinstance(source, str) or not source.strip():
+        continue
+    if is_remote_source(source):
         continue
     if source.startswith('/'):
         abs_source = source
     else:
         abs_source = os.path.normpath(os.path.join(pack_dir, source))
     try:
-        rel = os.path.relpath(abs_source, os.path.abspath(rig_root))
+        abs_source = os.path.realpath(abs_source)
+    except OSError:
+        continue
+    # Validate that resolved local import paths live inside the rig root.
+    try:
+        common = os.path.commonpath([rig_root, abs_source])
     except ValueError:
         continue
-    if rel.startswith('..'):
+    if common != rig_root:
+        continue
+    try:
+        rel = os.path.relpath(abs_source, rig_root)
+    except ValueError:
+        continue
+    # Avoid bogus sparse patterns from empty, current-dir, or parent-traversal paths.
+    if not rel or rel == '.' or rel.startswith('..') or '/../' in rel + '/' or any(part == '..' for part in rel.split(os.sep)):
         continue
     print(rel.rstrip('/') + '/')
 PY
