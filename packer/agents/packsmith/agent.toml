@@ -9,7 +9,7 @@ pack = "packer"
 work_dir = "../.gc/workspaces/{{.Rig}}/jedi/{{.AgentBase}}"
 nudge = "Run gc hook; claim pack maintenance work, then keep the workspace sparse to the target pack plus shared pack infrastructure."
 pre_start = [
-  "GC_PACKER_PACK={{.Pack}} {{.PackRoot}}/assets/scripts/pack-workspace-setup.sh {{.RigRoot}} {{.WorkDir}} {{.AgentBase}} {{.PackRoot}} --sync",
+  "GC_PACKER_PACK={{.Pack}} {{.ConfigDir}}/assets/scripts/pack-workspace-setup.sh {{.RigRoot}} {{.WorkDir}} {{.AgentBase}} --sync",
 ]
 idle_timeout = "2h"
 min_active_sessions = 0
