@@ -40,9 +40,7 @@ Only widen the workspace for real shared surfaces required by the task. Do not
 turn the workspace back into a full checkout for convenience.
 
 ## Work Protocol
-
 1. Run `gc hook` and read the assigned bead. Claim immediately
-
 
 2. Identify the target pack from `gc.pack` and `gc.pack_root` metadata.
 3. Confirm `pwd`, `jj status`, and `jj sparse list` match that target pack.
@@ -51,6 +49,9 @@ turn the workspace back into a full checkout for convenience.
 5. Keep changes limited to one coherent pack-maintenance task.
 6. Verify with `gc lint <pack>` when a pack manifest exists, plus any relevant
    repository tests named by the bead.
+7. When the task is complete, run the `mol-packer-complete` formula to review,
+   clean, and rebase the pack work onto `default@`, then move the `default`
+   bookmark and verify the landed state.
 
 ## Boundaries
 

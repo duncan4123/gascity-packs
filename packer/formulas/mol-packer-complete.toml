@@ -1,0 +1,179 @@
+description = """
+Finish packer pack work and move it onto default@.
+
+Use this formula from inside a pack workspace when the pack-maintenance task is
+complete. It helps the agent decide how to integrate the local commits into the
+shared default bookmark and ensure the live file system reflects the result.
+
+Because jj workspaces share one commit graph, the work is already in the
+repository; this formula guides rebasing it onto default@, resolving any
+conflicts, advancing the bookmark, and verifying the landed state.
+"""
+formula = "mol-packer-complete"
+version = 1
+
+[[steps]]
+id = "review-working-copy"
+title = "Review the working copy and local commits"
+description = """
+Confirm what has changed in this pack workspace and whether it is ready to
+land. Look for:
+
+- uncommitted or undescribed changes
+- commits that should be squashed, split, or reordered
+- unrelated changes mixed into the same commit
+- empty placeholder commits
+
+```bash
+jj status
+jj log -r 'default@..@' --no-graph
+jj diff --git
+jj diff --from default@ --to @ --stat
+```
+
+Exit criteria:
+
+- the working copy has no unintended changes
+- every commit between default@ and @ has a clear description
+- commits are atomic (one logical change each)
+- any empty or placeholder commits are abandoned or described
+"""
+
+[[steps]]
+id = "decide-integration-strategy"
+title = "Choose how to integrate onto default@"
+description = """
+Look at the relationship between the local pack line and default@, then pick
+the safest path:
+
+| situation | action |
+| --- | --- |
+| local commits are direct descendants of default@ | rebase onto default@ and move the bookmark |
+| default@ has moved forward since work started | rebase local commits onto the new default@ |
+| another pack line also needs to land together | merge both heads onto default@ in one commit |
+| commits are messy or non-atomic | squash or split first, then rebase |
+
+```bash
+jj log -r 'default@ | @' --no-graph
+jj log -r 'default@..@' --no-graph
+jj log -r '@..default@' --no-graph
+```
+
+Exit criteria:
+
+- the integration strategy is written down
+- any commits needing cleanup are identified
+- the target default@ commit is known
+"""
+
+[[steps]]
+id = "clean-commits"
+title = "Clean up commits before landing"
+description = """
+Apply the chosen cleanup. Common operations:
+
+```bash
+# Describe an empty workspace placeholder
+jj describe -m "<pack>: workspace checkpoint"
+
+# Squash a fixup into its parent
+jj squash
+
+# Abandon a truly empty, unneeded commit
+jj abandon <change-id>
+
+# Split a mixed commit (interactive; use manual restore/re-edit if needed)
+jj split
+```
+
+Exit criteria:
+
+- no empty or undescribed commits remain on the landing path
+- each commit represents one coherent change
+- the working copy still passes pack-level tests
+"""
+
+[[steps]]
+id = "rebase-onto-default"
+title = "Rebase pack work onto default@"
+description = """
+Rebase the cleaned pack commits onto the current default@. If multiple pack
+lines must land together, rebase them all onto default@ first, then merge them
+in the next step.
+
+```bash
+# Single pack line
+jj rebase -s <first-pack-change> -d default@
+
+# Multiple pack lines landing together
+jj rebase -s <pack-a-first-change> -d default@
+jj rebase -s <pack-b-first-change> -d default@
+```
+
+Exit criteria:
+
+- all pack commits are descendants of default@
+- no unresolved conflicts remain
+- `jj log -r 'default@..@'` shows the expected commit chain
+"""
+
+[[steps]]
+id = "advance-default"
+title = "Move default@ to the landed work"
+description = """
+Advance the default bookmark to the tip of the landed pack work. If multiple
+pack lines landed together, first create a single merge commit on top of
+default@ with all heads as parents, then move default@ to that merge.
+
+```bash
+# Single line: move default directly to the tip
+jj bookmark move default --to <tip-change-id>
+
+# Multiple lines: merge then move default
+jj new default@ <pack-a-tip> <pack-b-tip> -m "Land <pack-a> and <pack-b> packs"
+jj bookmark move default --to @
+```
+
+Exit criteria:
+
+- default@ points to the landed commit
+- the working copy is a clean descendant of default@
+"""
+
+[[steps]]
+id = "verify-landed-state"
+title = "Verify from default@"
+description = """
+Run pack-level checks from the default@ state. Use a fresh workspace or widen
+the current sparse checkout to include the pack files.
+
+```bash
+jj sparse set --add <pack-name>/ --add README.md --add registry.toml --add validate_registry.py --add go.mod --add .gitignore --add tests/
+gc lint <pack-name>
+python3 -m pytest <relevant-tests> -q
+```
+
+Exit criteria:
+
+- `gc lint <pack>` passes for every landed pack
+- relevant repository tests pass
+- `jj status` shows no unresolved conflicts
+- no empty working-copy commits are left un-described
+"""
+
+[[steps]]
+id = "clean-up-working-copy"
+title = "Leave a clean working copy"
+description = """
+Create a new empty commit on top of default@ so the workspace is ready for the
+next bead. Do not leave the working copy sitting on a content commit.
+
+```bash
+jj new default@
+```
+
+Exit criteria:
+
+- working copy is empty and its parent is default@
+- default@ remains at the landed tip
+"""
