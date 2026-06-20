@@ -55,6 +55,8 @@ turn the workspace back into a full checkout for convenience.
    clean, and rebase the pack work onto `main@`, then move the `main` bookmark
    and verify the landed state.
 
+{{ template "jj-basics" . }}
+
 ## Boundaries
 
 - Use `jj`, not `git`.
