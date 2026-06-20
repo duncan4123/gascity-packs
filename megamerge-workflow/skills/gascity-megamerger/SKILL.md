@@ -1,11 +1,12 @@
 ---
-name: gascity-megamerge
-description: Use for Gas City Jujutsu megamerge work: simultaneous edits across several related jj lines, multi-parent merge workbenches, scratch children, hunk routing with jj-hunk, and cleaning up incomplete or duplicate repair lines.
+name: gascity-megamerger
+description: Use for Gas City megamerger work: Jujutsu megamerge repairs across several related jj lines, multi-parent merge workbenches, scratch children, hunk routing with jj-hunk, and cleaning up incomplete or duplicate repair lines.
 ---
 
-# Gas City Megamerge
+# Gas City Megamerger
 
-Use this skill when repairing several related Jujutsu lines at once.
+Use this skill when the Gas City megamerger is repairing several related
+Jujutsu lines at once.
 
 ## Core Pattern
 
