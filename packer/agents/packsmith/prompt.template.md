@@ -52,8 +52,8 @@ turn the workspace back into a full checkout for convenience.
 6. Verify with `gc lint <pack>` when a pack manifest exists, plus any relevant
    repository tests named by the bead.
 7. When the task is complete, run the `mol-packer-complete` formula to review,
-   clean, and rebase the pack work onto `default@`, then move the `default`
-   bookmark and verify the landed state.
+   clean, and rebase the pack work onto `main@`, then move the `main` bookmark
+   and verify the landed state.
 
 ## Boundaries
 
