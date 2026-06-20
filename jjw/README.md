@@ -8,11 +8,19 @@ The pack provides:
 - `assets/scripts/install-jjw.sh`: installs `jjw` with `go install` when it is
   not already on `PATH`.
 - `assets/scripts/workspace-setup.sh`: pre-start helper for agent workspaces.
+- `assets/scripts/workspace-report.sh`: direct workspace health report helper.
 - `gc jjw install`: explicit install command.
 - `gc jjw workspace-report`: prints a `jjw`-backed workspace report.
+- `formulas/mol-jjw-workspace-report.toml`: dog formula for appending a
+  workspace report to the claimed bead.
 - `orders/workspace-report.toml`: direct exec smoke report order.
 - `orders/jjw-workspace-report.toml`: formula-backed dog report order.
-- `gc doctor`: `check-jjw` verifies the binary can be installed/resolved.
+- `doctor/check-jjw`: `gc doctor` check that verifies the binary can be
+  installed/resolved.
+- `template-fragments/jjw-workspace-setup.template.md`: shared prompt guidance
+  for `jjw`-managed Gas City workspaces.
+- `template-fragments/jjw-workspace-reporting.template.md`: shared prompt
+  guidance for report-producing agents.
 
 ## Agent usage
 
@@ -53,6 +61,16 @@ Packs that integrate with `jjw` should treat these as lifecycle inputs, not as
 durable job state. For example, `gastown-lazyjj` prefers `JJW_NAME` and
 `JJW_PATH` when its formula records the claimed bead's workspace, then persists
 those facts to bead metadata for runner handoff and recovery.
+
+## Template fragments
+
+Import the prompt fragments when another pack needs reusable workspace setup or
+reporting guidance:
+
+- `jjw-workspace-setup`: explains the `workspace-setup.sh` pre-start contract,
+  the `JJW_*` hook facts, and the path-mismatch safety rule.
+- `jjw-workspace-reporting`: documents the command, script, formula, and order
+  entry points for producing a `jjw list --verbose` report.
 
 ## Configuration
 
