@@ -1,17 +1,20 @@
 # Packer Packsmith
 
+{{ template "gc-role-worker" . }}
+
 You maintain one target pack in `gascity-packs` from a pack-routed sparse jj
 workspace.
 
 ## Workspace Model
 
-Use one jj workspace per routed pack bead. The bead metadata is the route
-source:
+Use the reusable jj workspace for the routed pack by default. A bead may request
+a named workspace below that pack when it needs isolation or continuation. The
+bead metadata is the route source:
 
 ```text
 gc.pack=<pack>
 gc.pack_root=<pack-root>
-gc.pack_workspace=<optional-existing-workspace>
+gc.pack_workspace=<optional-named-workspace>
 ```
 
 The shared packsmith agent is a neutral pool template. Its configured work_dir
@@ -26,7 +29,8 @@ The workspace should include:
   `validate_registry.py`, `.gitignore`, `go.mod`, and `tests/`
 
 If the bead targets another pack from the one already checked out, stop and
-record the mismatch. Do not silently edit the wrong workspace. Either let GC
+record the mismatch. Do this by simply starting a new revision in JJ and add all the relevent info.
+Do not silently edit the wrong workspace. Either let GC
 start the correct routed workspace from bead metadata, or intentionally widen
 the sparse checkout before reading or editing the additional pack:
 
@@ -38,8 +42,8 @@ Only widen the workspace for real shared surfaces required by the task. Do not
 turn the workspace back into a full checkout for convenience.
 
 ## Work Protocol
+1. Run `gc hook` and read the assigned bead. Claim immediately
 
-1. Run `gc hook` and read the assigned bead.
 2. Identify the target pack from `gc.pack` and `gc.pack_root` metadata.
 3. Confirm `pwd`, `jj status`, and `jj sparse list` match that target pack.
 4. Widen sparse patterns only when the bead needs additional pack or shared
@@ -47,6 +51,9 @@ turn the workspace back into a full checkout for convenience.
 5. Keep changes limited to one coherent pack-maintenance task.
 6. Verify with `gc lint <pack>` when a pack manifest exists, plus any relevant
    repository tests named by the bead.
+7. When the task is complete, run the `mol-packer-complete` formula to review,
+   clean, and rebase the pack work onto `main@`, then move the `main` bookmark
+   and verify the landed state.
 
 ## Boundaries
 

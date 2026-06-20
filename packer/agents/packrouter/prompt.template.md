@@ -1,5 +1,7 @@
 # Packer Router
 
+{{ template "gc-role-worker" . }}
+
 Claim broad pack-maintenance work from the rig root, split it into pack-scoped
 implementation beads, and route each child bead to packsmith.
 
@@ -30,16 +32,16 @@ gc.pack_root=jj-hunk
 
 ## Workspace Selection
 
-New implementation work should usually get a new workspace. For a new
-workspace, create a child bead with `gc.pack` and `gc.pack_root`, and omit
-`gc.pack_workspace`. GC derives the concrete workspace as:
+Implementation work defaults to the reusable pack workspace. Create a child
+bead with `gc.pack` and `gc.pack_root`, and omit `gc.pack_workspace`. GC derives
+the concrete workspace as:
 
 ```text
-.gc/workspaces/<rig>/packs/<pack>/<bead-id>-<title-slug>
+.gc/workspaces/<rig>/packs/<pack>
 ```
 
-Use an existing workspace only for follow-up work that must continue the same
-in-progress change. For an existing workspace, also set:
+Use a named workspace only for work that needs isolation or must continue a
+specific in-progress change. For a named workspace, also set:
 
 ```text
 gc.pack_workspace=<workspace-name>
@@ -48,24 +50,40 @@ gc.pack_workspace=<workspace-name>
 `gc.pack_workspace` is a workspace key under the pack directory. It is not a
 path and must not contain slashes.
 
+Before creating follow-up work, look up existing packsmith workspaces:
+
+```bash
+packer/assets/scripts/list-pack-workspaces.sh --pack <pack-name>
+```
+
+Use the output to see which packsmith session is already sitting in the pack
+workspace, its `work_dir`, and the title of the work it last carried. If the
+right workspace already exists, create the child bead with the same pack and
+workspace metadata so `gc sling` can route and nudge the existing worker. For
+the default pack workspace, keep omitting `gc.pack_workspace`; for a named
+workspace, pass `--workspace <workspace-name>`.
+
 ## Work Protocol
 
 1. Run `gc hook --claim --json` and read the assigned bead.
 2. Identify each target pack and any shared files required.
-3. Decide whether the bead is implementation work or configuration-only:
+3. For each implementation target, run
+   `packer/assets/scripts/list-pack-workspaces.sh --pack <pack-name>` to check
+   for an existing packsmith workspace before creating child beads.
+4. Decide whether the bead is implementation work or configuration-only:
    - Implementation: changes pack files (agents, formulas, skills, etc.)
    - Configuration-only: changes `city.toml` (rig imports, patches,
      named_session/agent settings)
-4. Create one claim-sized child bead per target pack when implementation work
-   is needed.
-5. Omit `--workspace` for new workspaces.
-6. Add `--workspace <workspace-name>` only when reusing an existing pack
-   workspace is required.
-7. Route configuration-only beads to the current packrouter session with
+5. Create one claim-sized child bead per target pack when implementation work
+    is needed.
+6. Omit `--workspace` for the default reusable pack workspace.
+7. Add `--workspace <workspace-name>` when reusing a specific named workspace,
+   or `--task-workspace` when the task needs its own workspace.
+8. Route configuration-only beads to the current packrouter session with
    `mol-packer-configure`.
-8. Route each implementation bead to the shared `packer.packsmith` pool with
+9. Route each implementation bead to the shared `packer.packsmith` pool with
    `mol-packer-work`.
-9. Record the route decision on the parent bead.
+10. Record the route decision on the parent bead.
 
 Use the helper rather than hand-assembling metadata:
 
@@ -92,11 +110,24 @@ packer/assets/scripts/create-pack-bead.sh \
   --acceptance "gc lint <pack-name> passes"
 ```
 
+For isolated task work:
+
+```bash
+packer/assets/scripts/create-pack-bead.sh \
+  --parent <parent-bead-id> \
+  --pack <pack-name> \
+  --pack-root <pack-root> \
+  --task-workspace \
+  --title "<pack-name>: <specific isolated task>" \
+  --description "<task details>" \
+  --acceptance "gc lint <pack-name> passes"
+```
+
 The helper creates the child bead with:
 
 - `gc.pack`
 - `gc.pack_root`
-- `gc.pack_workspace` when `--workspace` is provided
+- `gc.pack_workspace` when `--workspace` or `--task-workspace` is provided
 - `gc.formula=mol-packer-work`
 - `gc.route_target`
 

@@ -13,15 +13,20 @@ one pack at a time.
   `gascity-packs`, the default value is the same as `gc.pack`.
 - `work_dir` is a neutral anchor for the shared pool template. GC rewrites the
   concrete session work dir from bead metadata before `pre_start` runs.
-- Triggered pool work defaults to a workspace named from the bead id and title
-  under the pack directory. Set `gc.pack_workspace` only when a bead must reuse
-  an existing workspace under that pack.
+- Triggered pool work defaults to the pack workspace itself. Set
+  `gc.pack_workspace` only when a bead needs a named workspace below that pack,
+  such as a task-specific workspace.
 - `pre_start` reads the trigger bead metadata, delegates workspace creation to
   `jjw`, then sparse-checks out the target pack directory plus shared
   registry/test files.
 
 This lets a formula route work to an agent in a workspace that contains
 `jj-hunk/` without checking out every other pack directory.
+
+Workflow diagrams:
+
+- [Pack workspace reuse](docs/diagrams/pack-workspace-reuse.md)
+- [Task workspace](docs/diagrams/task-workspace.md)
 
 ## Router Agent
 
@@ -35,18 +40,18 @@ Typical route shape:
 gc sling <pack-agent-target> <child-bead-id> --on mol-packer-work
 ```
 
-The child bead should name the target pack in its title and metadata. For a new
-workspace, omit `gc.pack_workspace`:
+The child bead should name the target pack in its title and metadata. For the
+default reusable pack workspace, omit `gc.pack_workspace`:
 
 ```text
 gc.pack=jj-hunk
 gc.pack_root=jj-hunk
 ```
 
-GC derives the workspace path from the bead id and title:
+GC derives the workspace path from the pack:
 
 ```text
-.gc/workspaces/<rig>/packs/<pack>/<bead-id>-<title-slug>
+.gc/workspaces/<rig>/packs/<pack>
 ```
 
 The jj bookmark for that workspace uses a flat pack namespace:
@@ -58,7 +63,7 @@ gc/<pack>.<workspace>
 Do not use `gc/<pack>/<workspace>`; it conflicts with existing Git refs such as
 `gc/packer`.
 
-For follow-up work that must reuse an existing workspace, add:
+For work that needs a named workspace below the pack, add:
 
 ```text
 gc.pack_workspace=existing-workspace
@@ -105,18 +110,22 @@ packer/assets/scripts/create-pack-bead.sh \
   --acceptance "gc lint jj-hunk passes"
 ```
 
-The helper creates a new workspace by default. It writes `gc.pack` /
+The helper reuses the pack workspace by default. It writes `gc.pack` /
 `gc.pack_root` metadata, then runs
 `gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work`.
 
-To route follow-up work into an existing workspace, add:
+To route work into an explicit named workspace, add:
 
 ```bash
 --workspace existing-workspace
 ```
 
-That writes `gc.pack_workspace=existing-workspace` on the child bead. Do not set
-`gc.pack_workspace` for fresh implementation work.
+That writes `gc.pack_workspace=existing-workspace` on the child bead. To force a
+workspace named from the child bead id and title, add:
+
+```bash
+--task-workspace
+```
 
 When the target does not match the current sparse workspace, stop and report the
 mismatch instead of editing from the wrong checkout.

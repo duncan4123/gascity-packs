@@ -1,0 +1,189 @@
+description = """
+Finish packer pack work and move it onto main@.
+
+Use this formula from inside a pack workspace when the pack-maintenance task is
+complete. It helps the agent decide how to integrate the local commits into the
+shared `main` bookmark and ensure the live file system reflects the result.
+
+Because jj workspaces share one commit graph, the work is already in the
+repository; this formula guides rebasing it onto main@, resolving any
+conflicts, advancing the `main` bookmark, and verifying the landed state.
+
+Note: new pack workspaces are created from `default@` (the working copy of the
+rig-root default workspace), which should be kept at or near `main@`. The
+landing target for pack work is the `main` bookmark, not `default@`.
+"""
+formula = "mol-packer-complete"
+version = 1
+
+[[steps]]
+id = "review-working-copy"
+title = "Review the working copy and local commits"
+description = """
+Confirm what has changed in this pack workspace and whether it is ready to
+land. Look for:
+
+- uncommitted or undescribed changes
+- commits that should be squashed, split, or reordered
+- unrelated changes mixed into the same commit
+- empty placeholder commits
+
+```bash
+jj status
+jj log -r 'main@..@' --no-graph
+jj diff --git
+jj diff --from main@ --to @ --stat
+```
+
+Exit criteria:
+
+- the working copy has no unintended changes
+- every commit between main@ and @ has a clear description
+- commits are atomic (one logical change each)
+- any empty or placeholder commits are abandoned or described
+"""
+
+[[steps]]
+id = "decide-integration-strategy"
+title = "Choose how to integrate onto main@"
+needs = ["review-working-copy"]
+description = """
+Look at the relationship between the local pack line and main@, then pick
+the safest path:
+
+| situation | action |
+| --- | --- |
+| local commits are direct descendants of main@ | rebase onto main@ and move the bookmark |
+| main@ has moved forward since work started | rebase local commits onto the new main@ |
+| another pack line also needs to land together | merge both heads onto main@ in one commit |
+| commits are messy or non-atomic | squash or split first, then rebase |
+
+```bash
+jj log -r 'main@ | @' --no-graph
+jj log -r 'main@..@' --no-graph
+jj log -r '@..main@' --no-graph
+```
+
+Exit criteria:
+
+- the integration strategy is written down
+- any commits needing cleanup are identified
+- the target main@ commit is known
+"""
+
+[[steps]]
+id = "clean-commits"
+title = "Clean up commits before landing"
+needs = ["decide-integration-strategy"]
+description = """
+Apply the chosen cleanup. Common operations:
+
+```bash
+# Describe an empty workspace placeholder
+jj describe -m "<pack>: workspace checkpoint"
+
+# Squash a fixup into its parent
+jj squash
+
+# Abandon a truly empty, unneeded commit
+jj abandon <change-id>
+
+# Split a mixed commit (interactive; use manual restore/re-edit if needed)
+jj split
+```
+
+Exit criteria:
+
+- no empty or undescribed commits remain on the landing path
+- each commit represents one coherent change
+- the working copy still passes pack-level tests
+"""
+
+[[steps]]
+id = "rebase-onto-main"
+title = "Rebase pack work onto main@"
+needs = ["clean-commits"]
+description = """
+Rebase the cleaned pack commits onto the current main@. If multiple pack
+lines must land together, rebase them all onto main@ first, then merge them
+in the next step.
+
+```bash
+# Single pack line
+jj rebase -s <first-pack-change> -d main@
+
+# Multiple pack lines landing together
+jj rebase -s <pack-a-first-change> -d main@
+jj rebase -s <pack-b-first-change> -d main@
+```
+
+Exit criteria:
+
+- all pack commits are descendants of main@
+- no unresolved conflicts remain
+- `jj log -r 'main@..@'` shows the expected commit chain
+"""
+
+[[steps]]
+id = "advance-main"
+title = "Move main to the landed work"
+needs = ["rebase-onto-main"]
+description = """
+Advance the `main` bookmark to the tip of the landed pack work. If multiple
+pack lines landed together, first create a single merge commit on top of
+main@ with all heads as parents, then move `main` to that merge.
+
+```bash
+# Single line: move main directly to the tip
+jj bookmark move main --to <tip-change-id>
+
+# Multiple lines: merge then move main
+jj new main@ <pack-a-tip> <pack-b-tip> -m "Land <pack-a> and <pack-b> packs"
+jj bookmark move main --to @
+```
+
+Exit criteria:
+
+- `main` points to the landed commit
+- the working copy is a clean descendant of main@
+"""
+
+[[steps]]
+id = "verify-landed-state"
+title = "Verify from main@"
+needs = ["advance-main"]
+description = """
+Run pack-level checks from the main@ state. Use a fresh workspace or widen
+the current sparse checkout to include the pack files.
+
+```bash
+jj sparse set --add <pack-name>/ --add README.md --add registry.toml --add validate_registry.py --add go.mod --add .gitignore --add tests/
+gc lint <pack-name>
+python3 -m pytest <relevant-tests> -q
+```
+
+Exit criteria:
+
+- `gc lint <pack>` passes for every landed pack
+- relevant repository tests pass
+- `jj status` shows no unresolved conflicts
+- no empty working-copy commits are left un-described
+"""
+
+[[steps]]
+id = "clean-up-working-copy"
+title = "Leave a clean working copy"
+needs = ["verify-landed-state"]
+description = """
+Create a new empty commit on top of main@ so the workspace is ready for the
+next bead. Do not leave the working copy sitting on a content commit.
+
+```bash
+jj new main@
+```
+
+Exit criteria:
+
+- working copy is empty and its parent is main@
+- `main` remains at the landed tip
+"""
