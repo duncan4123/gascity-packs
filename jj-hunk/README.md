@@ -21,8 +21,13 @@ This pack wraps `jj-hunk-tool` and installs two skills from
 - `gc jj-hunk split`
 - `gc jj-hunk commit`
 - `gc jj-hunk squash`
+- `gc jj-hunk lightjj-annotate`
 
-The wrappers are intentionally thin and delegate to `jj-hunk`.
+The hunk-editing wrappers are intentionally thin and delegate to `jj-hunk`.
+
+`gc jj-hunk lightjj-annotate` bridges `jj-hunk-tool absorb --dry-run --debug`
+into lightjj review annotations. It previews by default and only posts when
+`--post` is passed.
 
 ## Formulas
 

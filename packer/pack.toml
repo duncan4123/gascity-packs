@@ -1,27 +1,27 @@
 [pack]
-name = "jj-hunk"
-version = "0.1.2"
+name = "packer"
+version = "0.1.0"
 schema = 2
-description = "Agent-safe jj hunk selection workflows and subagent workspace tasking."
+description = "Pack-routed jj workspace workflow for maintaining one pack at a time in gascity-packs."
 
 [imports.jjw]
 source = "../jjw"
 
-[providers.omp-tasksmith]
-display_name = "Oh My Pi Tasksmith"
+[providers.omp-packsmith]
+display_name = "Oh My Pi Packsmith"
 command = "/home/ubuntu/.bun/bin/omp"
 prompt_mode = "arg"
 ready_delay_ms = 1000
 path_check = "/home/ubuntu/.bun/bin/omp"
 
-[providers.omp-surgeon]
-display_name = "Oh My Pi Surgeon"
+[providers.omp-packrouter]
+display_name = "Oh My Pi Pack Router"
 command = "/home/ubuntu/.bun/bin/omp"
 prompt_mode = "arg"
 ready_delay_ms = 1000
 path_check = "/home/ubuntu/.bun/bin/omp"
 
 [[named_session]]
-template = "tasksmith"
+template = "packrouter"
 scope = "rig"
 mode = "always"
