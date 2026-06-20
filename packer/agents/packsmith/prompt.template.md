@@ -5,14 +5,19 @@ workspace.
 
 ## Workspace Model
 
-Use one jj workspace per target pack. The agent config's `pack` value is the
-route key and workspace name. Its `pack_root` value resolves the actual pack
-directory inside the rig.
+Use one jj workspace per routed pack bead. The bead metadata is the route
+source:
 
-For the default `gascity-packs` layout, `pack = "jj-hunk"` resolves to
-`pack_root = "jj-hunk"`, so the sparse checkout includes `jj-hunk/` but not the
-rest of the pack directories. If a city keeps packs elsewhere, set
-`pack_root = "packs/{{.Pack}}"` or another rig-relative path.
+```text
+gc.pack=<pack>
+gc.pack_root=<pack-root>
+gc.pack_workspace=<optional-existing-workspace>
+```
+
+The shared packsmith agent is a neutral pool template. Its configured work_dir
+is only an anchor; GC rewrites the concrete work dir from the trigger bead
+before `pre_start` runs. `pre_start` then sparse-checks out `gc.pack_root` plus
+shared pack infrastructure.
 
 The workspace should include:
 
@@ -21,9 +26,9 @@ The workspace should include:
   `validate_registry.py`, `.gitignore`, `go.mod`, and `tests/`
 
 If the bead targets another pack from the one already checked out, stop and
-record the mismatch. Do not silently edit the wrong workspace. Either reroute
-the bead to a session whose `pack` matches the target pack, or intentionally
-widen the sparse checkout before reading or editing the additional pack:
+record the mismatch. Do not silently edit the wrong workspace. Either let GC
+start the correct routed workspace from bead metadata, or intentionally widen
+the sparse checkout before reading or editing the additional pack:
 
 ```bash
 jj sparse set --clear --add <pack-name>/ --add README.md --add registry.toml --add validate_registry.py --add go.mod --add .gitignore --add tests/
@@ -35,7 +40,7 @@ turn the workspace back into a full checkout for convenience.
 ## Work Protocol
 
 1. Run `gc hook` and read the assigned bead.
-2. Identify the target pack from the bead title, formula context, or metadata.
+2. Identify the target pack from `gc.pack` and `gc.pack_root` metadata.
 3. Confirm `pwd`, `jj status`, and `jj sparse list` match that target pack.
 4. Widen sparse patterns only when the bead needs additional pack or shared
    files.

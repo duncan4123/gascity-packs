@@ -6,16 +6,19 @@ one pack at a time.
 ## Model
 
 - `packrouter` lives in the rig root and routes broad requests.
-- `packsmith` lives in a sparse jj workspace and implements one pack bead.
-- `pack` is the route key and workspace name, such as `jj-hunk`.
-- `pack_root` is the pack directory inside the rig. In `gascity-packs`, the
-  default layout is `pack_root = "{{.Pack}}"`.
-- `work_dir` is the jj workspace created for the agent. It must resolve inside
-  the `workspace_dir` declared by `jjw` for this rig. In `gascity-packs` that is
-  `.gc/workspaces/{{.Rig}}/packs/{{.Pack}}`. The workspace name is the pack
-  name, so the default bookmark is `gc/<pack>`.
-- `pre_start` delegates workspace creation to `jjw`, then sparse-checks out the
-  target pack directory plus shared registry/test files.
+- `packsmith` is one shared pool template. It implements one routed pack bead
+  per session from a sparse jj workspace.
+- `gc.pack` on the bead is the route key, such as `jj-hunk`.
+- `gc.pack_root` on the bead is the pack directory inside the rig. In
+  `gascity-packs`, the default value is the same as `gc.pack`.
+- `work_dir` is a neutral anchor for the shared pool template. GC rewrites the
+  concrete session work dir from bead metadata before `pre_start` runs.
+- Triggered pool work defaults to a workspace named from the bead id and title
+  under the pack directory. Set `gc.pack_workspace` only when a bead must reuse
+  an existing workspace under that pack.
+- `pre_start` reads the trigger bead metadata, delegates workspace creation to
+  `jjw`, then sparse-checks out the target pack directory plus shared
+  registry/test files.
 
 This lets a formula route work to an agent in a workspace that contains
 `jj-hunk/` without checking out every other pack directory.
@@ -24,7 +27,7 @@ This lets a formula route work to an agent in a workspace that contains
 
 `packrouter` uses `mol-packer-route` from `{{.RigRoot}}`. It can inspect the
 full packs repository, choose target packs, create child beads, and dispatch
-each child bead to a pack-scoped worker.
+each child bead to the shared packsmith pool.
 
 Typical route shape:
 
@@ -32,41 +35,63 @@ Typical route shape:
 gc sling <pack-agent-target> <child-bead-id> --on mol-packer-work
 ```
 
-The child bead should name the target pack in its title and notes or metadata,
-for example:
+The child bead should name the target pack in its title and metadata. For a new
+workspace, omit `gc.pack_workspace`:
 
 ```text
 gc.pack=jj-hunk
 gc.pack_root=jj-hunk
 ```
 
-## Per-Pack Agent Variants
+GC derives the workspace path from the bead id and title:
 
-Define or patch an agent per target pack:
-
-```toml
-pack = "jj-hunk"
-pack_root = "{{.Pack}}"
-work_dir = ".gc/workspaces/{{.Rig}}/packs/{{.Pack}}"
-pre_start = ["GC_PACKER_PACK=packer \"$GC_RIG_ROOT/packer/assets/scripts/pack-workspace-setup.sh\" --sync"]
+```text
+.gc/workspaces/<rig>/packs/<pack>/<bead-id>-<title-slug>
 ```
 
-For repos that nest packs, use a different root:
+The jj bookmark for that workspace uses a flat pack namespace:
+
+```text
+gc/<pack>.<workspace>
+```
+
+Do not use `gc/<pack>/<workspace>`; it conflicts with existing Git refs such as
+`gc/packer`.
+
+For follow-up work that must reuse an existing workspace, add:
+
+```text
+gc.pack_workspace=existing-workspace
+```
+
+`gc.pack_workspace` is a workspace key under the pack directory. It is not a
+path and must not contain slashes.
+
+## Shared Packsmith Agent
+
+The bundled packsmith agent is intentionally not per-pack:
 
 ```toml
-pack = "jj-hunk"
-pack_root = "packs/{{.Pack}}"
+work_dir = ".gc/workspaces/{{.Rig}}/packs/__packsmith__"
+pre_start = ["\"$GC_RIG_ROOT/packer/assets/scripts/pack-workspace-setup.sh\" --sync"]
 ```
+
+Do not create one packsmith agent per pack for normal routing. The child bead
+selects the actual pack with `gc.pack` and `gc.pack_root`. `GC_PACKER_PACK` is
+only a manual/debug fallback for running the setup script outside a routed bead.
+
+For repos that nest packs, put the nested path in bead metadata, for example
+`gc.pack_root=packs/jj-hunk`.
 
 ## Bead Routing
 
 Pack-maintenance parent beads can be assigned to `packrouter`. Implementation
-child beads should be assigned or slung to pack agents running
+child beads should be assigned or slung to the shared packsmith pool running
 `mol-packer-work`.
 
 Every implementation bead should name the target pack in the title, notes,
-formula context, or metadata. `mol-packer-work` expects the claimed bead target
-to match the session's `pack` route before editing.
+formula context, or metadata. `mol-packer-work` expects the sparse checkout to
+match the bead's `gc.pack` route before editing.
 
 Use the router helper to create implementation beads:
 
@@ -80,8 +105,18 @@ packer/assets/scripts/create-pack-bead.sh \
   --acceptance "gc lint jj-hunk passes"
 ```
 
-The helper creates the bead with `gc.pack` / `gc.pack_root` metadata, then runs
+The helper creates a new workspace by default. It writes `gc.pack` /
+`gc.pack_root` metadata, then runs
 `gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work`.
 
-When the target does not match the current sparse workspace, reroute the bead to
-the correct pack agent instead of editing from the wrong checkout.
+To route follow-up work into an existing workspace, add:
+
+```bash
+--workspace existing-workspace
+```
+
+That writes `gc.pack_workspace=existing-workspace` on the child bead. Do not set
+`gc.pack_workspace` for fresh implementation work.
+
+When the target does not match the current sparse workspace, stop and report the
+mismatch instead of editing from the wrong checkout.

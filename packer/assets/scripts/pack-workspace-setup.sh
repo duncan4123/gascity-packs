@@ -41,7 +41,7 @@ case "$PACK_ROOT" in
 esac
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-PACK_NAME="${GC_PACKER_PACK:-${PACKER_PACK:-$AGENT_NAME}}"
+PACK_NAME="${GC_PACKER_PACK:-${PACKER_PACK:-}}"
 EXTRA_PATTERNS="${GC_PACKER_SPARSE_ADD:-}"
 TRIGGER_TITLE=""
 
@@ -50,8 +50,22 @@ show_trigger_bead_json() {
     if bd show "$bead_id" --json 2>/dev/null; then
         return 0
     fi
-    if [ "${GC_TRIGGER_BEAD_STORE_REF:-}" = "city" ] && [ -n "${GC_CITY_ROOT:-}" ]; then
-        BEADS_DIR="$GC_CITY_ROOT/.beads" GC_BEADS_SCOPE_ROOT="$GC_CITY_ROOT" bd show "$bead_id" --json 2>/dev/null
+    case "${GC_TRIGGER_BEAD_STORE_REF:-}" in
+        city)
+            if [ -n "${GC_CITY_ROOT:-}" ]; then
+                BEADS_DIR="$GC_CITY_ROOT/.beads" GC_BEADS_SCOPE_ROOT="$GC_CITY_ROOT" bd show "$bead_id" --json 2>/dev/null
+                return $?
+            fi
+            ;;
+        rig:*)
+            if [ -n "${GC_RIG_ROOT:-}" ]; then
+                BEADS_DIR="$GC_RIG_ROOT/.beads" GC_BEADS_SCOPE_ROOT="$GC_RIG_ROOT" bd show "$bead_id" --json 2>/dev/null
+                return $?
+            fi
+            ;;
+    esac
+    if [ -n "${GC_RIG_ROOT:-}" ]; then
+        BEADS_DIR="$GC_RIG_ROOT/.beads" GC_BEADS_SCOPE_ROOT="$GC_RIG_ROOT" bd show "$bead_id" --json 2>/dev/null
         return $?
     fi
     return 1
@@ -70,7 +84,7 @@ if [ -n "${GC_TRIGGER_BEAD_ID:-}" ]; then
                 PACK_ROOT="$trigger_pack_root"
             fi
         else
-            echo "packer workspace setup: warning: could not read trigger bead $GC_TRIGGER_BEAD_ID; using configured pack" >&2
+            echo "packer workspace setup: warning: could not read trigger bead $GC_TRIGGER_BEAD_ID; using configured pack fallback" >&2
         fi
     else
         echo "packer workspace setup: warning: jq not found; cannot inspect trigger bead $GC_TRIGGER_BEAD_ID" >&2
@@ -79,40 +93,49 @@ fi
 
 case "$PACK_NAME" in
     ""|.*|*/*|*' '*)
-        echo "packer workspace setup: invalid pack name: $PACK_NAME" >&2
+        echo "packer workspace setup: missing or invalid pack name: $PACK_NAME" >&2
+        echo "packer workspace setup: routed beads must set gc.pack; manual runs may set GC_PACKER_PACK" >&2
         exit 2
         ;;
 esac
 
-PACK_WORKSPACE_DIR="$(dirname "$TARGET_DIR")/$PACK_NAME"
+PACK_WORKSPACE_DIR="$TARGET_DIR"
+PACK_WORKSPACE_NAME=$(basename "$PACK_WORKSPACE_DIR")
 PACK_WORKSPACE_PARENT=$(python3 - "$RIG_ROOT" "$(dirname "$PACK_WORKSPACE_DIR")" <<'PY'
 import os, sys
 print(os.path.relpath(os.path.abspath(sys.argv[2]), os.path.abspath(sys.argv[1])))
 PY
 )
+PACK_WORKSPACE_PARENT_NAME=$(basename "$(dirname "$PACK_WORKSPACE_DIR")")
+GC_JJW_WORKSPACE_DIR="$PACK_WORKSPACE_PARENT"
+export GC_JJW_WORKSPACE_DIR
+if [ -z "${GC_JJW_BOOKMARK_PATTERN:-}" ] && [ "$PACK_WORKSPACE_PARENT_NAME" = "$PACK_NAME" ]; then
+	GC_JJW_BOOKMARK_PATTERN="gc/$PACK_NAME.{name}"
+	export GC_JJW_BOOKMARK_PATTERN
+fi
 
 workspace_setup="$SCRIPT_DIR/../../../jjw/assets/scripts/workspace-setup.sh"
 if [ -n "${GC_TRIGGER_BEAD_ID:-}" ]; then
 	if [ -n "$TRIGGER_TITLE" ]; then
-		GC_JJW_WORKSPACE_DIR="$PACK_WORKSPACE_PARENT" "$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_NAME" --bead "$GC_TRIGGER_BEAD_ID" --title "$TRIGGER_TITLE" "$@"
+		"$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_WORKSPACE_NAME" --bead "$GC_TRIGGER_BEAD_ID" --title "$TRIGGER_TITLE" "$@"
 	else
-		GC_JJW_WORKSPACE_DIR="$PACK_WORKSPACE_PARENT" "$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_NAME" --bead "$GC_TRIGGER_BEAD_ID" "$@"
+		"$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_WORKSPACE_NAME" --bead "$GC_TRIGGER_BEAD_ID" "$@"
 	fi
 else
-	GC_JJW_WORKSPACE_DIR="$PACK_WORKSPACE_PARENT" "$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_NAME" "$@"
+	"$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_WORKSPACE_NAME" "$@"
 fi
 
 # `PACK_NAME` is the route/workspace key. `PACK_ROOT` is the resolved pack
-# directory from Gas City's {{.PackRoot}} template. Convert it back into a jj
-# sparse pattern relative to the rig root so layouts like:
+# directory from trigger bead metadata. Convert it back into a jj sparse
+# pattern relative to the rig root so metadata like:
 #
-#   pack = "jj-hunk"
-#   pack_root = "{{.Pack}}"
+#   gc.pack=jj-hunk
+#   gc.pack_root=jj-hunk
 #
 # sparse-checkout `jj-hunk/`, while layouts like:
 #
-#   pack = "jj-hunk"
-#   pack_root = "packs/{{.Pack}}"
+#   gc.pack=jj-hunk
+#   gc.pack_root=packs/jj-hunk
 #
 # sparse-checkout `packs/jj-hunk/`.
 if [ -z "$PACK_ROOT" ]; then

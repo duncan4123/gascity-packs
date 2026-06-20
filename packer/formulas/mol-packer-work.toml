@@ -2,10 +2,12 @@ description = """
 Maintain one gascity-packs pack from a pack-routed sparse jj workspace.
 
 Use this formula for beads that name a target pack explicitly. The session is
-expected to start from an agent config whose `pack` route matches that target
-and whose `pack_root` resolves the pack directory inside the rig. The pre-start
-script creates a jj workspace and sparse-checks out that pack folder plus shared
-registry, tests, and documentation surfaces, rather than the whole pack set.
+expected to start from the shared packsmith pool. The triggering bead must carry
+`gc.pack` and `gc.pack_root` metadata. GC uses that metadata to place the
+session under the target pack directory before pre-start runs. The pre-start
+script then creates a jj workspace and sparse-checks out that pack folder plus
+shared registry, tests, and documentation surfaces, rather than the whole pack
+set.
 
 Broad or ambiguous requests should go to `mol-packer-route` first. This formula
 is for already-routed implementation work.
@@ -18,8 +20,7 @@ id = "load-pack-task"
 title = "Load pack task and workspace scope"
 description = """
 Run `gc hook`, read the assigned bead, identify the target pack from the bead
-title, notes, formula context, or metadata, and inspect the current sparse
-checkout.
+metadata, and inspect the current sparse checkout.
 
 ```bash
 gc hook
@@ -31,7 +32,7 @@ jj sparse list
 Exit criteria:
 
 - target pack is explicit
-- current workspace is a jj workspace created for that target pack
+- current workspace is a jj workspace created from the bead's `gc.pack`
 - required shared files are known
 - sparse checkout is understood before editing
 - broad routing work has already been handled by packrouter
@@ -43,9 +44,9 @@ title = "Apply pack-scoped change"
 needs = ["load-pack-task"]
 description = """
 Edit only the target pack and required shared files. If the bead target does not
-match the workspace route, reroute the bead or stop with a clear note instead of
-editing the wrong pack. If another pack or shared surface is truly needed, widen
-sparse checkout intentionally with `jj sparse set --add`.
+match the sparse workspace, stop with a clear note instead of editing the wrong
+pack. If another pack or shared surface is truly needed, widen sparse checkout
+intentionally with `jj sparse set --add`.
 
 Exit criteria:
 

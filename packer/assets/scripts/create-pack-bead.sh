@@ -10,6 +10,7 @@ Create a pack-routed implementation bead and sling it to packsmith.
 Options:
   --pack <name>              Pack route key, for example jj-hunk
   --pack-root <path>         Pack directory relative to rig root (default: pack)
+  --workspace <name>         Existing workspace under the pack to reuse
   --title <title>            Child bead title
   --description <text>       Child bead description
   --description-file <path>  Read child bead description from file
@@ -22,6 +23,7 @@ EOF
 
 PACK=""
 PACK_ROOT=""
+WORKSPACE=""
 TITLE=""
 DESCRIPTION=""
 DESCRIPTION_FILE=""
@@ -46,6 +48,14 @@ while [ "$#" -gt 0 ]; do
             ;;
         --pack-root=*)
             PACK_ROOT="${1#--pack-root=}"
+            shift
+            ;;
+        --workspace)
+            WORKSPACE="${2:-}"
+            shift 2
+            ;;
+        --workspace=*)
+            WORKSPACE="${1#--workspace=}"
             shift
             ;;
         --title)
@@ -125,6 +135,14 @@ fi
 if [ -z "$PACK_ROOT" ]; then
     PACK_ROOT="$PACK"
 fi
+case "$WORKSPACE" in
+    ""|*[!A-Za-z0-9._-]*|.|..)
+        if [ -n "$WORKSPACE" ]; then
+            echo "create-pack-bead: invalid --workspace: $WORKSPACE" >&2
+            exit 2
+        fi
+        ;;
+esac
 
 RIG_NAME="${GC_RIG:-}"
 if [ -z "$RIG_NAME" ]; then
@@ -136,17 +154,19 @@ fi
 
 metadata_file=$(mktemp)
 trap 'rm -f "$metadata_file"' EXIT HUP INT TERM
-python3 - "$metadata_file" "$PACK" "$PACK_ROOT" "$TARGET" <<'PY'
+python3 - "$metadata_file" "$PACK" "$PACK_ROOT" "$TARGET" "$WORKSPACE" <<'PY'
 import json
 import sys
 
-path, pack, pack_root, target = sys.argv[1:5]
+path, pack, pack_root, target, workspace = sys.argv[1:6]
 metadata = {
     "gc.pack": pack,
     "gc.pack_root": pack_root,
     "gc.formula": "mol-packer-work",
     "gc.route_target": target,
 }
+if workspace:
+    metadata["gc.pack_workspace"] = workspace
 with open(path, "w", encoding="utf-8") as f:
     json.dump(metadata, f, sort_keys=True)
 PY
