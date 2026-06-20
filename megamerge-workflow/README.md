@@ -13,6 +13,8 @@ multi-line repair work:
 - route hunks back into their owning lines with `jj absorb`, `jj squash`, or
   `jj-hunk`
 - keep the merge as the validation surface
+- materialize the accepted head into the root/default workspace so the files
+  appear in the normal checkout after validation
 
 Membership checks are explicit. A stack drawn near the megamerge is not enough:
 
@@ -23,6 +25,11 @@ jj log --no-pager -r '<megamerge>-'
 
 If the first command does not print the stack head, restage the megamerge with
 that head included before repairing or validating.
+
+After validation, the megamerger should move the default workspace onto the
+accepted head with `jj edit <accepted-head>` from the root checkout, unless
+the default workspace has unrelated active work. Do not copy files between
+workspaces.
 
 ## Checks
 

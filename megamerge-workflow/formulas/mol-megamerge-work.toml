@@ -143,9 +143,43 @@ Exit criteria:
 """
 
 [[steps]]
+id = "materialize-default"
+title = "Materialize accepted head in default workspace"
+needs = ["verify"]
+description = """
+Move the root/default workspace onto the accepted validated head so the files
+appear in the normal filesystem checkout.
+
+Use the verified megamerge head when several lines must land together. Use the
+single rebased worker head only when no multi-parent merge is needed.
+
+From the default workspace root:
+
+```bash
+jj status
+jj log --no-pager -r 'default@ | <accepted-head>'
+```
+
+If the default workspace has unrelated active work, stop and report the blocker.
+Do not copy files across workspaces. If the default workspace is clean or
+intentionally ready to move:
+
+```bash
+jj edit <accepted-head>
+```
+
+Exit criteria:
+
+- accepted head is named
+- default workspace is either moved to that head or a blocker is reported
+- expected files are present in the root/default filesystem when materialized
+- focused checks are rerun from the root/default filesystem view
+"""
+
+[[steps]]
 id = "handoff"
 title = "Handoff"
-needs = ["verify"]
+needs = ["materialize-default"]
 description = """
 Summarize:
 
@@ -154,6 +188,7 @@ Summarize:
 - parent stack heads and ownership
 - proof that each intended stack head is in `::<merge>`
 - hunks moved or intentionally left in scratch
+- accepted head materialized into default, or the reason it was blocked
 - build/test results
 - obsolete lines to abandon later
 """

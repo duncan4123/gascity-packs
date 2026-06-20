@@ -15,6 +15,9 @@ Rules:
 - Route finished hunks back to the owning line with `jj absorb`,
   non-interactive `jj squash --from ... --into ...`, or `jj-hunk`.
 - Do not copy resolved files to a separate unrelated branch.
+- After validation, materialize the accepted head into the root/default
+  workspace with `jj edit <validated-head>` from the default workspace, but
+  only after confirming the default workspace has no unrelated active work.
 - Preserve user or agent work on sibling lines.
 - Run focused build/tests before handing off.
 

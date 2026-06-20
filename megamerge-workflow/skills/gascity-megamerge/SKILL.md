@@ -18,6 +18,8 @@ Use this skill when repairing several related Jujutsu lines at once.
 7. Make new fixes in the scratch child.
 8. Route hunks back into the owning parent line.
 9. Keep the merge as the integrated validation surface.
+10. Materialize the accepted head into the root/default workspace after
+    validation.
 
 Do not copy the final files to an unrelated linear branch. That loses the
 connection between the fix and the line that should own it.
@@ -73,6 +75,35 @@ jj squash --from @ --into <owning-line> -m "fix: <owned behavior>"
 
 Use `jj-hunk` when only selected hunks belong to an owning line.
 
+## Materialize to Default
+
+The megamerger owns the final handoff from workspace graph state to the real
+root/default filesystem. Worker workspaces produce graph heads; they do not
+make files appear in the default checkout by themselves.
+
+After the integrated view is validated, choose the accepted head:
+
+- the verified megamerge, when several lines must land together
+- the single rebased worker head, when no multi-parent merge is needed
+
+From the default workspace root, inspect the current state before moving it:
+
+```bash
+jj status
+jj log --no-pager -r 'default@ | <accepted-head>'
+```
+
+If the default workspace has unrelated active work, stop and report the
+blocker. Do not copy files across workspaces. If the default workspace is clean
+or intentionally ready to move, materialize the accepted head:
+
+```bash
+jj edit <accepted-head>
+```
+
+Then verify the expected files exist in the root checkout and rerun the focused
+checks from that filesystem view.
+
 ## Ownership Rules
 
 - Build and fast-path plumbing belongs to the line that introduced that
@@ -104,5 +135,7 @@ Report:
 - scratch child change id
 - parent stack heads and their intended ownership
 - membership proof for every intended stack head
+- accepted head materialized into the default workspace, or the reason it was
+  not materialized
 - build/test commands run
 - remaining duplicate or obsolete lines
