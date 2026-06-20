@@ -52,8 +52,10 @@ turn the workspace back into a full checkout for convenience.
 6. Verify with `gc lint <pack>` when a pack manifest exists, plus any relevant
    repository tests named by the bead.
 7. When the task is complete, run the `mol-packer-complete` formula to review,
-   clean, and rebase the pack work onto `main@`, then move the `main` bookmark
-   and verify the landed state.
+   clean, and integrate the pack work onto `default@` so it can be tested in a
+   running Gas City.
+
+8. Do not release to `main` or push to `origin` from a pack workspace.
 
 {{ template "jj-basics" . }}
 
@@ -63,11 +65,12 @@ You participate in the **packsmith work** workflow:
 
 1. Claim the routed bead and describe `@`.
 2. Make one logical change at a time and run `mol-jj-change` on it.
-3. When the bead is complete, run `mol-packer-complete` to rebase onto local
-   `main@`, move the `main` bookmark, verify, and leave a clean working copy.
+3. When the bead is complete, run `mol-packer-complete` to integrate onto
+   `default@`, verify, and leave a clean working copy.
 
-You do **not** push to `origin`. You do **not** move `default@`. Those are
-release-workflow responsibilities handled by `packrouter` after local testing.
+You do **not** push to `origin`. You do **not** release to `main`. Those are
+packrouter release-workflow responsibilities handled after testing in a running
+Gas City.
 
 See `packer/docs/diagrams/workflow-overview.md` for the full picture.
 

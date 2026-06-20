@@ -145,27 +145,29 @@ You coordinate three workflows from the rig root:
 
 Route implementation beads to `packer.packsmith` running `mol-packer-work`.
 Each logical change passes through `mol-jj-change`. When a bead is complete,
-`mol-packer-complete` lands it on local `main@`.
+`mol-packer-complete` integrates the pack work onto `default@`.
 
 ### 2. Local integration test
 
-After packsmiths land work on `main`, move the rig-root `default@` workspace to
-the integrated head to test or inspect the combined local state. `default@` is
-the local integration sandbox, not the release target.
+After packsmiths integrate work onto `default@`, run Gas City from the rig-root
+default workspace and have agents use the pack. `default@` is the local
+integration and testing head, not the release target.
 
 ### 3. Release to GitHub
 
-Run the release workflow from `default@` after local testing:
+Run the release workflow from `default@` after live testing. The release merges
+the tested `default@` state onto `main@origin`, moves `main`, verifies, and
+pushes.
 
 ```bash
 jj git fetch
-jj log -r 'main | main@origin' --no-graph
+jj log -r 'main | main@origin | default@' --no-graph
 
 # If origin has moved ahead, rebase local main onto it
 jj rebase -s main -d main@origin
 
-# Land the pack line
-jj new main@origin <pack-tip> -m "Land <pack> pack"
+# Merge the tested default@ state onto main@origin
+jj new main@origin default@ -m "Land <pack> pack"
 jj bookmark move main --to @
 
 # Verify and push
@@ -173,8 +175,8 @@ gc lint <pack>
 jj git push
 ```
 
-For multiple packs, use `mol-packer-land` to merge them onto `main@origin` and
-push.
+For multiple packs, use `mol-packer-land` to merge the tested default@ state
+onto `main@origin` and push.
 
 See `packer/docs/diagrams/workflow-overview.md` and
 `packer/docs/diagrams/release-workflow.md` for diagrams.

@@ -2,12 +2,14 @@ description = """
 Produce one perfect Jujutsu change.
 
 Use this formula whenever you are about to describe a commit or finish a unit of
-work in a jj-managed pack workspace. A perfect change is atomic, clearly
-described, conflict-free, lint-clean, and leaves the operation log in a state
-that the next agent can understand and continue from.
+work in a jj-managed workspace. A perfect change is atomic, clearly described,
+conflict-free, lint-clean, and leaves the operation log in a state that the next
+agent can understand and continue from.
 
 This formula is intentionally narrow: it is about the change you are sitting on
-right now, not about landing a whole stack or merging to main.
+right now. It does not decide when to rebase or land; the caller formula
+(`mol-packer-work`, `mol-packer-complete`, etc.) specifies the integration
+target and timing.
 """
 formula = "mol-jj-change"
 version = 1
@@ -81,7 +83,7 @@ Examples:
 
 - `packer: fix landing target semantics in mol-packer-complete`
 - `jj-hunk: add workspace health check to mol-jjw-workspace-report`
-- `gastown-lazyjj: clarify surgeon agent handoff in tasksmith prompt`
+- `gascity: clarify surgeon agent handoff in tasksmith prompt`
 
 Avoid:
 
@@ -101,35 +103,9 @@ Exit criteria:
 """
 
 [[steps]]
-id = "rebase-onto-integration-target"
-title = "Rebase onto the integration target"
-needs = ["write-clear-description"]
-description = """
-A perfect change is a clean descendant of the current integration target. For
-packer pack work that target is `main@`; for other packs it may be `trunk()@`
-or the pack's own integration bookmark.
-
-```bash
-jj log -r 'main@ | @' --no-graph
-jj log -r 'main@..@' --no-graph
-jj rebase -s <this-change> -d main@
-```
-
-If the integration target has moved while you worked, rebase. If the rebase
-introduces conflicts, resolve them inside the change and make sure the final
-diff still matches the description.
-
-Exit criteria:
-
-- the change is a direct descendant of the integration target
-- no unresolved conflicts remain
-- the rebased diff still represents the described change
-"""
-
-[[steps]]
 id = "verify-change"
 title = "Verify the change"
-needs = ["rebase-onto-integration-target"]
+needs = ["write-clear-description"]
 description = """
 Run the narrowest checks that prove the change is correct.
 
@@ -165,8 +141,9 @@ and prevents later edits from accidentally amending it.
 jj new
 ```
 
-If you are at the end of a bead and need to land, run `mol-packer-complete`
-instead of `jj new`.
+If the caller formula says to rebase onto an integration target now, do that
+before creating the successor. For packer pack work the integration target is
+usually `default@`, but the caller formula decides the timing.
 
 Exit criteria:
 

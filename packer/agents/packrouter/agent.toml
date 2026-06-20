@@ -1,5 +1,5 @@
 scope = "rig"
-provider = "omp-packrouter"
+provider = "codex"
 wake_mode = "fresh"
 formula = "mol-packer-route"
 work_dir = "{{.RigRoot}}"

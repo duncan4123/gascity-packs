@@ -37,20 +37,23 @@ Workflow diagrams:
 
 Packsmiths run `mol-packer-work` from sparse jj workspaces. Each logical change
 passes through `mol-jj-change`. When the bead is complete, `mol-packer-complete`
-rebases onto local `main@`, moves the `main` bookmark, verifies, and leaves a
-clean working copy.
+integrates the pack work onto `default@` so it can be tested in a running Gas
+City.
+
+Rebase onto `default@` only when the bead, formula step, or situation requires
+it. Do not rebase after every trivial change by default.
 
 ### 2. Local integration test
 
-After packsmiths land work on `main`, move the rig-root `default@` workspace to
-the integrated head so the combined local state can be tested. `default@` is the
-local integration sandbox, not the release target.
+After packsmiths integrate work onto `default@`, run Gas City from the rig-root
+default workspace and have agents use the pack. `default@` is the local
+integration and testing head, not the release target.
 
 ### 3. Release to GitHub
 
-The release workflow runs from `default@` after local testing. It fetches,
-rebases local `main` onto `main@origin` if needed, merges the pack line, moves
-`main`, verifies, and pushes. `main@origin` is the live published state.
+The release workflow runs from `default@` after live testing. It fetches,
+rebases local `main` onto `main@origin` if needed, merges the tested `default@`
+state, moves `main`, verifies, and pushes.
 
 See [Workflow overview](docs/diagrams/workflow-overview.md) and
 [Release workflow](docs/diagrams/release-workflow.md) for diagrams.

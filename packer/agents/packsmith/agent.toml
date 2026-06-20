@@ -1,5 +1,5 @@
 scope = "rig"
-provider = "omp-packsmith"
+provider = "codex"
 wake_mode = "fresh"
 formula = "mol-packer-work"
 # Shared packsmith is a neutral pool template. Routed beads select the actual

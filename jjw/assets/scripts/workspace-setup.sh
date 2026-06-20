@@ -5,6 +5,12 @@
 
 set -eu
 
+if [ -n "${TMPDIR:-}" ]; then
+    if [ ! -d "$TMPDIR" ] || [ ! -w "$TMPDIR" ]; then
+        unset TMPDIR
+    fi
+fi
+
 RIG_ROOT="${1:?usage: workspace-setup.sh <rig-root> <target-dir> <agent-name> [--sync]}"
 REQUESTED_WT="${2:?missing target-dir}"
 AGENT="${3:?missing agent-name}"
@@ -60,6 +66,25 @@ while [ "$#" -gt 0 ]; do
             ;;
     esac
 done
+
+RIG_ROOT=$(python3 - "$RIG_ROOT" <<'PY'
+import os
+import sys
+
+print(os.path.abspath(sys.argv[1]))
+PY
+)
+REQUESTED_WT=$(python3 - "$RIG_ROOT" "$REQUESTED_WT" <<'PY'
+import os
+import sys
+
+root, path = sys.argv[1:3]
+if os.path.isabs(path):
+    print(os.path.normpath(path))
+else:
+    print(os.path.normpath(os.path.join(root, path)))
+PY
+)
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
@@ -161,6 +186,13 @@ registered_workspace_root() {
     name="$1"
     jj -R "$RIG_ROOT" workspace list -T 'name ++ "\t" ++ root ++ "\n"' 2>/dev/null |
         awk -F '\t' -v want="$name" '$1 == want { print $2; exit }'
+}
+
+workspace_root_lookup_failed() {
+    case "$1" in
+        "<Error:"*) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 workspace_name_component() {
@@ -370,6 +402,20 @@ if [ "$REQUESTED_WT_ABS" != "$WT" ]; then
     echo "jjw workspace-setup: .jjw.yaml target: $WT" >&2
     echo "jjw workspace-setup: update agent work_dir or GC_JJW_WORKSPACE_DIR so they match" >&2
     exit 1
+fi
+
+if workspace_root_lookup_failed "$REGISTERED_WT"; then
+    if [ -d "$WT/.jj" ] && jj -R "$WT" root >/dev/null 2>&1; then
+        log_step "workspace $WORKSPACE_NAME has stale recorded root; refreshing existing target $WT"
+        REGISTERED_WT="$WT"
+    else
+        echo "jjw workspace-setup: workspace name is registered but jj cannot resolve its root" >&2
+        echo "jjw workspace-setup: workspace: $WORKSPACE_NAME" >&2
+        echo "jjw workspace-setup: requested target: $WT" >&2
+        echo "jjw workspace-setup: registered target: $REGISTERED_WT" >&2
+        echo "jjw workspace-setup: run from a valid workspace path or forget the stale jj workspace before reusing this name" >&2
+        exit 1
+    fi
 fi
 
 if [ -n "$REGISTERED_WT" ] && [ "$REGISTERED_WT" != "$WT" ]; then

@@ -1,6 +1,14 @@
 #!/bin/sh
 set -eu
 
+# Supervisor-launched agents can inherit a per-command TMPDIR after that
+# directory has been removed. Let mktemp fall back to /tmp in that case.
+if [ -n "${TMPDIR:-}" ]; then
+    if [ ! -d "$TMPDIR" ] || [ ! -w "$TMPDIR" ]; then
+        unset TMPDIR
+    fi
+fi
+
 RIG_ROOT="${1:-}"
 case "$RIG_ROOT" in
     ""|--*) RIG_ROOT="${GC_RIG_ROOT:-}" ;;
@@ -22,6 +30,25 @@ if [ -z "$TARGET_DIR" ]; then
     exit 2
 fi
 
+RIG_ROOT=$(python3 - "$RIG_ROOT" <<'PY'
+import os
+import sys
+
+print(os.path.abspath(sys.argv[1]))
+PY
+)
+TARGET_DIR=$(python3 - "$RIG_ROOT" "$TARGET_DIR" <<'PY'
+import os
+import sys
+
+root, path = sys.argv[1:3]
+if os.path.isabs(path):
+    print(os.path.normpath(path))
+else:
+    print(os.path.normpath(os.path.join(root, path)))
+PY
+)
+
 default_agent="${GC_AGENT:-${GC_TEMPLATE:-}}"
 default_agent="${default_agent##*/}"
 AGENT_NAME="${1:-}"
@@ -41,6 +68,11 @@ case "$PACK_ROOT" in
 esac
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+# First-time jjw setup may replace TARGET_DIR. Supervisors often launch agents
+# from TARGET_DIR, so keep this parent wrapper in a stable cwd before setup.
+cd "$RIG_ROOT"
+
 PACK_NAME="${GC_PACKER_PACK:-${PACKER_PACK:-}}"
 EXTRA_PATTERNS="${GC_PACKER_SPARSE_ADD:-}"
 TRIGGER_TITLE=""
