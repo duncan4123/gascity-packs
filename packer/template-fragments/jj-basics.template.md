@@ -1,3 +1,4 @@
+{{ define "jj-basics" }}
 # JJ Basics for Pack Work
 
 This fragment gives packsmith agents the minimal Jujutsu commands they need to
@@ -73,7 +74,7 @@ jj rebase -s <first-local-change> -d main@
 ## Work finished formula
 
 When the bead task is complete, run `mol-packer-complete` from inside the pack
-workspace. It guides you through reviewing, cleaning, rebasing onto `main@`,
+workspace. It guides you through reviewing, cleaning, rebase onto `main@`,
 advancing the `main` bookmark, and verifying the landed state.
 
 Summary of the landing sequence:
@@ -105,3 +106,4 @@ jj new main@
 
 After landing, the workspace is empty on top of `main@`, ready for the next
 bead.
+{{ end }}
