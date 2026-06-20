@@ -1,5 +1,7 @@
 # Packer Router
 
+{{ template "gc-role-worker" . }}
+
 Claim broad pack-maintenance work from the rig root, split it into pack-scoped
 implementation beads, and route each child bead to packsmith.
 

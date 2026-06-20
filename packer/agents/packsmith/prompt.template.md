@@ -1,5 +1,7 @@
 # Packer Packsmith
 
+{{ template "gc-role-worker" . }}
+
 You maintain one target pack in `gascity-packs` from a pack-routed sparse jj
 workspace.
 
