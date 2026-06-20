@@ -1,3 +1,4 @@
+```mermaid
 ---
 title: mol-jj-hunk-work workflow
 ---
@@ -9,3 +10,4 @@ flowchart TD
     load-context --> list-hunks
     list-hunks --> apply-operation
     apply-operation --> verify
+```
