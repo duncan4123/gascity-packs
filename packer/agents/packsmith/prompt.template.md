@@ -57,6 +57,20 @@ turn the workspace back into a full checkout for convenience.
 
 {{ template "jj-basics" . }}
 
+## Workflow
+
+You participate in the **packsmith work** workflow:
+
+1. Claim the routed bead and describe `@`.
+2. Make one logical change at a time and run `mol-jj-change` on it.
+3. When the bead is complete, run `mol-packer-complete` to rebase onto local
+   `main@`, move the `main` bookmark, verify, and leave a clean working copy.
+
+You do **not** push to `origin`. You do **not** move `default@`. Those are
+release-workflow responsibilities handled by `packrouter` after local testing.
+
+See `packer/docs/diagrams/workflow-overview.md` for the full picture.
+
 ## Boundaries
 
 - Use `jj`, not `git`.

@@ -6,6 +6,11 @@ with the full packs repository visible, identifies target packs, creates one
 child bead per target pack, and dispatches those beads to the shared packsmith
 pool. Each packsmith session uses bead metadata to create a sparse jj workspace
 for the requested pack.
+
+The router is also responsible for aligning the new work with in-flight convoys
+and existing packsmith sessions. Reuse or chain existing beads and workspaces
+when the work is a continuation; create isolated task workspaces only when
+concurrent pack work must not share a working copy.
 """
 formula = "mol-packer-route"
 version = 1
@@ -31,9 +36,43 @@ Exit criteria:
 """
 
 [[steps]]
+id = "inspect-existing-convoys"
+title = "Inspect existing convoys, beads, and packsmith sessions"
+needs = ["load-request"]
+description = """
+Before creating new beads, check what is already in flight for the target packs.
+A convoy is a set of related beads and sessions working toward the same outcome;
+the router must decide whether to join an existing convoy or start a new one.
+
+```bash
+# Packsmith sessions/workspaces for the target pack
+packer/assets/scripts/list-pack-workspaces.sh --pack <pack-name>
+
+# All gc/* pack bookmarks and their states
+jj log -r 'bookmarks(\"gc/*\")' --no-graph -T 'bookmarks ++ \" \" ++ change_id.shortest() ++ \" \" ++ description.first_line() ++ \"\\n\"'
+
+# Active and parked agents if available
+gc session list --json --state all 2>/dev/null | head -c 20K
+```
+
+Look for:
+
+- an existing packsmith session already working on the same pack
+- an open parent bead whose children cover the same task
+- a convoy label or `gc.convoy` metadata tying beads together
+- empty or stalled `gc/<pack>` bookmarks that indicate an abandoned workspace
+
+Exit criteria:
+
+- existing sessions and beads for each target pack are listed
+- continuation vs. new-convoy decision is recorded
+- stale or abandoned workspaces are noted for cleanup
+"""
+
+[[steps]]
 id = "plan-pack-routes"
 title = "Plan pack routes"
-needs = ["load-request"]
+needs = ["inspect-existing-convoys"]
 description = """
 For each target pack, decide the pack route and pack root. In `gascity-packs`,
 the usual route for `jj-hunk` is:
@@ -46,8 +85,16 @@ gc.pack_root=jj-hunk
 All normal pack implementation beads route to the shared `packer.packsmith`
 agent. Do not require one packsmith agent per pack.
 
-Before deciding whether to use the default pack workspace, a named workspace, or
-a task workspace, inspect existing packsmith sessions:
+Choose the workspace model based on the convoy state:
+
+| situation | workspace choice |
+| --- | --- |
+| no existing session and work fits one bead | default reusable pack workspace |
+| continuation of an active session | same workspace as the existing session |
+| concurrent work that must not share `@` | named workspace under the pack |
+| isolated one-off task | task workspace derived from child bead id/title |
+
+Before deciding, inspect existing packsmith sessions:
 
 ```bash
 packer/assets/scripts/list-pack-workspaces.sh --pack <pack-name>
@@ -58,11 +105,15 @@ packsmith sessions with their target, `work_dir`, workspace key, and title.
 Reuse the existing workspace metadata when follow-up work belongs with a worker
 already sitting in that workspace.
 
+If multiple target packs must land together, record the dependency so their
+landing can be coordinated.
+
 Exit criteria:
 
 - every target pack has `gc.pack` and `gc.pack_root` values
 - route target is the shared packsmith pool
 - existing packsmith workspaces were checked for each implementation target
+- continuation beads point at the same workspace as their predecessor
 - any ambiguous pack target is reported clearly
 """
 
@@ -79,6 +130,7 @@ Create one child bead per target pack. Each child bead should include:
 - acceptance criteria
 - verification command, usually `gc lint <pack>`
 - dependencies on other child beads when order matters
+- convoy metadata when this bead continues or joins a convoy
 
 Use metadata or notes to preserve the route decision. For the default reusable
 pack workspace, set the pack fields and omit `gc.pack_workspace`:
@@ -102,6 +154,13 @@ gc.pack_workspace=<workspace-name>
 
 `gc.pack_workspace` is a workspace key under the pack directory. It is not a
 path and must not contain slashes.
+
+When continuing a convoy, set or preserve convoy metadata:
+
+```text
+gc.convoy=<convoy-name>
+gc.continuation_of=<previous-bead-id>
+```
 
 Prefer the packer helper so the child bead and sling route stay consistent:
 
@@ -140,6 +199,7 @@ Exit criteria:
 - target pack is visible in each bead
 - default pack-workspace beads omit `gc.pack_workspace`
 - named/task workspace beads set `gc.pack_workspace`
+- continuation beads preserve convoy metadata
 - dependencies encode only real ordering constraints
 """
 
@@ -162,9 +222,13 @@ If `gc.pack_workspace` is set, packsmith uses that named workspace under the
 pack; otherwise GC reuses the pack workspace itself. Do not dispatch a bead
 whose target pack is ambiguous.
 
+After dispatch, update the parent bead notes with the child bead IDs, their
+target packs, their workspace keys, and any convoy grouping. This visibility
+lets future routers and packsmith agents understand the convoy shape.
+
 Exit criteria:
 
 - every child bead is routed to `packer.packsmith`
-- the parent bead notes list child beads and targets
+- the parent bead notes list child beads, targets, workspaces, and convoys
 - any unrouted pack is explicitly recorded
 """

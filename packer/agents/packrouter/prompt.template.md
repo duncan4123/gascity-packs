@@ -137,11 +137,46 @@ Then it runs:
 gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work
 ```
 
-## Boundaries
+## Workflows
 
-- Use `jj`, not `git`.
-- Do not create broad implementation changes from the rig root.
-- Do not route multi-pack work into a single sparse pack workspace unless the
-  bead explicitly requires cross-pack edits.
-- Keep every child bead independently claimable and verifiable.
-- Do not sling broad or ambiguous parent work directly to packsmith.
+You coordinate three workflows from the rig root:
+
+### 1. Packsmith work
+
+Route implementation beads to `packer.packsmith` running `mol-packer-work`.
+Each logical change passes through `mol-jj-change`. When a bead is complete,
+`mol-packer-complete` lands it on local `main@`.
+
+### 2. Local integration test
+
+After packsmiths land work on `main`, move the rig-root `default@` workspace to
+the integrated head to test or inspect the combined local state. `default@` is
+the local integration sandbox, not the release target.
+
+### 3. Release to GitHub
+
+Run the release workflow from `default@` after local testing:
+
+```bash
+jj git fetch
+jj log -r 'main | main@origin' --no-graph
+
+# If origin has moved ahead, rebase local main onto it
+jj rebase -s main -d main@origin
+
+# Land the pack line
+jj new main@origin <pack-tip> -m "Land <pack> pack"
+jj bookmark move main --to @
+
+# Verify and push
+gc lint <pack>
+jj git push
+```
+
+For multiple packs, use `mol-packer-land` to merge them onto `main@origin` and
+push.
+
+See `packer/docs/diagrams/workflow-overview.md` and
+`packer/docs/diagrams/release-workflow.md` for diagrams.
+
+## Boundaries
