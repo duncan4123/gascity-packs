@@ -14,8 +14,10 @@ is for already-routed implementation work.
 
 This formula extends `mol-jj-change`: every logical change the agent produces
 must pass through the change-perfecting steps before the bead moves on. The
-integration target for pack work is the default workspace working copy
-(`default@`), but rebase timing depends on the bead mode and common sense.
+pack-named workspace `.gc/workspaces/<rig>/packs/<pack>` is the integration
+workspace for that pack. Child workspaces under it land back into that pack
+workspace first; the pack workspace later lands to the default workspace
+working copy (`default@`) for full rig testing.
 """
 formula = "mol-packer-work"
 version = 1
@@ -86,9 +88,11 @@ run the imported `mol-jj-change` steps against it:
 Do not batch multiple unrelated changes into one commit just because they belong
 to the same bead. A bead may contain several logical changes; perfect each one.
 
-Rebase onto `default@` only when the bead instructions say so, when default@
-has moved forward, or when you are about to run `mol-packer-complete`. Do not
-rebase after every trivial change by default.
+Rebase onto the current integration base only when the bead instructions say so,
+when that base has moved forward, or when you are about to run
+`mol-packer-complete`. Use `gc/<pack>` as the base in child workspaces and
+`default@` in the pack-named integration workspace. Do not rebase after every
+trivial change by default.
 
 Exit criteria:
 
@@ -116,16 +120,19 @@ Exit criteria:
 
 [[steps]]
 id = "prepare-for-integration"
-title = "Prepare the pack line for integration onto default@"
+title = "Prepare the pack line for integration"
 needs = ["verify-pack"]
 description = """
 When the bead's changes are complete and each one is a perfect change, run
-`mol-packer-complete` to rebase onto `default@`, move the default workspace to
-the landed tip, verify the integrated state, and leave a clean working copy.
+`mol-packer-complete` to rebase onto the current integration base, move the
+right integration workspace to the landed tip, verify the integrated state, and
+leave a clean working copy.
 
-This makes the pack work available for testing in a running Gas City. Do not
-release to `main` from a pack workspace; that is the packrouter release
-workflow.
+From a child workspace, `mol-packer-complete` integrates into the pack-named
+workspace so that pack's integration packsmith can keep receiving work and
+absorbing sibling workspaces. From the pack-named workspace, it integrates into
+`default@` for testing in a running Gas City. Do not release to `main` from a
+pack workspace; that is the packrouter release workflow.
 
 If the bead instructions say not to land yet (e.g. because sibling beads must
 land together), leave the workspace in a clean state and note in the bead why
@@ -133,6 +140,7 @@ integration was deferred.
 
 Exit criteria:
 
-- either `mol-packer-complete` ran and default@ was moved to the integrated tip
+- either `mol-packer-complete` ran and the current integration target was moved
+  to the landed tip
 - or the workspace is clean with a clear note explaining the deferral
 """

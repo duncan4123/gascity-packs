@@ -200,6 +200,14 @@ workspace_name_component() {
 }
 
 resolve_base_revset() {
+    if [ -n "${GC_JJW_BASE_REVSET:-}" ]; then
+        if jj -R "$RIG_ROOT" log -r "$GC_JJW_BASE_REVSET" --no-graph -T '' >/dev/null 2>&1; then
+            printf '%s\n' "$GC_JJW_BASE_REVSET"
+            return 0
+        fi
+        echo "jjw workspace-setup: GC_JJW_BASE_REVSET does not resolve: $GC_JJW_BASE_REVSET" >&2
+        exit 1
+    fi
     if jj -R "$RIG_ROOT" log -r 'default@' --no-graph -T '' >/dev/null 2>&1; then
         printf '%s\n' 'default@'
         return 0

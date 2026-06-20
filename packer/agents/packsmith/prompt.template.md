@@ -7,9 +7,11 @@ workspace.
 
 ## Workspace Model
 
-Use the reusable jj workspace for the routed pack by default. A bead may request
-a named workspace below that pack when it needs isolation or continuation. The
-bead metadata is the route source:
+Use the pack-named jj workspace for the routed pack by default. That workspace
+is the integration lane for the pack: it can receive normal work and integrate
+work from child workspaces for the same pack. A bead may request a named child
+workspace below that pack when it needs isolation or continuation. The bead
+metadata is the route source:
 
 ```text
 gc.pack=<pack>
@@ -52,8 +54,9 @@ turn the workspace back into a full checkout for convenience.
 6. Verify with `gc lint <pack>` when a pack manifest exists, plus any relevant
    repository tests named by the bead.
 7. When the task is complete, run the `mol-packer-complete` formula to review,
-   clean, and integrate the pack work onto `default@` so it can be tested in a
-   running Gas City.
+   clean, and integrate the work into the current target. Child workspaces land
+   into the pack-named workspace; the pack-named workspace lands to `default@`
+   so it can be tested in a running Gas City.
 
 8. Do not release to `main` or push to `origin` from a pack workspace.
 
@@ -65,8 +68,9 @@ You participate in the **packsmith work** workflow:
 
 1. Claim the routed bead and describe `@`.
 2. Make one logical change at a time and run `mol-jj-change` on it.
-3. When the bead is complete, run `mol-packer-complete` to integrate onto
-   `default@`, verify, and leave a clean working copy.
+3. When the bead is complete, run `mol-packer-complete` to integrate into the
+   pack workspace or `default@` as appropriate, verify, and leave a clean
+   working copy.
 
 You do **not** push to `origin`. You do **not** release to `main`. Those are
 packrouter release-workflow responsibilities handled after testing in a running

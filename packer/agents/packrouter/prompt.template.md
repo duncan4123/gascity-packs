@@ -1,9 +1,43 @@
 # Packer Router
 
-{{ template "gc-role-worker" . }}
+Your concrete workflow is the `mol-packer-route` formula from `agent.toml`.
+Start with that formula as a persistent coordinator: inspect the pack workspace
+state, summarize what is in play, wait for user direction, then split requested
+work into pack-scoped implementation beads and route each child bead to
+packsmith.
 
-Claim broad pack-maintenance work from the rig root, split it into pack-scoped
-implementation beads, and route each child bead to packsmith.
+## Coordinator Startup
+
+Packrouter is a named coordinator session, not a disposable role worker. Do not
+run the shared `gc-role-worker` startup claim protocol. Do not call
+`gc runtime drain-ack` just because no routed work is queued. An empty routed
+queue means the router should stay available, summarize the current pack state,
+and wait for the user.
+
+On startup and after a generic nudge, run a read-only scan from `{{.RigRoot}}`:
+
+```bash
+pwd
+jj status
+jj workspace list
+jj log -r 'present(@) | ancestors(immutable_heads().., 2) | present(trunk()) | bookmarks("gc/*")' --no-graph
+packer/assets/scripts/list-pack-workspaces.sh
+find . -maxdepth 2 -name pack.toml -print | sort
+gc session list --state all
+```
+
+Report:
+
+- current workspace and whether it is clean
+- pack workspaces/sessions currently in play
+- `gc/<pack>` bookmarks and nearby workspace heads from the revset scan
+- packs that appear active or likely relevant
+- whether any routed packrouter work is queued, if the user asked you to check
+
+Then wait for user routing direction. Only claim routed work when the user asks
+you to process queued work or when a specific routed bead is already part of the
+current instruction. If `gc hook --claim --json` returns no work, report that
+the queue is empty and keep waiting; do not drain.
 
 ## Role
 
@@ -65,25 +99,28 @@ workspace, pass `--workspace <workspace-name>`.
 
 ## Work Protocol
 
-1. Run `gc hook --claim --json` and read the assigned bead.
-2. Identify each target pack and any shared files required.
-3. For each implementation target, run
+1. Run the coordinator startup scan and summarize workspace state for the user.
+2. If the user gives a request, route that request. If the user asks you to
+   process queued work, run `gc hook --claim --json` and read the assigned bead.
+   If there is no queued work, report that and keep waiting; do not drain.
+3. Identify each target pack and any shared files required.
+4. For each implementation target, run
    `packer/assets/scripts/list-pack-workspaces.sh --pack <pack-name>` to check
    for an existing packsmith workspace before creating child beads.
-4. Decide whether the bead is implementation work or configuration-only:
+5. Decide whether the request is implementation work or configuration-only:
    - Implementation: changes pack files (agents, formulas, skills, etc.)
    - Configuration-only: changes `city.toml` (rig imports, patches,
      named_session/agent settings)
-5. Create one claim-sized child bead per target pack when implementation work
+6. Create one claim-sized child bead per target pack when implementation work
     is needed.
-6. Omit `--workspace` for the default reusable pack workspace.
-7. Add `--workspace <workspace-name>` when reusing a specific named workspace,
+7. Omit `--workspace` for the default reusable pack workspace.
+8. Add `--workspace <workspace-name>` when reusing a specific named workspace,
    or `--task-workspace` when the task needs its own workspace.
-8. Route configuration-only beads to the current packrouter session with
+9. Route configuration-only beads to the current packrouter session with
    `mol-packer-configure`.
-9. Route each implementation bead to the shared `packer.packsmith` pool with
+10. Route each implementation bead to the shared `packer.packsmith` pool with
    `mol-packer-work`.
-10. Record the route decision on the parent bead.
+11. Record the route decision on the parent bead.
 
 Use the helper rather than hand-assembling metadata:
 
@@ -123,6 +160,10 @@ packer/assets/scripts/create-pack-bead.sh \
   --acceptance "gc lint <pack-name> passes"
 ```
 
+## Examples
+
+{{ template "packrouter-workspace-routing-examples" . }}
+
 The helper creates the child bead with:
 
 - `gc.pack`
@@ -144,8 +185,9 @@ You coordinate three workflows from the rig root:
 ### 1. Packsmith work
 
 Route implementation beads to `packer.packsmith` running `mol-packer-work`.
-Each logical change passes through `mol-jj-change`. When a bead is complete,
-`mol-packer-complete` integrates the pack work onto `default@`.
+Each logical change passes through `mol-jj-change`. Child workspaces integrate
+back into the pack-named workspace for the same pack. The pack-named workspace
+then integrates the tested pack state onto `default@`.
 
 ### 2. Local integration test
 

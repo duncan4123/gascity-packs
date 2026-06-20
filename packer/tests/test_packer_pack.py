@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKER = ROOT / "packer"
+JJW = ROOT / "jjw"
 
 
 def load_toml(path: Path) -> dict:
@@ -28,6 +29,14 @@ def test_packrouter_is_named_session_not_pool_agent() -> None:
     assert named_session_templates() == {"packrouter"}
 
     router = agent_config("packrouter")
+    assert router["formula"] == "mol-packer-route"
+    assert "startup scan" in router["nudge"]
+    prompt = (PACKER / "agents" / "packrouter" / "prompt.template.md").read_text(encoding="utf-8")
+    assert "`mol-packer-route` formula" in prompt
+    assert '{{ template "gc-role-worker" . }}' not in prompt
+    assert "Coordinator Startup" in prompt
+    assert "Do not call\n`gc runtime drain-ack`" in prompt
+    assert "present(@) | ancestors(immutable_heads().., 2) | present(trunk())" in prompt
     pool_fields = {
         "min_active_sessions",
         "max_active_sessions",
@@ -42,11 +51,24 @@ def test_packsmith_is_pool_agent_not_named_session() -> None:
     assert "packsmith" not in named_session_templates()
 
     packsmith = agent_config("packsmith")
+    assert packsmith["formula"] == "mol-packer-work"
     assert packsmith["min_active_sessions"] == 0
     assert packsmith["max_active_sessions"] > 1
     assert "gc.pack/gc.pack_root" in (PACKER / "agents" / "packsmith" / "agent.toml").read_text(
         encoding="utf-8"
     )
+
+
+def test_role_worker_fragment_defers_to_agent_formula() -> None:
+    fragment = (PACKER / "template-fragments" / "gc-role-worker.template.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "agent's `formula` in" in fragment
+    assert "metadata:gc.formula_name" in fragment
+    assert "metadata:gc.formula)" in fragment
+    assert "GC_CLAIMED_FORMULA" in fragment
+    assert "CLAIMED_FORMULA=%s" in fragment
 
 
 def test_create_pack_bead_dry_run_writes_route_metadata() -> None:
@@ -227,5 +249,42 @@ def test_pack_workspace_setup_uses_bead_selected_pack_not_agent_default() -> Non
     assert 'trigger_pack=' in script
     assert 'trigger_pack_root=' in script
     assert 'GC_JJW_WORKSPACE_DIR="$PACK_WORKSPACE_PARENT"' in script
+    assert 'if [ "$(basename "$TARGET_DIR")" = "__packsmith__" ]; then' in script
     assert 'missing or invalid pack name' in script
     assert "PACK_NAME=\"$AGENT_NAME\"" not in script
+
+
+def test_child_pack_workspaces_start_from_pack_integration_lane() -> None:
+    script = (PACKER / "assets" / "scripts" / "pack-workspace-setup.sh").read_text(encoding="utf-8")
+
+    assert 'PACK_WORKSPACE_KIND="integration"' in script
+    assert 'PACK_WORKSPACE_KIND="child"' in script
+    assert 'PACK_INTEGRATION_BOOKMARK="gc/$PACK_NAME"' in script
+    assert 'GC_PACKER_INTEGRATION_WORKSPACE_DIR' in script
+    assert '"$workspace_setup" "$RIG_ROOT" "$PACK_INTEGRATION_WORKSPACE_DIR" "$PACK_INTEGRATION_WORKSPACE_NAME"' in script
+    assert 'GC_JJW_BASE_REVSET="$PACK_INTEGRATION_BOOKMARK"' in script
+
+
+def test_jjw_workspace_setup_accepts_base_revset_override() -> None:
+    script = (JJW / "assets" / "scripts" / "workspace-setup.sh").read_text(encoding="utf-8")
+    readme = (JJW / "README.md").read_text(encoding="utf-8")
+
+    assert "GC_JJW_BASE_REVSET" in script
+    assert 'jj -R "$RIG_ROOT" log -r "$GC_JJW_BASE_REVSET"' in script
+    assert "GC_JJW_BASE_REVSET" in readme
+
+
+def test_packer_formulas_describe_pack_integration_lane() -> None:
+    complete = (PACKER / "formulas" / "mol-packer-complete.toml").read_text(encoding="utf-8")
+    work = (PACKER / "formulas" / "mol-packer-work.toml").read_text(encoding="utf-8")
+    route = (PACKER / "formulas" / "mol-packer-route.toml").read_text(encoding="utf-8")
+    basics = (PACKER / "template-fragments" / "jj-basics.template.md").read_text(encoding="utf-8")
+
+    assert "child workspace under a pack: land into the pack-named workspace" in complete
+    assert "pack-named workspace: land into the rig-root default workspace" in complete
+    assert "pack-named workspace `.gc/workspaces/<rig>/packs/<pack>` is the integration" in work
+    assert "Child workspaces under it land back into that pack" in work
+    assert "An empty routed queue is not a shutdown condition for packrouter" in route
+    assert 'id = "startup-scan"' in route
+    assert "present(@) | ancestors(immutable_heads().., 2) | present(trunk())" in route
+    assert "lands back into the pack-named workspace, not directly to `default@`" in basics

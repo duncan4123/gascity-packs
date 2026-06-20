@@ -1,6 +1,8 @@
 scope = "rig"
 provider = "codex"
 wake_mode = "fresh"
+# The role-worker prompt is generic; this formula is packsmith's concrete
+# workflow contract.
 formula = "mol-packer-work"
 # Shared packsmith is a neutral pool template. Routed beads select the actual
 # pack with gc.pack/gc.pack_root metadata before pre_start runs.

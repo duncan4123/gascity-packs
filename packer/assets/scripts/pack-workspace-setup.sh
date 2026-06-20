@@ -131,6 +131,10 @@ case "$PACK_NAME" in
         ;;
 esac
 
+if [ "$(basename "$TARGET_DIR")" = "__packsmith__" ]; then
+	TARGET_DIR="$(dirname "$TARGET_DIR")/$PACK_NAME"
+fi
+
 PACK_WORKSPACE_DIR="$TARGET_DIR"
 PACK_WORKSPACE_NAME=$(basename "$PACK_WORKSPACE_DIR")
 PACK_WORKSPACE_PARENT=$(python3 - "$RIG_ROOT" "$(dirname "$PACK_WORKSPACE_DIR")" <<'PY'
@@ -139,6 +143,51 @@ print(os.path.relpath(os.path.abspath(sys.argv[2]), os.path.abspath(sys.argv[1])
 PY
 )
 PACK_WORKSPACE_PARENT_NAME=$(basename "$(dirname "$PACK_WORKSPACE_DIR")")
+
+if [ "$PACK_WORKSPACE_NAME" = "$PACK_NAME" ]; then
+	PACK_WORKSPACE_KIND="integration"
+	PACK_INTEGRATION_WORKSPACE_DIR="$PACK_WORKSPACE_DIR"
+elif [ "$PACK_WORKSPACE_PARENT_NAME" = "$PACK_NAME" ]; then
+	PACK_WORKSPACE_KIND="child"
+	PACK_INTEGRATION_WORKSPACE_DIR=$(dirname "$PACK_WORKSPACE_DIR")
+else
+	echo "packer workspace setup: target is not the pack workspace or a workspace under the pack" >&2
+	echo "packer workspace setup: pack=$PACK_NAME target=$PACK_WORKSPACE_DIR" >&2
+	exit 2
+fi
+PACK_INTEGRATION_WORKSPACE_PARENT=$(python3 - "$RIG_ROOT" "$(dirname "$PACK_INTEGRATION_WORKSPACE_DIR")" <<'PY'
+import os, sys
+print(os.path.relpath(os.path.abspath(sys.argv[2]), os.path.abspath(sys.argv[1])))
+PY
+)
+PACK_INTEGRATION_WORKSPACE_REL=$(python3 - "$RIG_ROOT" "$PACK_INTEGRATION_WORKSPACE_DIR" <<'PY'
+import os, sys
+print(os.path.relpath(os.path.abspath(sys.argv[2]), os.path.abspath(sys.argv[1])))
+PY
+)
+PACK_INTEGRATION_WORKSPACE_NAME=$(basename "$PACK_INTEGRATION_WORKSPACE_DIR")
+PACK_INTEGRATION_BOOKMARK="gc/$PACK_NAME"
+export GC_PACKER_WORKSPACE_KIND="$PACK_WORKSPACE_KIND"
+export GC_PACKER_INTEGRATION_WORKSPACE_DIR="$PACK_INTEGRATION_WORKSPACE_DIR"
+export GC_PACKER_INTEGRATION_WORKSPACE="$PACK_INTEGRATION_WORKSPACE_REL"
+export GC_PACKER_INTEGRATION_WORKSPACE_NAME="$PACK_INTEGRATION_WORKSPACE_NAME"
+export GC_PACKER_INTEGRATION_BOOKMARK="$PACK_INTEGRATION_BOOKMARK"
+
+workspace_setup="$SCRIPT_DIR/../../../jjw/assets/scripts/workspace-setup.sh"
+if [ "$PACK_WORKSPACE_KIND" = "child" ]; then
+	(
+		GC_JJW_WORKSPACE_DIR="$PACK_INTEGRATION_WORKSPACE_PARENT"
+		export GC_JJW_WORKSPACE_DIR
+		unset GC_JJW_BOOKMARK_PATTERN
+		unset GC_JJW_BASE_REVSET
+		"$workspace_setup" "$RIG_ROOT" "$PACK_INTEGRATION_WORKSPACE_DIR" "$PACK_INTEGRATION_WORKSPACE_NAME" "$@"
+	)
+	if jj -R "$RIG_ROOT" log -r "$PACK_INTEGRATION_BOOKMARK" --no-graph -T '' >/dev/null 2>&1; then
+		GC_JJW_BASE_REVSET="$PACK_INTEGRATION_BOOKMARK"
+		export GC_JJW_BASE_REVSET
+	fi
+fi
+
 GC_JJW_WORKSPACE_DIR="$PACK_WORKSPACE_PARENT"
 export GC_JJW_WORKSPACE_DIR
 if [ -z "${GC_JJW_BOOKMARK_PATTERN:-}" ] && [ "$PACK_WORKSPACE_PARENT_NAME" = "$PACK_NAME" ]; then
@@ -146,7 +195,6 @@ if [ -z "${GC_JJW_BOOKMARK_PATTERN:-}" ] && [ "$PACK_WORKSPACE_PARENT_NAME" = "$
 	export GC_JJW_BOOKMARK_PATTERN
 fi
 
-workspace_setup="$SCRIPT_DIR/../../../jjw/assets/scripts/workspace-setup.sh"
 if [ -n "${GC_TRIGGER_BEAD_ID:-}" ]; then
 	if [ -n "$TRIGGER_TITLE" ]; then
 		"$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_WORKSPACE_NAME" --bead "$GC_TRIGGER_BEAD_ID" --title "$TRIGGER_TITLE" "$@"

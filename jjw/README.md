@@ -62,6 +62,8 @@ Set these through `city.toml` agent/rig env overrides when needed:
 - `GC_JJW_INSTALL_DIR`: install directory; default `$HOME/.local/bin`.
 - `GC_JJW_WORKSPACE_DIR`: `jjw` workspace_dir override. Default is the target
   workspace parent, relative to the rig root.
+- `GC_JJW_BASE_REVSET`: base revision for new workspaces. Default resolves to
+  `default@`, then a remote main branch, then `@`.
 - `GC_JJW_DEFAULT_BRANCH`: `jjw` default_branch; default `main`.
 - `GC_JJW_BOOKMARK_PATTERN`: `jjw` bookmark_pattern; default `gc/{name}`.
 - `GC_JJW_MANAGE_CONFIG`: `true` by default. Set `overwrite` to replace a
