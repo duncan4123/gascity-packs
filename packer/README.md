@@ -25,8 +25,35 @@ This lets a formula route work to an agent in a workspace that contains
 
 Workflow diagrams:
 
+- [Pack workflow overview](docs/diagrams/workflow-overview.md)
+- [Release workflow](docs/diagrams/release-workflow.md)
+- [Bookmark lifecycle](docs/diagrams/bookmark-lifecycle.md)
 - [Pack workspace reuse](docs/diagrams/pack-workspace-reuse.md)
 - [Task workspace](docs/diagrams/task-workspace.md)
+
+## Workflows
+
+### 1. Packsmith work
+
+Packsmiths run `mol-packer-work` from sparse jj workspaces. Each logical change
+passes through `mol-jj-change`. When the bead is complete, `mol-packer-complete`
+rebases onto local `main@`, moves the `main` bookmark, verifies, and leaves a
+clean working copy.
+
+### 2. Local integration test
+
+After packsmiths land work on `main`, move the rig-root `default@` workspace to
+the integrated head so the combined local state can be tested. `default@` is the
+local integration sandbox, not the release target.
+
+### 3. Release to GitHub
+
+The release workflow runs from `default@` after local testing. It fetches,
+rebases local `main` onto `main@origin` if needed, merges the pack line, moves
+`main`, verifies, and pushes. `main@origin` is the live published state.
+
+See [Workflow overview](docs/diagrams/workflow-overview.md) and
+[Release workflow](docs/diagrams/release-workflow.md) for diagrams.
 
 ## Router Agent
 

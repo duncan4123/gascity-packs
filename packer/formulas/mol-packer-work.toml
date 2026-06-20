@@ -4,16 +4,20 @@ Maintain one gascity-packs pack from a pack-routed sparse jj workspace.
 Use this formula for beads that name a target pack explicitly. The session is
 expected to start from the shared packsmith pool. The triggering bead must carry
 `gc.pack` and `gc.pack_root` metadata. GC uses that metadata to place the
-session under the target pack directory before pre-start runs. The pre-start
+session under the target pack directory before pre_start runs. The pre-start
 script then creates a jj workspace and sparse-checks out that pack folder plus
 shared registry, tests, and documentation surfaces, rather than the whole pack
 set.
 
 Broad or ambiguous requests should go to `mol-packer-route` first. This formula
 is for already-routed implementation work.
+
+This formula extends `mol-jj-change`: every logical change the agent produces
+must pass through the change-perfecting steps before the bead moves on.
 """
 formula = "mol-packer-work"
 version = 1
+extends = ["mol-jj-change"]
 
 [[steps]]
 id = "load-pack-task"
@@ -39,24 +43,58 @@ Exit criteria:
 """
 
 [[steps]]
-id = "apply-pack-change"
-title = "Apply pack-scoped change"
+id = "claim-and-describe"
+title = "Claim the bead and describe the starting commit"
 needs = ["load-pack-task"]
+description = """
+Claim the routed bead and record a clear workspace commit tied to this session.
+This prevents accidental mixing with the previous agent's work and gives other
+workspaces a readable signal of who is doing what.
+
+```bash
+gc hook --claim --json
+jj describe -m "<pack>: <short task summary>"
+```
+
+Exit criteria:
+
+- bead is claimed
+- `@` has a description that names the pack and task
+"""
+
+[[steps]]
+id = "apply-pack-change"
+title = "Apply one pack-scoped logical change"
+needs = ["claim-and-describe"]
 description = """
 Edit only the target pack and required shared files. If the bead target does not
 match the sparse workspace, stop with a clear note instead of editing the wrong
 pack. If another pack or shared surface is truly needed, widen sparse checkout
 intentionally with `jj sparse set --add`.
 
+Work in logical steps. Each time you finish a coherent, self-contained change,
+run the imported `mol-jj-change` steps against it:
+
+- inspect the current change
+- ensure it is atomic
+- write a clear `<pack>: <description>` message
+- rebase onto `main@`
+- verify with `gc lint <pack>` and relevant tests
+- leave a clean successor with `jj new`
+
+Do not batch multiple unrelated changes into one commit just because they belong
+to the same bead. A bead may contain several logical changes; perfect each one.
+
 Exit criteria:
 
 - changes are limited to the pack task
+- each logical change is described, verified, and rebased onto `main@`
 - any sparse widening is justified by the bead
 """
 
 [[steps]]
 id = "verify-pack"
-title = "Verify pack"
+title = "Verify the bead's final state"
 needs = ["apply-pack-change"]
 description = """
 Run the narrowest relevant verification, usually `gc lint <pack>` for a pack
@@ -69,4 +107,23 @@ Exit criteria:
 
 - verification command and result are recorded
 - remaining risk is explicit
+"""
+
+[[steps]]
+id = "prepare-for-landing"
+title = "Prepare the pack line for landing"
+needs = ["verify-pack"]
+description = """
+When the bead's changes are complete and each one is a perfect change, run
+`mol-packer-complete` to rebase the whole line onto `main@`, advance the `main`
+bookmark, verify the landed state, and leave a clean working copy.
+
+If the bead instructions say not to land yet (e.g. because sibling beads must
+land together), leave the workspace in a clean state on `main@` instead and note
+in the bead why landing was deferred.
+
+Exit criteria:
+
+- either `mol-packer-complete` ran and `main` was advanced
+- or the workspace is clean on `main@` with a clear note explaining the deferral
 """
