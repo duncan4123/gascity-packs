@@ -10,7 +10,8 @@ Create a pack-routed implementation bead and sling it to packsmith.
 Options:
   --pack <name>              Pack route key, for example jj-hunk
   --pack-root <path>         Pack directory relative to rig root (default: pack)
-  --workspace <name>         Existing workspace under the pack to reuse
+  --workspace <name>         Named workspace under the pack to reuse
+  --task-workspace           Create a workspace named from the child bead id/title
   --title <title>            Child bead title
   --description <text>       Child bead description
   --description-file <path>  Read child bead description from file
@@ -24,6 +25,7 @@ EOF
 PACK=""
 PACK_ROOT=""
 WORKSPACE=""
+TASK_WORKSPACE=""
 TITLE=""
 DESCRIPTION=""
 DESCRIPTION_FILE=""
@@ -56,6 +58,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --workspace=*)
             WORKSPACE="${1#--workspace=}"
+            shift
+            ;;
+        --task-workspace)
+            TASK_WORKSPACE=1
             shift
             ;;
         --title)
@@ -143,6 +149,10 @@ case "$WORKSPACE" in
         fi
         ;;
 esac
+if [ -n "$WORKSPACE" ] && [ -n "$TASK_WORKSPACE" ]; then
+    echo "create-pack-bead: --workspace and --task-workspace are mutually exclusive" >&2
+    exit 2
+fi
 
 RIG_NAME="${GC_RIG:-}"
 if [ -z "$RIG_NAME" ]; then
@@ -188,7 +198,10 @@ if [ -n "$DRY_RUN" ]; then
     printf 'bd'
     printf ' %s' "$@"
     printf '\n'
-    printf 'gc sling %s <child-bead-id> --on mol-packer-work\n' "$TARGET"
+    if [ -n "$TASK_WORKSPACE" ]; then
+        printf 'bd update <child-bead-id> --set-metadata gc.pack_workspace=<child-bead-id>-<title-slug>\n'
+    fi
+    printf 'gc sling %s <child-bead-id> --on mol-packer-work --nudge\n' "$TARGET"
     printf 'metadata: '
     cat "$metadata_file"
     printf '\n'
@@ -196,7 +209,44 @@ if [ -n "$DRY_RUN" ]; then
 fi
 
 child_id=$(bd "$@")
-gc sling "$TARGET" "$child_id" --on mol-packer-work
+if [ -n "$TASK_WORKSPACE" ]; then
+    task_workspace=$(python3 - "$child_id" "$TITLE" <<'PY'
+import sys
+
+def safe_path_slug(value, max_len):
+    value = value.strip().lower()
+    out = []
+    last_dash = False
+    for ch in value:
+        if "a" <= ch <= "z" or "0" <= ch <= "9":
+            token = ch
+        else:
+            token = "-"
+        if token == "-":
+            if not out or last_dash:
+                continue
+            last_dash = True
+        else:
+            last_dash = False
+        out.append(token)
+        if max_len > 0 and len(out) >= max_len:
+            break
+    return "".join(out).strip("-")
+
+child_id, title = sys.argv[1:3]
+id_slug = safe_path_slug(child_id, 32)
+title_slug = safe_path_slug(title, 72)
+if id_slug and title_slug:
+    print(f"{id_slug}-{title_slug}")
+elif id_slug:
+    print(id_slug)
+else:
+    print(title_slug)
+PY
+)
+    bd update "$child_id" --set-metadata "gc.pack_workspace=$task_workspace"
+fi
+gc sling "$TARGET" "$child_id" --on mol-packer-work --nudge
 
 if [ -n "$PARENT" ]; then
     bd note "$PARENT" "Created pack-routed child $child_id for pack $PACK -> $TARGET using mol-packer-work."

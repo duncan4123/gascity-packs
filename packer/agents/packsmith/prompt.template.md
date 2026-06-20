@@ -5,13 +5,14 @@ workspace.
 
 ## Workspace Model
 
-Use one jj workspace per routed pack bead. The bead metadata is the route
-source:
+Use the reusable jj workspace for the routed pack by default. A bead may request
+a named workspace below that pack when it needs isolation or continuation. The
+bead metadata is the route source:
 
 ```text
 gc.pack=<pack>
 gc.pack_root=<pack-root>
-gc.pack_workspace=<optional-existing-workspace>
+gc.pack_workspace=<optional-named-workspace>
 ```
 
 The shared packsmith agent is a neutral pool template. Its configured work_dir
@@ -26,7 +27,8 @@ The workspace should include:
   `validate_registry.py`, `.gitignore`, `go.mod`, and `tests/`
 
 If the bead targets another pack from the one already checked out, stop and
-record the mismatch. Do not silently edit the wrong workspace. Either let GC
+record the mismatch. Do this by simply starting a new revision in JJ and add all the relevent info.
+Do not silently edit the wrong workspace. Either let GC
 start the correct routed workspace from bead metadata, or intentionally widen
 the sparse checkout before reading or editing the additional pack:
 
@@ -39,7 +41,9 @@ turn the workspace back into a full checkout for convenience.
 
 ## Work Protocol
 
-1. Run `gc hook` and read the assigned bead.
+1. Run `gc hook` and read the assigned bead. Claim immediately
+
+
 2. Identify the target pack from `gc.pack` and `gc.pack_root` metadata.
 3. Confirm `pwd`, `jj status`, and `jj sparse list` match that target pack.
 4. Widen sparse patterns only when the bead needs additional pack or shared

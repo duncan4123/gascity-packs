@@ -46,10 +46,23 @@ gc.pack_root=jj-hunk
 All normal pack implementation beads route to the shared `packer.packsmith`
 agent. Do not require one packsmith agent per pack.
 
+Before deciding whether to use the default pack workspace, a named workspace, or
+a task workspace, inspect existing packsmith sessions:
+
+```bash
+packer/assets/scripts/list-pack-workspaces.sh --pack <pack-name>
+```
+
+The helper reads `gc session list --json --state all` and reports matching
+packsmith sessions with their target, `work_dir`, workspace key, and title.
+Reuse the existing workspace metadata when follow-up work belongs with a worker
+already sitting in that workspace.
+
 Exit criteria:
 
 - every target pack has `gc.pack` and `gc.pack_root` values
 - route target is the shared packsmith pool
+- existing packsmith workspaces were checked for each implementation target
 - any ambiguous pack target is reported clearly
 """
 
@@ -67,21 +80,21 @@ Create one child bead per target pack. Each child bead should include:
 - verification command, usually `gc lint <pack>`
 - dependencies on other child beads when order matters
 
-Use metadata or notes to preserve the route decision. For a new workspace, set
-the pack fields and omit `gc.pack_workspace`:
+Use metadata or notes to preserve the route decision. For the default reusable
+pack workspace, set the pack fields and omit `gc.pack_workspace`:
 
 ```text
 gc.pack=<pack>
 gc.pack_root=<pack-root>
 ```
 
-GC will derive the concrete workspace from the child bead id and title under:
+GC will derive the concrete workspace from the pack:
 
 ```text
-.gc/workspaces/<rig>/packs/<pack>/<bead-id>-<title-slug>
+.gc/workspaces/<rig>/packs/<pack>
 ```
 
-For follow-up work that must reuse an existing workspace, also set:
+For work that must use a named workspace below the pack, also set:
 
 ```text
 gc.pack_workspace=<workspace-name>
@@ -108,16 +121,25 @@ To reuse an existing workspace, add:
 --workspace <workspace-name>
 ```
 
+Use the workspace value printed by `list-pack-workspaces.sh`. A `WORKSPACE` of
+`-` means the reusable default pack workspace, so omit `--workspace`.
+
+To create an isolated workspace named from the child bead id and title, add:
+
+```bash
+--task-workspace
+```
+
 The helper writes `gc.pack`, `gc.pack_root`, `gc.formula=mol-packer-work`, and
 `gc.route_target` metadata before dispatch. It also writes `gc.pack_workspace`
-when `--workspace` is provided.
+when `--workspace` or `--task-workspace` is provided.
 
 Exit criteria:
 
 - child beads are claim-sized
 - target pack is visible in each bead
-- new workspace beads omit `gc.pack_workspace`
-- existing workspace beads set `gc.pack_workspace`
+- default pack-workspace beads omit `gc.pack_workspace`
+- named/task workspace beads set `gc.pack_workspace`
 - dependencies encode only real ordering constraints
 """
 
@@ -136,9 +158,9 @@ gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work
 
 The child bead must carry `gc.pack` and `gc.pack_root` metadata so packsmith's
 pre-start hook can sparse-checkout the correct pack before the bead is claimed.
-If `gc.pack_workspace` is set, packsmith reuses that workspace under the pack;
-otherwise GC creates a new workspace from the child bead id and title. Do not
-dispatch a bead whose target pack is ambiguous.
+If `gc.pack_workspace` is set, packsmith uses that named workspace under the
+pack; otherwise GC reuses the pack workspace itself. Do not dispatch a bead
+whose target pack is ambiguous.
 
 Exit criteria:
 
