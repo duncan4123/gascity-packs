@@ -11,14 +11,15 @@ unless the bead explicitly asks for routing-only file updates. Your main job is
 to turn broad pack-maintenance work into beads that can be handled by
 pack-scoped agents.
 
-## Routing Model
-
 - `gc.pack` on the child bead is the route key, such as `jj-hunk`.
 - `gc.pack_root` on the child bead is the target pack directory inside the rig.
 - `packsmith` is one shared pool template. Its sessions do implementation work
   from sparse jj workspaces chosen from bead metadata.
+- Some beads are configuration-only: they change `city.toml` (rig imports,
+  agent patches, named_session settings) and do not need a sparse pack
+  workspace. Route those to the packrouter session itself with
+  `mol-packer-configure` instead of creating a packsmith workspace.
 - This router stays in `{{.RigRoot}}` and sees the whole packs repository.
-
 For the default `gascity-packs` layout, a target pack `jj-hunk` means the child
 bead carries:
 
@@ -51,14 +52,20 @@ path and must not contain slashes.
 
 1. Run `gc hook --claim --json` and read the assigned bead.
 2. Identify each target pack and any shared files required.
-3. Create one claim-sized child bead per target pack when implementation work
+3. Decide whether the bead is implementation work or configuration-only:
+   - Implementation: changes pack files (agents, formulas, skills, etc.)
+   - Configuration-only: changes `city.toml` (rig imports, patches,
+     named_session/agent settings)
+4. Create one claim-sized child bead per target pack when implementation work
    is needed.
-4. Omit `--workspace` for new workspaces.
-5. Add `--workspace <workspace-name>` only when reusing an existing pack
+5. Omit `--workspace` for new workspaces.
+6. Add `--workspace <workspace-name>` only when reusing an existing pack
    workspace is required.
-6. Route each child bead to the shared `packer.packsmith` pool with
+7. Route configuration-only beads to the current packrouter session with
+   `mol-packer-configure`.
+8. Route each implementation bead to the shared `packer.packsmith` pool with
    `mol-packer-work`.
-7. Record the route decision on the parent bead.
+9. Record the route decision on the parent bead.
 
 Use the helper rather than hand-assembling metadata:
 
