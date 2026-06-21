@@ -37,6 +37,10 @@ default = ""
 description = "JJ workspace used for source implementation work."
 default = ""
 
+[vars.source_workspace_path]
+description = "Absolute path to the jj source implementation workspace."
+default = ""
+
 [vars.source_change_id]
 description = "JJ change ID containing the latest source implementation state."
 default = ""
@@ -44,7 +48,7 @@ default = ""
 [[steps]]
 id = "describe-fix-plan-change"
 title = "Describe fix plan document change"
-metadata = { "gc.run_target" = "gc.review-synthesizer", "gc.jj.describe" = "true", "gc.jj.describe_scope" = "document", "gc.jj.describe_document" = "fix-plan", "gc.docs.managed" = "true", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
+metadata = { "gc.run_target" = "gc.review-synthesizer", "gc.jj.describe" = "true", "gc.jj.describe_scope" = "document", "gc.jj.describe_document" = "fix-plan", "gc.docs.managed" = "true", "gc.docs.workspace_key" = "gc.docs.workspace,gc.var.docs_workspace", "gc.docs.workspace_path_key" = "gc.docs.workspace_path,gc.var.docs_workspace_path", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
 description_file = "../assets/workflows/jj-docs/describe-jj-change.md"
 
 [[steps]]
@@ -55,24 +59,31 @@ metadata = { "gc.run_target" = "gc.review-synthesizer", "gc.docs.managed" = "tru
 description_file = "../assets/workflows/jj-docs/fix-loop.md"
 
 [[steps]]
+id = "prepare-worktree"
+title = "Prepare jj source workspace"
+needs = ["plan-fixes"]
+metadata = { "gc.run_target" = "gc.run-operator", "gc.docs.managed" = "true", "gc.docs.workspace_key" = "gc.docs.workspace,gc.var.docs_workspace", "gc.docs.workspace_path_key" = "gc.docs.workspace_path,gc.var.docs_workspace_path", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_workspace_key" = "gc.docs.source_workspace,gc.var.source_workspace", "gc.docs.source_workspace_path_key" = "gc.docs.source_workspace_path,gc.var.source_workspace_path" }
+description_file = "../assets/workflows/jj-docs/prepare-worktree.md"
+
+[[steps]]
 id = "describe-source-fix-change"
 title = "Describe source fix change"
-needs = ["plan-fixes"]
-metadata = { "gc.run_target" = "{{implementation_target}}", "gc.jj.describe" = "true", "gc.jj.describe_scope" = "source", "gc.docs.managed" = "true", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_workspace_key" = "gc.docs.source_workspace,gc.var.source_workspace", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
+needs = ["plan-fixes", "prepare-worktree"]
+metadata = { "gc.run_target" = "{{implementation_target}}", "gc.jj.describe" = "true", "gc.jj.describe_scope" = "source", "gc.docs.managed" = "true", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_workspace_key" = "gc.docs.source_workspace,gc.var.source_workspace", "gc.docs.source_workspace_path_key" = "gc.docs.source_workspace_path,gc.var.source_workspace_path", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
 description_file = "../assets/workflows/jj-docs/describe-jj-change.md"
 
 [[steps]]
 id = "apply-fixes"
 title = "Apply jj review fixes"
-needs = ["plan-fixes", "describe-source-fix-change"]
-metadata = { "gc.run_target" = "{{implementation_target}}", "gc.docs.managed" = "true", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_workspace_key" = "gc.docs.source_workspace,gc.var.source_workspace", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
+needs = ["plan-fixes", "prepare-worktree", "describe-source-fix-change"]
+metadata = { "gc.run_target" = "{{implementation_target}}", "gc.build.artifact_schema" = "gc.build.implementation-summary.v1", "gc.build.artifact_path_keys" = "gc.implementation.summary_path,gc.build.implementation_summary_path,gc.var.summary_path,gc.docs.implementation-summary.path", "gc.docs.managed" = "true", "gc.docs.document" = "implementation-summary", "gc.docs.document_schema" = "gc.build.implementation-summary.v1", "gc.docs.document_path_keys" = "gc.docs.implementation-summary.path,gc.implementation.summary_path,gc.build.implementation_summary_path,gc.var.summary_path", "gc.docs.source_workspace_key" = "gc.docs.source_workspace,gc.var.source_workspace", "gc.docs.source_workspace_path_key" = "gc.docs.source_workspace_path,gc.var.source_workspace_path", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path" }
 description_file = "../assets/workflows/jj-docs/implementation-item.md"
 
 [[steps]]
 id = "describe-re-review-change"
 title = "Describe re-review document change"
 needs = ["apply-fixes"]
-metadata = { "gc.run_target" = "gc.implementation-reviewer", "gc.jj.describe" = "true", "gc.jj.describe_scope" = "document", "gc.jj.describe_document" = "review", "gc.docs.managed" = "true", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
+metadata = { "gc.run_target" = "gc.implementation-reviewer", "gc.jj.describe" = "true", "gc.jj.describe_scope" = "document", "gc.jj.describe_document" = "review", "gc.docs.managed" = "true", "gc.docs.workspace_key" = "gc.docs.workspace,gc.var.docs_workspace", "gc.docs.workspace_path_key" = "gc.docs.workspace_path,gc.var.docs_workspace_path", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
 description_file = "../assets/workflows/jj-docs/describe-jj-change.md"
 
 [[steps]]

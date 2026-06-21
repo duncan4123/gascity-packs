@@ -29,6 +29,15 @@ The document owner is the default jj workspace. Later jj-specific formulas can
 record the artifact path, jj change ID, and content hash back onto the workflow
 root bead.
 
+Source edits follow the packer workspace model, but the workspace setup remains
+inside the formula graph instead of agent pre-start hooks. Formula steps create
+or refresh a pack-named source workspace under
+`.gc/workspaces/<rig>/packs/<pack>`, use optional child workspaces below that
+path when `gc.pack_workspace` is present, and record both
+`gc.docs.source_workspace` and `gc.docs.source_workspace_path` before source
+describe/edit/review/publish steps run. Source workspaces land back through the
+pack-named source workspace before any tested state moves to `default@`.
+
 ## Ownership Boundary
 
 This pack should extend the imported `gascity` contracts instead of editing or
@@ -36,6 +45,7 @@ copying upstream-owned base formulas. JJ-specific behavior belongs here:
 
 - default@ document conventions
 - jj path and revset setup through `jjw`
+- packer-style source workspace lanes driven by formula steps
 - artifact path to jj change metadata
 - source-editing semantics
 - explicit bookmark and publish behavior

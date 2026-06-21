@@ -26,6 +26,8 @@ Record these root-level fields on the workflow root bead when they are known:
 - `gc.docs.base_revset=default@`
 - `gc.docs.artifact_root`
 - `gc.docs.manifest_path`
+- `gc.docs.source_workspace`
+- `gc.docs.source_workspace_path`
 - `gc.docs.change_id`
 
 Use an artifact root under the `default@` checkout, for example
@@ -54,6 +56,13 @@ artifact root. Otherwise the jj formulas default to `docs_workspace=default` and
 gc sling gc.run-operator <workflow-root-bead-id> --on <jj-formula-name> \
   --var artifact_root=plans/<root-bead-id>
 ```
+
+Source edits should follow the packer-style workspace lane without relying on
+agent pre-start hooks. The formula setup step creates or reuses a source
+workspace under `.gc/workspaces/<rig>/packs/<pack>`, or a child workspace under
+that pack when `gc.pack_workspace` is present, and records
+`gc.docs.source_workspace` plus `gc.docs.source_workspace_path` before source
+describe/edit/review/publish steps run. Keep workflow documents in `default@`.
 
 ## Formula Selection
 

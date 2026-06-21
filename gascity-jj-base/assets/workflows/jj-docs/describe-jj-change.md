@@ -6,8 +6,12 @@ before making those edits.
 Required behavior:
 
 - Work in the jj workspace selected by step metadata: the default@ document
-  workspace for document edits, or the source workspace for implementation
-  edits.
+  workspace for document edits, or `gc.docs.source_workspace_path` for
+  implementation/source edits.
+- For source-scoped describe steps, hard-stop if
+  `gc.docs.source_workspace_path` is missing or does not resolve to a jj
+  workspace. Use `jj -R "$SOURCE_WORKSPACE_PATH" ...` or `cd` there before any
+  source `jj status`, `jj log`, `jj describe`, or `jj new` command.
 - Inspect the current change before editing:
 
   ```bash

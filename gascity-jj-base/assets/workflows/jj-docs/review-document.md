@@ -11,6 +11,10 @@ Required behavior:
   `@`.
 - If `{{source_change_id}}` is present, review the source state identified by
   that jj change ID together with the relevant document set.
+- Use `gc.docs.source_workspace_path` for source inspection. Hard-stop if the
+  source path is missing or is not a jj workspace; do not inspect source state
+  from `default@` unless the recorded source workspace path is explicitly the
+  default workspace checkout.
 - Write the review artifact to the path identified by
   `gc.docs.document_path_keys` or `gc.build.artifact_path_keys`.
 - Update `manifest.json` with the review path, schema, hash, and jj document

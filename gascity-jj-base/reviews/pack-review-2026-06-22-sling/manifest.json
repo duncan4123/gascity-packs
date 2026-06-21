@@ -19,13 +19,25 @@
       "schema": "gc.review.fix-plan.v1",
       "hash": "8a63eb120f7554ac97edb329d88031203fdb0ff9613f85a433d2d6f595e1c76d",
       "change_id": "twxnwoow"
+    },
+    "implementation_summary": {
+      "path": "gascity-jj-base/reviews/pack-review-2026-06-22-sling/implementation-summary.md",
+      "schema": "gc.review.implementation-summary.v1",
+      "hash": "c3a691cd76b205580638d36bd1cbdf754346757ee1dd73767994b38689d363a4",
+      "change_id": "wwppnzmw"
+    },
+    "re_review": {
+      "path": "gascity-jj-base/reviews/pack-review-2026-06-22-sling/re-review.md",
+      "schema": "gc.build.review.v1",
+      "hash": "09aa1e65b8dbe023d679925037b3e53c4c8917a0b7d343c450f00c179d2a7b09",
+      "change_id": "losnxzxm"
     }
   },
   "source": {
     "workspace": "gascity-packs",
     "workspace_path": "/data/projects/doltlite-gascity/gascity-packs",
-    "change_id": "tynmlvxmoqkw",
-    "commit_id": "a8e075e1dc58",
+    "change_id": "wwppnzmw",
+    "commit_id": "125d6649372b",
     "pack_path": "gascity-jj-base"
   }
 }
