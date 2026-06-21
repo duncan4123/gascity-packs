@@ -5,6 +5,9 @@ Produce or update the document named by step metadata `gc.docs.document`.
 Required behavior:
 
 - Read inputs from `{{manifest_path}}` whenever the manifest exists.
+- Confirm the preceding describe step has described the jj change that will
+  receive this document edit. Do not write document files from an undescribed
+  `@`.
 - Write the output as a normal file under the default@ artifact root, preferably
   under `{{docs_artifact_root}}`.
 - Use the path keys in `gc.docs.document_path_keys` and

@@ -5,6 +5,8 @@ Write the canonical implementation summary for the workflow root.
 Required behavior:
 
 - Read item summaries and source identities from `{{manifest_path}}`.
+- Confirm the preceding describe step has described the jj change that will
+  receive the aggregate implementation summary.
 - Include the source workspace and latest source change ID that downstream
   review should inspect.
 - Write the summary as a document under the default@ artifact root.

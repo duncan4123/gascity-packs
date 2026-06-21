@@ -6,6 +6,8 @@ summary.
 Required behavior:
 
 - Use the source workspace for source edits.
+- Confirm the preceding describe step has described the source jj change that
+  will receive these edits. Do not edit source files from an undescribed `@`.
 - Use `{{manifest_path}}` to read requirements, plan, decomposition, and any
   prior review/fix documents.
 - Write or update the implementation summary at the path selected by

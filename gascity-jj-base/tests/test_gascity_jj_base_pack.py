@@ -31,6 +31,10 @@ def formula_files() -> list[pathlib.Path]:
     return sorted((PACK / "formulas").glob("*.formula.toml"))
 
 
+def steps_by_id(formula: dict) -> dict[str, dict]:
+    return {step["id"]: step for step in formula.get("steps", [])}
+
+
 def test_pack_imports_gascity_and_jjw_without_copying_base_pack() -> None:
     pack = load_pack_toml()
 
@@ -153,6 +157,69 @@ def test_document_steps_carry_manifest_metadata() -> None:
             if document_name:
                 assert "gc.docs.document_path_keys" in metadata
                 assert "gc.docs.document_schema" in metadata
+
+
+def test_describe_workflow_declares_pre_edit_jj_semantics() -> None:
+    doc = (
+        PACK / "assets" / "workflows" / "jj-docs" / "describe-jj-change.md"
+    ).read_text(encoding="utf-8")
+
+    assert "before making those edits" in doc
+    assert "jj describe -m" in doc
+    assert "jj new -m" in doc
+    assert "(no description set)" in doc
+
+
+def test_every_formula_has_concrete_describe_step() -> None:
+    for name in EXPECTED_FORMULAS:
+        formula = load_formula(name)
+        describe_steps = [
+            step
+            for step in formula["steps"]
+            if step.get("metadata", {}).get("gc.jj.describe") == "true"
+        ]
+
+        assert describe_steps, name
+
+        for step in describe_steps:
+            metadata = step["metadata"]
+            assert step["description_file"] == (
+                "../assets/workflows/jj-docs/describe-jj-change.md"
+            )
+            assert "gc.run_target" in metadata
+            assert metadata["gc.jj.describe_scope"] in {"document", "source"}
+            assert "gc.docs.manifest_path_keys" in metadata
+
+
+def test_mutating_steps_depend_on_concrete_describe_steps() -> None:
+    source_edit_descriptions = {
+        "../assets/workflows/jj-docs/fix-loop.md",
+        "../assets/workflows/jj-docs/implementation-item.md",
+    }
+
+    for name in EXPECTED_FORMULAS:
+        formula = load_formula(name)
+        steps = steps_by_id(formula)
+        describe_step_ids = {
+            step_id
+            for step_id, step in steps.items()
+            if step.get("metadata", {}).get("gc.jj.describe") == "true"
+        }
+
+        for step_id, step in steps.items():
+            metadata = step.get("metadata", {})
+            mutates_document = bool(metadata.get("gc.docs.document"))
+            mutates_source = step.get("description_file") in source_edit_descriptions
+            if not (mutates_document or mutates_source):
+                continue
+
+            needs = set(step.get("needs", []))
+            direct_describe_needs = needs & describe_step_ids
+            assert direct_describe_needs, f"{name}:{step_id}"
+
+            for describe_step_id in direct_describe_needs:
+                describe_needs = set(steps[describe_step_id].get("needs", []))
+                assert describe_needs <= needs, f"{name}:{step_id}"
 
 
 def test_formula_description_files_exist() -> None:

@@ -6,6 +6,9 @@ Required behavior:
 
 - Read the final report and source identity from `{{manifest_path}}`.
 - Confirm the latest source change ID is known before pushing or opening a PR.
+- Confirm the source change being published is already described. If publication
+  needs to update the current source change description, do that before pushing
+  or opening a PR.
 - Confirm the default@ artifact root has the final manifest state.
 - If `{{push}}` is enabled, move/push the appropriate jj-backed Git bookmark for
   the source change.

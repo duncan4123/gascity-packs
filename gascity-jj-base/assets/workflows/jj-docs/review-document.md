@@ -6,6 +6,9 @@ Required behavior:
 
 - Load `{{manifest_path}}` and follow document paths from the manifest instead
   of relying on pasted prompt context.
+- Confirm the preceding describe step has described the jj change that will
+  receive this review document. Do not write review files from an undescribed
+  `@`.
 - If `{{source_change_id}}` is present, review the source state identified by
   that jj change ID together with the relevant document set.
 - Write the review artifact to the path identified by
