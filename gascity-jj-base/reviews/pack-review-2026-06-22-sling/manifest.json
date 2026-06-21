@@ -10,7 +10,9 @@
     },
     "review": {
       "path": "gascity-jj-base/reviews/pack-review-2026-06-22-sling/review.md",
-      "schema": "gc.build.review.v1"
+      "schema": "gc.build.review.v1",
+      "hash": "2c017a02fdc837bbad05119434ac93c157d847416ac54f1585175f8a7d690eed",
+      "change_id": "xylxutzm"
     }
   },
   "source": {
