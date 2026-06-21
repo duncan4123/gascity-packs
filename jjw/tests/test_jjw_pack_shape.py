@@ -94,12 +94,53 @@ def test_commands_doctor_orders_and_assets_are_wired() -> None:
     ).read_text(encoding="utf-8")
 
 
+def test_workspace_setup_script_contract_is_explicit() -> None:
+    script = (PACK_DIR / "assets/scripts/workspace-setup.sh").read_text(
+        encoding="utf-8"
+    )
+
+    for expected in (
+        'usage: workspace-setup.sh <rig-root> <target-dir> <agent-name> [--sync]',
+        'REQUESTED_WT="${2:?missing target-dir}"',
+        'AGENT="${3:?missing agent-name}"',
+        'SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)',
+        '"$SCRIPT_DIR/install-jjw.sh"',
+        "GC_JJW_WORKSPACE_DIR",
+        "GC_JJW_BASE_REVSET",
+        "GC_JJW_BOOKMARK_PATTERN",
+        "GC_JJW_MANAGE_CONFIG",
+        "refusing to create workspace outside jjw config",
+        "update agent work_dir or GC_JJW_WORKSPACE_DIR so they match",
+        'echo "$RIG_ROOT/.beads" > "$WT/.beads/redirect"',
+        'jj -R "$WT" bookmark set -B "$BOOKMARK" -r @',
+    ):
+        assert expected in script
+
+
+def test_command_and_doctor_surfaces_preserve_script_relative_resolution() -> None:
+    install = (PACK_DIR / "commands/install/run.sh").read_text(encoding="utf-8")
+    report = (PACK_DIR / "commands/workspace-report/run.sh").read_text(
+        encoding="utf-8"
+    )
+    doctor = (PACK_DIR / "doctor/check-jjw/run.sh").read_text(encoding="utf-8")
+
+    for command_script in (install, report):
+        assert 'SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)' in command_script
+
+    assert '"$SCRIPT_DIR/../../assets/scripts/install-jjw.sh"' in install
+    assert '"$SCRIPT_DIR/../../assets/scripts/workspace-report.sh" "$@"' in report
+    assert "command -v jjw" in doctor
+    assert "jjw version >/dev/null" in doctor
+
+
 def test_template_fragments_cover_workspace_setup_and_reporting() -> None:
     fragments = {
         "template-fragments/jjw-workspace-setup.template.md": (
             '{{ define "jjw-workspace-setup" -}}',
+            "[imports.jjw]",
             "assets/scripts/workspace-setup.sh",
             "JJW_NAME",
+            "GC_JJW_WORKSPACE_DIR",
             "path disagree",
         ),
         "template-fragments/jjw-workspace-reporting.template.md": (
@@ -136,3 +177,59 @@ def test_readmes_list_jjw_entrypoints() -> None:
     root_readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert "[jjw](./jjw)" in root_readme
     assert "workspace setup/reporting" in root_readme
+
+
+def test_readme_documents_workspace_setup_contract_and_consumers() -> None:
+    readme = (PACK_DIR / "README.md").read_text(encoding="utf-8")
+
+    for expected in (
+        "## Workspace setup contract",
+        "[imports.jjw]",
+        "source = \"../jjw\"",
+        "`assets/scripts/workspace-setup.sh` is the public setup entry point",
+        "`{{.RigRoot}}`",
+        "`{{.WorkDir}}`",
+        "`{{.AgentBase}}`",
+        "agent process working directory",
+        "`GC_JJW_WORKSPACE_DIR`",
+        "`GC_JJW_BASE_REVSET`",
+        "`GC_JJW_BOOKMARK_PATTERN`",
+        "`packer/assets/scripts/pack-workspace-setup.sh`",
+        "`jj-hunk/agents/surgeon/agent.toml`",
+    ):
+        assert expected in readme
+
+
+def test_packer_and_jj_hunk_consumers_pin_jjw_workspace_setup_contract() -> None:
+    packer_manifest = tomllib.loads(
+        (REPO_ROOT / "packer/pack.toml").read_text(encoding="utf-8")
+    )
+    hunk_manifest = tomllib.loads(
+        (REPO_ROOT / "jj-hunk/pack.toml").read_text(encoding="utf-8")
+    )
+    packer_setup = (REPO_ROOT / "packer/assets/scripts/pack-workspace-setup.sh").read_text(
+        encoding="utf-8"
+    )
+    hunk_agent_path = REPO_ROOT / "jj-hunk/agents/surgeon/agent.toml"
+    hunk_agent_text = hunk_agent_path.read_text(encoding="utf-8")
+    hunk_agent = tomllib.loads(hunk_agent_text)
+
+    assert packer_manifest["imports"]["jjw"]["source"] == "../jjw"
+    assert hunk_manifest["imports"]["jjw"]["source"] == "../jjw"
+
+    assert "packer imports jjw in pack.toml" in packer_setup
+    assert 'workspace_setup="$SCRIPT_DIR/../../../jjw/assets/scripts/workspace-setup.sh"' in packer_setup
+    assert '"$workspace_setup" "$RIG_ROOT" "$PACK_WORKSPACE_DIR" "$PACK_WORKSPACE_NAME"' in packer_setup
+    assert 'GC_JJW_WORKSPACE_DIR="$PACK_WORKSPACE_PARENT"' in packer_setup
+    assert 'GC_JJW_BOOKMARK_PATTERN="gc/$PACK_NAME.{name}"' in packer_setup
+    assert 'GC_JJW_BASE_REVSET="$PACK_INTEGRATION_BOOKMARK"' in packer_setup
+    assert '"$SCRIPT_DIR/list-import-patterns.py"' in packer_setup
+    assert 'jj -R "$PACK_WORKSPACE_DIR" sparse set "$@"' in packer_setup
+
+    assert "jj-hunk imports jjw in pack.toml" in hunk_agent_text
+    assert hunk_agent["pre_start"] == [
+        '{{.ConfigDir}}/../jjw/assets/scripts/workspace-setup.sh {{.RigRoot}} {{.WorkDir}} {{.AgentBase}} --sync${JJ_HUNK_WORK_BEAD_ID:+ --bead "$JJ_HUNK_WORK_BEAD_ID"}'
+    ]
+    pre_start = hunk_agent["pre_start"][0]
+    for expected in ("{{.ConfigDir}}/../jjw", "{{.RigRoot}}", "{{.WorkDir}}", "{{.AgentBase}}", "--sync"):
+        assert expected in pre_start

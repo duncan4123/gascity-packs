@@ -173,6 +173,8 @@ export GC_PACKER_INTEGRATION_WORKSPACE="$PACK_INTEGRATION_WORKSPACE_REL"
 export GC_PACKER_INTEGRATION_WORKSPACE_NAME="$PACK_INTEGRATION_WORKSPACE_NAME"
 export GC_PACKER_INTEGRATION_BOOKMARK="$PACK_INTEGRATION_BOOKMARK"
 
+# packer imports jjw in pack.toml. Resolve the helper from this script, not the
+# agent cwd, so pre_start works while the target workspace is being replaced.
 workspace_setup="$SCRIPT_DIR/../../../jjw/assets/scripts/workspace-setup.sh"
 if [ "$PACK_WORKSPACE_KIND" = "child" ]; then
 	(
