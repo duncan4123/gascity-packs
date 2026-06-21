@@ -1,0 +1,23 @@
+{
+  "schema": "gc.docs.manifest.v1",
+  "workflow": "jj-review",
+  "purpose": "Sling-run review of the gascity-jj-base pack changes.",
+  "documents": {
+    "subject": {
+      "path": "gascity-jj-base/reviews/pack-review-2026-06-22-sling/subject.md",
+      "schema": "gc.review.subject.v1",
+      "change_id": "tynmlvxmoqkw"
+    },
+    "review": {
+      "path": "gascity-jj-base/reviews/pack-review-2026-06-22-sling/review.md",
+      "schema": "gc.build.review.v1"
+    }
+  },
+  "source": {
+    "workspace": "gascity-packs",
+    "workspace_path": "/data/projects/doltlite-gascity/gascity-packs",
+    "change_id": "tynmlvxmoqkw",
+    "commit_id": "a8e075e1dc58",
+    "pack_path": "gascity-jj-base"
+  }
+}
