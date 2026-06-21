@@ -13,6 +13,12 @@
       "schema": "gc.build.review.v1",
       "hash": "2c017a02fdc837bbad05119434ac93c157d847416ac54f1585175f8a7d690eed",
       "change_id": "xylxutzm"
+    },
+    "fix_plan": {
+      "path": "gascity-jj-base/reviews/pack-review-2026-06-22-sling/fix-plan.md",
+      "schema": "gc.review.fix-plan.v1",
+      "hash": "8a63eb120f7554ac97edb329d88031203fdb0ff9613f85a433d2d6f595e1c76d",
+      "change_id": "twxnwoow"
     }
   },
   "source": {
