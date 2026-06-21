@@ -7,6 +7,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PACK = ROOT / "jj-hunk"
+MATURE_TMUX_HELPERS = {
+    "gastown/assets/scripts/agent-menu.sh",
+    "gastown/assets/scripts/bind-key.sh",
+    "gastown/assets/scripts/cycle.sh",
+    "gastown/assets/scripts/status-line.sh",
+    "gastown/assets/scripts/tmux-keybindings.sh",
+    "gastown/assets/scripts/tmux-theme.sh",
+    "gastown-lazyjj/assets/scripts/tmux-scroll.sh",
+}
 
 
 def load_toml(path: Path) -> dict:
@@ -32,6 +41,7 @@ def test_pack_imports_jjw_and_declares_tasksmith_named_session() -> None:
 
 
 def test_tasksmith_is_named_session_and_surgeon_is_pool_agent() -> None:
+    manifest = load_toml(PACK / "pack.toml")
     tasksmith = load_toml(PACK / "agents" / "tasksmith" / "agent.toml")
 
     assert tasksmith["scope"] == "rig"
@@ -54,12 +64,17 @@ def test_tasksmith_is_named_session_and_surgeon_is_pool_agent() -> None:
 
     assert len(surgeon["pre_start"]) == 1
     pre_start = surgeon["pre_start"][0]
-    assert "../jjw/assets/scripts/workspace-setup.sh" in pre_start
+    jjw_workspace_setup = (
+        f"{{{{.ConfigDir}}}}/{manifest['imports']['jjw']['source']}/"
+        "assets/scripts/workspace-setup.sh"
+    )
+    assert pre_start.startswith(jjw_workspace_setup)
     assert "{{.RigRoot}}" in pre_start
     assert "{{.WorkDir}}" in pre_start
     assert "{{.AgentBase}}" in pre_start
     assert "--sync" in pre_start
     assert "JJ_HUNK_WORK_BEAD_ID" in pre_start
+    assert not (PACK / "assets" / "scripts" / "workspace-setup.sh").exists()
 
 
 def test_command_and_doctor_entry_points_are_present_and_executable() -> None:
@@ -119,10 +134,44 @@ def test_formula_skill_and_template_fragment_entry_points_are_present() -> None:
         assert (PACK / "template-fragments" / fragment).read_text(encoding="utf-8").strip()
 
 
+def test_docs_diagrams_cover_formula_entry_points() -> None:
+    formulas = {path.stem for path in (PACK / "formulas").glob("*.toml")}
+    diagrams_dir = PACK / "docs" / "diagrams"
+    index = (diagrams_dir / "README.md").read_text(encoding="utf-8")
+
+    for formula in formulas:
+        diagram = diagrams_dir / f"{formula}.md"
+
+        assert diagram.is_file()
+        assert formula in diagram.read_text(encoding="utf-8")
+        assert f"[{formula}.md]" in index
+
+
+def test_workspace_setup_and_tmux_reuse_contract_is_documented() -> None:
+    readme = (PACK / "README.md").read_text(encoding="utf-8")
+    local_script_names = {
+        path.name
+        for path in PACK.rglob("*")
+        if path.is_file() and ("tmux" in path.name or path.name == "workspace-setup.sh")
+    }
+
+    assert "jjw/assets/scripts/workspace-setup.sh" in readme
+    assert "does not ship local tmux or workspace lifecycle scripts" in readme
+    assert local_script_names == set()
+
+    for helper in MATURE_TMUX_HELPERS:
+        assert (ROOT / helper).is_file()
+        assert helper in readme
+
+
 def test_readme_documents_jj_hunk_entry_points() -> None:
     readme = (PACK / "README.md").read_text(encoding="utf-8")
 
     for expected in [
+        "`jjw/assets/scripts/workspace-setup.sh`",
+        "`gastown-lazyjj/assets/scripts/tmux-scroll.sh`",
+        "`docs/diagrams/mol-jj-hunk-work.md`",
+        "`docs/diagrams/mol-jj-hunk-subagent-task.md`",
         "`jj-subagent-workspaces`",
         "`jj-surgeon`",
         "`tasksmith`",
@@ -135,6 +184,8 @@ def test_readme_documents_jj_hunk_entry_points() -> None:
         "`gc jj-hunk lightjj-annotate`",
         "`mol-jj-hunk-work`",
         "`mol-jj-hunk-subagent-task`",
+        "gc lint jj-hunk",
+        "python3 -m pytest tests/test_jj_hunk_pack_shape.py -q",
         "gc doctor --json",
         "gc formula show mol-jj-hunk-work",
         "gc formula show mol-jj-hunk-subagent-task",
