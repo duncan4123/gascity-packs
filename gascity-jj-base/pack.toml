@@ -1,0 +1,11 @@
+[pack]
+name = "gascity-jj-base"
+version = "0.1.0"
+schema = 2
+description = "JJ-oriented extension of the Gas City base pack for rig-repo workflow documents."
+
+[imports.gc]
+source = "../gascity"
+
+[imports.jjw]
+source = "../jjw"
