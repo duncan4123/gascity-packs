@@ -4,6 +4,84 @@
 pack. It imports `gascity` for the workflow contracts and `jjw` for jj workspace
 support. It does not copy the base pack.
 
+## Quick Start
+
+Prerequisites: Gas City installed, a city running, and the repository you want
+to build in registered as a rig. If you have not done that yet:
+
+```sh
+brew install gascity
+gc init ~/my-city
+cd ~/my-city
+gc start
+mkdir proj && cd proj && jj git init && gc rig add .
+```
+
+1. **Import the pack at city scope.** From the city directory, add
+   `gascity-jj-base`. This writes the city import, fetches the pack, and pins it
+   in `packs.lock`:
+
+   ```sh
+   gc import add https://github.com/gastownhall/gascity-packs.git//gascity-jj-base
+   ```
+
+   Contributors working on the packs themselves can clone
+   `https://github.com/gastownhall/gascity-packs` and point the city import at a
+   local path instead:
+
+   ```toml
+   [imports.gascity-jj-base]
+   source = "../gascity-packs/gascity-jj-base"
+   ```
+
+2. **Keep the pack-internal imports together.** `gascity-jj-base/pack.toml`
+   imports the Gas City base contracts and jj workspace helpers from sibling
+   packs:
+
+   ```toml
+   [imports.gc]
+   source = "../gascity"
+
+   [imports.jjw]
+   source = "../jjw"
+   ```
+
+   These are pack-internal imports. City users import `gascity-jj-base`; the
+   pack brings `gc` and `jjw` with it.
+
+3. **Import the rig roles in `city.toml`.** The target rig also needs the
+   `gascity/roles` import so the `gc.*` role agents, including
+   `gc.run-operator`, can execute work inside the rig:
+
+   ```toml
+   [rigs.imports.gc]
+   source = "https://github.com/gastownhall/gascity-packs.git//gascity/roles"
+   ```
+
+   For local pack development, use the matching local roles path:
+
+   ```toml
+   [rigs.imports.gc]
+   source = "../gascity-packs/gascity/roles"
+   ```
+
+   Run `gc import install` after editing imports so the city and rig resolve the
+   new pack sources.
+
+4. **Launch a JJ workflow through `gc.run-operator`.** `jj-build` is targeted
+   (`target_required = true`), so create a bead for the goal and sling the
+   formula at it from the target rig context:
+
+   ```sh
+   gc bd create "Move workflow documents into default@"
+   gc sling gc.run-operator <bead-id> --on jj-build \
+     --var docs_artifact_root=plans/jj-docs/build \
+     --var drain_policy=separate
+   ```
+
+   The JJ formulas keep workflow documents under the `default@` artifact root
+   while source edits move through packer-style jj workspaces.
+
 ## Starting Contract
 
 The first integration step is to keep Gas City workflow documents in the
