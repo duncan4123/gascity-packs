@@ -1,8 +1,8 @@
 # Gas City JJ Base Pack
 
 `gascity-jj-base` is a thin extension pack over the upstream-owned Gas City base
-pack. It imports `gascity` for the workflow contracts and `jjw` for jj workspace
-support. It does not copy the base pack.
+pack. It imports `gascity` for the workflow contracts, `jjw` for jj workspace
+support, and `gastown` for shared tmux session helpers. It does not copy the base pack.
 
 ## Quick Start
 
@@ -35,8 +35,8 @@ mkdir proj && cd proj && jj git init && gc rig add .
    ```
 
 2. **Keep the pack-internal imports together.** `gascity-jj-base/pack.toml`
-   imports the Gas City base contracts and jj workspace helpers from sibling
-   packs:
+   imports the Gas City base contracts, jj workspace helpers, and shared tmux
+   helper scripts from sibling packs instead of carrying local copies:
 
    ```toml
    [imports.gc]
@@ -44,10 +44,16 @@ mkdir proj && cd proj && jj git init && gc rig add .
 
    [imports.jjw]
    source = "../jjw"
+
+   [imports.gastown]
+   source = "../gastown"
    ```
 
    These are pack-internal imports. City users import `gascity-jj-base`; the
-   pack brings `gc` and `jjw` with it.
+   pack brings `gc`, `jjw`, and `gastown` with it. Keep
+   `gastown/assets/scripts` available beside the pack so `tmux-theme.sh`,
+   `tmux-keybindings.sh`, and their helper scripts resolve from the shared base
+   implementation.
 
 3. **Import the rig roles in `city.toml`.** The target rig also needs the
    `gascity/roles` import so the `gc.*` role agents, including

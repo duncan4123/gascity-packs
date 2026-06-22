@@ -1,11 +1,20 @@
 [pack]
 name = "gascity-jj-base"
-version = "0.1.0"
+version = "0.1.1"
 schema = 2
 description = "JJ-oriented extension of the Gas City base pack for rig-repo workflow documents."
+
+[global]
+session_live = [
+    "{{.ConfigDir}}/../gastown/assets/scripts/tmux-theme.sh {{.Session}} {{.Agent}} {{.ConfigDir}}/../gastown",
+    "{{.ConfigDir}}/../gastown/assets/scripts/tmux-keybindings.sh {{.ConfigDir}}/../gastown",
+]
 
 [imports.gc]
 source = "../gascity"
 
 [imports.jjw]
 source = "../jjw"
+
+[imports.gastown]
+source = "../gastown"

@@ -9,13 +9,20 @@ Required behavior:
 - Resolve the workflow document manifest from `{{manifest_path}}`.
 - Keep workflow documents in `default@`; use the source workspace only for source
   edits, source `jj describe`, source verification, and source change IDs.
+- Reuse before creating. First honor `gc.docs.source_workspace_path`,
+  `gc.var.source_workspace_path`, or a manifest source workspace path that
+  already resolves. Refresh that workspace and record it back on the item/root
+  bead instead of deriving a new source workspace.
 - Resolve the target pack from `gc.pack`, `gc.pack_root`, manifest source data, or
   the requested pack path. The reusable integration workspace is:
   `.gc/workspaces/<rig>/packs/<pack>`.
-- If `gc.pack_workspace` is present, create or reuse the child workspace:
+- If `gc.pack_workspace` is present, create or reuse that stable child workspace:
   `.gc/workspaces/<rig>/packs/<pack>/<workspace>`. Child workspaces start from
   `gc/<pack>` when that bookmark exists and later land back into the pack-named
   integration workspace, not directly to `default@`.
+- Never include the formula name, step ID, step bead ID, attempt number, or
+  generated session name in the jj workspace name or path. Bead IDs may seed
+  descriptions and metadata, but they are not workspace identity.
 - Create or refresh the workspace from this formula step with the imported `jjw`
   helper, for example:
 

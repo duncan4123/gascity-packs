@@ -8,6 +8,7 @@ Required behavior:
 - Use `gc.docs.source_workspace_path` for source edits, source tests, and source
   jj commands. Hard-stop if the path is missing or is not a jj workspace; do not
   fall back to `default@` for source edits.
+- Do not create or select a new jj workspace in this step.
 - Confirm the preceding describe step has described the source jj change that
   will receive these edits. Do not edit source files from an undescribed `@`.
 - Use `{{manifest_path}}` to read requirements, plan, decomposition, and any

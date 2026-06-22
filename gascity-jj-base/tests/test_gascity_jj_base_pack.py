@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import pathlib
+import stat
 import tomllib
 
 
 PACK = pathlib.Path(__file__).resolve().parents[1]
+ROOT = PACK.parent
 EXPECTED_FORMULAS = {
     "jj-build",
     "jj-planning-base",
@@ -15,6 +17,21 @@ EXPECTED_FORMULAS = {
     "jj-review",
     "jj-fix-loop",
     "jj-publish",
+    "root-task-stage-report",
+}
+EXPECTED_TMUX_SESSION_LIVE = [
+    "{{.ConfigDir}}/../gastown/assets/scripts/tmux-theme.sh "
+    "{{.Session}} {{.Agent}} {{.ConfigDir}}/../gastown",
+    "{{.ConfigDir}}/../gastown/assets/scripts/tmux-keybindings.sh "
+    "{{.ConfigDir}}/../gastown",
+]
+BASE_TMUX_HELPERS = {
+    "agent-menu.sh",
+    "bind-key.sh",
+    "cycle.sh",
+    "status-line.sh",
+    "tmux-keybindings.sh",
+    "tmux-theme.sh",
 }
 
 
@@ -35,15 +52,35 @@ def steps_by_id(formula: dict) -> dict[str, dict]:
     return {step["id"]: step for step in formula.get("steps", [])}
 
 
-def test_pack_imports_gascity_and_jjw_without_copying_base_pack() -> None:
+def is_executable(path: pathlib.Path) -> bool:
+    return bool(path.stat().st_mode & stat.S_IXUSR)
+
+
+def test_pack_imports_sibling_packs_without_copying_base_pack() -> None:
     pack = load_pack_toml()
 
     assert pack["pack"]["name"] == "gascity-jj-base"
     assert pack["imports"]["gc"]["source"] == "../gascity"
     assert pack["imports"]["jjw"]["source"] == "../jjw"
+    assert pack["imports"]["gastown"]["source"] == "../gastown"
     assert not (PACK / "schemas").exists()
     assert not (PACK / "roles").exists()
     assert not (PACK / "assets" / "workflows" / "build-base").exists()
+
+
+def test_pack_reuses_base_tmux_session_live_scripts() -> None:
+    pack = load_pack_toml()
+
+    assert pack["global"]["session_live"] == EXPECTED_TMUX_SESSION_LIVE
+    assert not (PACK / "assets" / "scripts" / "tmux-theme.sh").exists()
+    assert not (PACK / "assets" / "scripts" / "tmux-keybindings.sh").exists()
+
+    base_scripts = ROOT / "gastown" / "assets" / "scripts"
+    for script in BASE_TMUX_HELPERS:
+        helper = base_scripts / script
+
+        assert helper.is_file(), script
+        assert is_executable(helper), script
 
 
 def test_readme_declares_default_document_workspace_contract() -> None:
@@ -88,6 +125,7 @@ def test_formula_improvement_plan_declares_jj_extension_surface() -> None:
         "jj-review",
         "jj-fix-loop",
         "jj-publish",
+        "root-task-stage-report",
         "DoltLite",
     ]:
         assert expected in plan
@@ -143,6 +181,27 @@ def test_jj_build_and_implement_route_drains_to_jj_item_formulas() -> None:
             steps[shared_step]["drain"]["on_item_failure"]
             == "skip_remaining"
         )
+
+
+def test_parent_drain_steps_carry_source_workspace_reuse_metadata() -> None:
+    for formula_name, step_ids in {
+        "jj-build": {"implement", "implement-same-session"},
+        "jj-implement": {"drain-separate", "drain-same-session"},
+    }.items():
+        steps = steps_by_id(load_formula(formula_name))
+
+        for step_id in step_ids:
+            metadata = steps[step_id]["metadata"]
+
+            assert metadata["gc.docs.source_workspace_key"] == (
+                "gc.docs.source_workspace,gc.var.source_workspace"
+            )
+            assert metadata["gc.docs.source_workspace_path_key"] == (
+                "gc.docs.source_workspace_path,gc.var.source_workspace_path"
+            )
+            assert metadata["gc.docs.source_change_id_key"] == (
+                "gc.docs.source_change_id,gc.var.source_change_id"
+            )
 
 
 def test_document_steps_carry_manifest_metadata() -> None:
@@ -221,6 +280,24 @@ def test_prepare_worktree_uses_packer_style_formula_workspace_setup() -> None:
     assert "gc.docs.source_workspace_path" in doc
 
 
+def test_source_workspace_policy_reuses_stable_lanes_not_formula_steps() -> None:
+    prepare = (
+        PACK / "assets" / "workflows" / "jj-docs" / "prepare-worktree.md"
+    ).read_text(encoding="utf-8")
+    drain = (
+        PACK / "assets" / "workflows" / "jj-docs" / "drain-separate.md"
+    ).read_text(encoding="utf-8")
+    implement = (
+        PACK / "assets" / "workflows" / "jj-docs" / "implementation-item.md"
+    ).read_text(encoding="utf-8")
+
+    assert "Reuse before creating" in prepare
+    assert "Never include the formula name, step ID, step bead ID" in prepare
+    assert "generated session name" in prepare
+    assert "Separate sessions are execution lanes, not source workspace identities" in drain
+    assert "Do not create or select a new jj workspace in this step" in implement
+
+
 def test_fix_loop_apply_fixes_declares_implementation_summary_contract() -> None:
     formula = load_formula("jj-fix-loop")
     metadata = steps_by_id(formula)["apply-fixes"]["metadata"]
@@ -244,6 +321,21 @@ def test_fix_loop_apply_fixes_declares_implementation_summary_contract() -> None
         "gc.var.summary_path,"
         "gc.docs.implementation-summary.path"
     )
+
+
+def test_fix_loop_document_describe_steps_select_document_workspace() -> None:
+    steps = steps_by_id(load_formula("jj-fix-loop"))
+
+    for step_id in {"describe-fix-plan-change", "describe-re-review-change"}:
+        metadata = steps[step_id]["metadata"]
+
+        assert metadata["gc.jj.describe_scope"] == "document"
+        assert metadata["gc.docs.workspace_key"] == (
+            "gc.docs.workspace,gc.var.docs_workspace"
+        )
+        assert metadata["gc.docs.workspace_path_key"] == (
+            "gc.docs.workspace_path,gc.var.docs_workspace_path"
+        )
 
 
 def test_implementation_item_prompt_requires_durable_closeout() -> None:
@@ -341,3 +433,21 @@ def test_formula_description_files_exist() -> None:
 
             resolved = (path.parent / description_file).resolve()
             assert resolved.is_file(), f"{path.name}:{step['id']} -> {resolved}"
+
+
+def test_root_task_stage_report_uses_tracked_document_generator() -> None:
+    formula = load_formula("root-task-stage-report")
+    steps = steps_by_id(formula)
+    generate = steps["generate-report"]
+    metadata = generate["metadata"]
+    script = PACK / "assets" / "scripts" / "root-task-stage-report.js"
+
+    assert script.is_file()
+    assert is_executable(script)
+    assert formula["vars"]["report_path"]["default"] == ""
+    assert metadata["gc.docs.managed"] == "true"
+    assert metadata["gc.docs.document"] == "root-task-stage-report"
+    assert metadata["gc.docs.document_schema"] == "gc.reports.root-task-stage.v1"
+    assert "gc.docs.root-task-stage-report.path" in metadata[
+        "gc.docs.document_path_keys"
+    ]

@@ -26,6 +26,7 @@ plans/<root-bead-id>/
   qa.md
   release-readiness.md
   final-report.md
+  root-task-stage-report.md
 ```
 
 The workflow root bead records:
@@ -191,6 +192,16 @@ Review fixes should preserve the existing document references while adding:
 - updated item summary path
 - updated review report path
 - iteration number
+
+### `root-task-stage-report`
+
+Report-only formula for the city-wide active root task stage summary.
+
+Writes `root-task-stage-report.md` under the `default@` artifact root and
+updates `manifest.json` with the report path, `gc.reports.root-task-stage.v1`
+schema, SHA-256 hash, and document jj change ID. The canonical report must not
+be written only to `.gc/reports`, because `.gc` is local runtime state rather
+than the durable document handoff surface.
 
 ### `jj-publish`
 
