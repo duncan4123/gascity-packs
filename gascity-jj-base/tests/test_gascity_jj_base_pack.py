@@ -56,13 +56,13 @@ def is_executable(path: pathlib.Path) -> bool:
     return bool(path.stat().st_mode & stat.S_IXUSR)
 
 
-def test_pack_imports_sibling_packs_without_copying_base_pack() -> None:
+def test_pack_imports_gascity_and_jjw_without_copying_base_pack() -> None:
     pack = load_pack_toml()
 
     assert pack["pack"]["name"] == "gascity-jj-base"
     assert pack["imports"]["gc"]["source"] == "../gascity"
     assert pack["imports"]["jjw"]["source"] == "../jjw"
-    assert pack["imports"]["gastown"]["source"] == "../gastown"
+    assert "gastown" not in pack["imports"]
     assert not (PACK / "schemas").exists()
     assert not (PACK / "roles").exists()
     assert not (PACK / "assets" / "workflows" / "build-base").exists()
