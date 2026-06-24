@@ -23,7 +23,7 @@ EXPECTED_TMUX_SESSION_LIVE = [
     "{{.ConfigDir}}/../gastown/assets/scripts/tmux-theme.sh "
     "{{.Session}} {{.Agent}} {{.ConfigDir}}/../gastown",
     "{{.ConfigDir}}/../gastown/assets/scripts/tmux-keybindings.sh "
-    "{{.ConfigDir}}/../gastown",
+    "{{.ConfigDir}}/../gastown {{.Session}}",
 ]
 BASE_TMUX_HELPERS = {
     "agent-menu.sh",
