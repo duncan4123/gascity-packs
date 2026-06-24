@@ -1,17 +1,18 @@
 {
   "schema": "gc.docs.manifest.v1",
-  "updated_at": "2026-06-24T13:49:20Z",
+  "updated_at": "2026-06-24T13:53:37Z",
   "source": {
     "workspace": "gascity-packs",
-    "change_id": "tynmlvxmoqkw",
-    "commit_id": "a8e075e1dc58"
+    "change_id": "wwppnzmwuvqn",
+    "subject_change_id": "tynmlvxmoqkw"
   },
   "documents": {
     "review": {
-      "path": "gascity-jj-base/reviews/pack-review-2026-06-22-sling/review.md",
+      "path": "/tmp/gascity-jj-base-smoke/jj-review-smoke-report-after-import.md",
       "schema": "gc.build.review.v1",
-      "hash": "sha256:b4eaf14ec8304700fc84538907dd13c8b71e6d663c5f114e96177d3224918ba2",
-      "change_id": "nrruxkpoowyskstllqlpyystsnqorvls"
+      "hash": "sha256:a6069ade21de85165b54f7a7e0130e46cd649b74aa95f1d7a45b70a50cad0af0",
+      "change_id": "klurwtopnnvmwouslqktupuyrvqsxkky",
+      "verdict": "blocked"
     }
   }
 }
