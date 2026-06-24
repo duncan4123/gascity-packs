@@ -5,6 +5,10 @@ Produce or update the document named by step metadata `gc.docs.document`.
 Required behavior:
 
 - Read inputs from `{{manifest_path}}` whenever the manifest exists.
+- If the manifest or metadata includes `gc.docs.source_change_id`, treat it as
+  read-only source context for the document. Verify source state only through
+  `gc.docs.source_workspace_path`; do not use this value as the document change
+  ID.
 - Confirm the preceding describe step has described the jj change that will
   receive this document edit. Do not write document files from an undescribed
   `@`.
@@ -16,6 +20,8 @@ Required behavior:
   present.
 - Update `manifest.json` with the document path, schema, SHA-256 content hash,
   and jj document change ID.
+- The jj document change ID is the default@ change after writing the document
+  and manifest. It is separate from `gc.docs.source_change_id`.
 - Record per-document bead metadata:
   `gc.docs.<name>.path`, `gc.docs.<name>.schema`,
   `gc.docs.<name>.hash`, and `gc.docs.<name>.change_id`.

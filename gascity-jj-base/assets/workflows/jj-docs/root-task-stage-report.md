@@ -38,6 +38,8 @@ node {{script_path}} \
   `gc.docs.root-task-stage-report.schema`,
   `gc.docs.root-task-stage-report.hash`, and
   `gc.docs.root-task-stage-report.change_id`.
+- `gc.docs.root-task-stage-report.change_id` is a document-workspace change ID.
+  Do not use it as `gc.docs.source_change_id`.
 
 Keep the report body in the JJ workspace. Put only paths, schemas, hashes, and
 change IDs in bead metadata or comments.

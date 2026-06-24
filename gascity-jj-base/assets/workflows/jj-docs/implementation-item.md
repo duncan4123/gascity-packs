@@ -8,6 +8,12 @@ Required behavior:
 - Use `gc.docs.source_workspace_path` for source edits, source tests, and source
   jj commands. Hard-stop if the path is missing or is not a jj workspace; do not
   fall back to `default@` for source edits.
+- If `gc.docs.source_change_id`, `gc.var.source_change_id`, or the manifest
+  provides a source change ID, anchor source edits to that change in
+  `gc.docs.source_workspace_path`. Verify it with
+  `jj -R "$SOURCE_WORKSPACE_PATH" log -r "$SOURCE_CHANGE_ID" --no-graph`; if
+  `@` is not already that change, switch with
+  `jj -R "$SOURCE_WORKSPACE_PATH" edit "$SOURCE_CHANGE_ID"` before editing.
 - Do not create or select a new jj workspace in this step.
 - Confirm the preceding describe step has described the source jj change that
   will receive these edits. Do not edit source files from an undescribed `@`.
@@ -18,6 +24,10 @@ Required behavior:
 - Include both source and document identities in the summary:
   source workspace, source change ID, default@ artifact root, document path,
   hash, and document change ID.
+- Do not substitute document change IDs for source state.
+  `gc.docs.implementation-summary.change_id` and `gc.docs.change_id` are
+  default@ document-workspace IDs; only `gc.docs.source_change_id` anchors the
+  source implementation state.
 - Update `manifest.json`, the claimed step bead, and the workflow root bead with
   the implementation summary path, schema, SHA-256 content hash, and jj document
   change ID. Use `gc.docs.implementation-summary.path`,

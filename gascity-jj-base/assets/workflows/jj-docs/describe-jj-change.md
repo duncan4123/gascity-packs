@@ -12,6 +12,10 @@ Required behavior:
   `gc.docs.source_workspace_path` is missing or does not resolve to a jj
   workspace. Use `jj -R "$SOURCE_WORKSPACE_PATH" ...` or `cd` there before any
   source `jj status`, `jj log`, `jj describe`, or `jj new` command.
+- When a source-scoped step receives `gc.docs.source_change_id` or
+  `gc.var.source_change_id`, verify that change in the resolved source
+  workspace and start from it before edits. Do not use a document
+  `gc.docs.change_id` or `gc.docs.<name>.change_id` as the source revision.
 - Inspect the current change before editing:
 
   ```bash
@@ -36,6 +40,9 @@ Required behavior:
 - Never start the document or source edits from a `(no description set)` change.
 - Record the described change ID in the appropriate document or source metadata
   after the downstream edit step updates the files.
+- For document-scoped edits, the downstream document step records
+  `gc.docs.<name>.change_id` or `gc.docs.change_id`; for source-scoped edits, it
+  records `gc.docs.source_change_id`.
 
 Exit criteria:
 

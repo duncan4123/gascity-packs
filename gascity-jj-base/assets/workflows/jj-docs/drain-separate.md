@@ -8,8 +8,11 @@ Required behavior:
 - Pass `docs_workspace`, `docs_workspace_path`, `docs_artifact_root`, and
   `manifest_path` to each item formula.
 - Separate sessions are execution lanes, not source workspace identities. Pass
-  any known source workspace, source workspace path, and source change ID to
-  each item formula so workers reuse the prepared source lane.
+  any known `gc.docs.source_workspace`, `gc.docs.source_workspace_path`, and
+  `gc.docs.source_change_id` to each item formula so workers reuse the prepared
+  source lane.
+- The source change ID is the source lane anchor. Document path keys and
+  document change IDs are for manifest-managed artifacts returned by each item.
 - Ensure each worker writes its implementation summary as a manifest-managed
   document.
 - For parallel writers, use item-scoped document paths or item-scoped document

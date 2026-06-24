@@ -9,6 +9,12 @@ Required behavior:
 - Resolve the workflow document manifest from `{{manifest_path}}`.
 - Keep workflow documents in `default@`; use the source workspace only for source
   edits, source `jj describe`, source verification, and source change IDs.
+- If `gc.docs.source_change_id`, `gc.var.source_change_id`, or the manifest
+  names a source change ID, treat it as the current source anchor. Verify it in
+  `gc.docs.source_workspace_path` with
+  `jj -R "$SOURCE_WORKSPACE_PATH" log -r "$SOURCE_CHANGE_ID" --no-graph`
+  before source edits. If it does not resolve in that workspace, stop and report
+  missing source context instead of guessing from `default@`.
 - Reuse before creating. First honor `gc.docs.source_workspace_path`,
   `gc.var.source_workspace_path`, or a manifest source workspace path that
   already resolves. Refresh that workspace and record it back on the item/root
@@ -45,6 +51,13 @@ Required behavior:
 - Record or confirm the source workspace name in `gc.docs.source_workspace`.
 - Record or confirm the source workspace path in `gc.docs.source_workspace_path`.
 - Record any starting source change ID in `gc.docs.source_change_id`.
+- Keep source and document identities separate: `gc.docs.source_change_id` names
+  the source implementation change in the source workspace, while
+  `gc.docs.change_id` and `gc.docs.<document>.change_id` name document-workspace
+  changes under `default@`.
+- Treat opaque user-reported strings such as `zrxomlvkwruu` as symptom context
+  only until they appear in manifest/bead metadata and resolve in the source
+  workspace. Do not assume they are bead IDs or local jj revisions.
 - Make the default@ artifact paths available to the implementation step.
 
 The implementation summary must be written as a document in the jj document
