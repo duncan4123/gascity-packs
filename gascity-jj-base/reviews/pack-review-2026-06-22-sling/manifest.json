@@ -1,0 +1,17 @@
+{
+  "schema": "gc.docs.manifest.v1",
+  "updated_at": "2026-06-24T13:49:20Z",
+  "source": {
+    "workspace": "gascity-packs",
+    "change_id": "tynmlvxmoqkw",
+    "commit_id": "a8e075e1dc58"
+  },
+  "documents": {
+    "review": {
+      "path": "gascity-jj-base/reviews/pack-review-2026-06-22-sling/review.md",
+      "schema": "gc.build.review.v1",
+      "hash": "sha256:b4eaf14ec8304700fc84538907dd13c8b71e6d663c5f114e96177d3224918ba2",
+      "change_id": "nrruxkpoowyskstllqlpyystsnqorvls"
+    }
+  }
+}
