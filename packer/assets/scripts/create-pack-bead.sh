@@ -24,6 +24,10 @@ Options:
   --acceptance <text>        Acceptance criteria
   --parent <bead-id>         Parent/router bead
   --target <agent>           Sling target (default: <rig>/packer.packsmith)
+  --finding-id <id>          Source pack-improvement finding id
+  --findings-path <path>     Source pack-improvement findings artifact path
+  --finding-schema <schema>  Source finding schema id
+  --packer-mode <mode>       Packer dev-mode that produced the handoff
   --dry-run                  Print commands without creating or slinging
 EOF
 }
@@ -38,6 +42,10 @@ DESCRIPTION_FILE=""
 ACCEPTANCE=""
 PARENT=""
 TARGET=""
+FINDING_ID=""
+FINDINGS_PATH=""
+FINDING_SCHEMA=""
+PACKER_MODE=""
 DRY_RUN=""
 
 while [ "$#" -gt 0 ]; do
@@ -118,6 +126,38 @@ while [ "$#" -gt 0 ]; do
             TARGET="${1#--target=}"
             shift
             ;;
+        --finding-id)
+            FINDING_ID="${2:-}"
+            shift 2
+            ;;
+        --finding-id=*)
+            FINDING_ID="${1#--finding-id=}"
+            shift
+            ;;
+        --findings-path)
+            FINDINGS_PATH="${2:-}"
+            shift 2
+            ;;
+        --findings-path=*)
+            FINDINGS_PATH="${1#--findings-path=}"
+            shift
+            ;;
+        --finding-schema)
+            FINDING_SCHEMA="${2:-}"
+            shift 2
+            ;;
+        --finding-schema=*)
+            FINDING_SCHEMA="${1#--finding-schema=}"
+            shift
+            ;;
+        --packer-mode)
+            PACKER_MODE="${2:-}"
+            shift 2
+            ;;
+        --packer-mode=*)
+            PACKER_MODE="${1#--packer-mode=}"
+            shift
+            ;;
         --dry-run)
             DRY_RUN=1
             shift
@@ -159,6 +199,16 @@ if [ -n "$WORKSPACE" ] && [ -n "$TASK_WORKSPACE" ]; then
     echo "create-pack-bead: --workspace and --task-workspace are mutually exclusive" >&2
     exit 2
 fi
+case "$PACKER_MODE" in
+    ""|off|self-review|handoff|self-review-handoff) ;;
+    *)
+        echo "create-pack-bead: invalid --packer-mode: $PACKER_MODE" >&2
+        exit 2
+        ;;
+esac
+if [ -z "$FINDING_SCHEMA" ] && { [ -n "$FINDING_ID" ] || [ -n "$FINDINGS_PATH" ]; }; then
+    FINDING_SCHEMA="gc.packer.pack-improvement-finding.v1"
+fi
 
 RIG_NAME="${GC_RIG:-}"
 if [ -z "$RIG_NAME" ] && [ -n "${GC_RIG_ROOT:-}" ]; then
@@ -173,11 +223,21 @@ fi
 
 metadata_file=$(mktemp)
 trap 'rm -f "$metadata_file"' EXIT HUP INT TERM
-python3 - "$metadata_file" "$PACK" "$PACK_ROOT" "$TARGET" "$WORKSPACE" <<'PY'
+python3 - "$metadata_file" "$PACK" "$PACK_ROOT" "$TARGET" "$WORKSPACE" "$FINDING_ID" "$FINDINGS_PATH" "$FINDING_SCHEMA" "$PACKER_MODE" <<'PY'
 import json
 import sys
 
-path, pack, pack_root, target, workspace = sys.argv[1:6]
+(
+    path,
+    pack,
+    pack_root,
+    target,
+    workspace,
+    finding_id,
+    findings_path,
+    finding_schema,
+    packer_mode,
+) = sys.argv[1:10]
 metadata = {
     "gc.pack": pack,
     "gc.pack_root": pack_root,
@@ -186,6 +246,14 @@ metadata = {
 }
 if workspace:
     metadata["gc.pack_workspace"] = workspace
+if finding_id:
+    metadata["gc.packer.finding_id"] = finding_id
+if findings_path:
+    metadata["gc.packer.findings_path"] = findings_path
+if finding_schema:
+    metadata["gc.packer.finding_schema"] = finding_schema
+if packer_mode:
+    metadata["gc.packer.mode"] = packer_mode
 with open(path, "w", encoding="utf-8") as f:
     json.dump(metadata, f, sort_keys=True)
 PY
@@ -210,7 +278,7 @@ if [ -n "$DRY_RUN" ]; then
     if [ -n "$TASK_WORKSPACE" ]; then
         printf 'bd update <child-bead-id> --set-metadata gc.pack_workspace=<child-bead-id>-<title-slug>\n'
     fi
-    printf 'gc sling %s <child-bead-id> --on mol-packer-work --nudge\n' "$TARGET"
+    printf 'gc sling %s <child-bead-id> --nudge\n' "$TARGET"
     printf 'metadata: '
     cat "$metadata_file"
     printf '\n'
@@ -255,7 +323,7 @@ PY
 )
     bd update "$child_id" --set-metadata "gc.pack_workspace=$task_workspace"
 fi
-gc sling "$TARGET" "$child_id" --on mol-packer-work --nudge
+gc sling "$TARGET" "$child_id" --nudge
 
 if [ -n "$PARENT" ]; then
     bd note "$PARENT" "Created pack-routed child $child_id for pack $PACK -> $TARGET using mol-packer-work."

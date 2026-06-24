@@ -175,8 +175,26 @@ The helper creates the child bead with:
 Then it runs:
 
 ```bash
-gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work
+gc sling <rig>/packer.packsmith <child-bead-id>
 ```
+
+Do not add `--on mol-packer-work`; `packer.packsmith` already declares that
+formula, and `--on` routes through a formula root before the child bead's pack
+metadata is available to pre-start.
+
+## Pack Dev-Mode Findings
+
+Imported packs may use packer's `mol-packer-self-review` and
+`mol-packer-improvement-handoff` formulas. Treat their actionable
+`gc.packer.pack-improvement-findings.v1` records like ordinary routing input:
+each concrete finding becomes a claim-sized child bead for `packer.packsmith`
+running `mol-packer-work`.
+
+Use the finding's `pack`, `pack_root`, title, description, and acceptance. Add
+`--workspace <pack_workspace>` only when the finding includes a named child
+workspace. Keep `gc.pack`, `gc.pack_root`, and `gc.pack_workspace` on generated
+child beads only; non-pack review steps should use `gc.packer.*` metadata and
+the `packer_mode` value instead.
 
 ## Workflows
 

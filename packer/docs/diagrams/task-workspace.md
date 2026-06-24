@@ -10,7 +10,7 @@ flowchart TD
     compute["Compute workspace from child id and title"]
     update["bd update child:<br/>gc.pack_workspace = child-id-title-slug"]
     metadata["child bead metadata:<br/>gc.pack = pack<br/>gc.pack_root = pack_root<br/>gc.pack_workspace = workspace"]
-    sling["gc sling rig/packer.packsmith child --on mol-packer-work"]
+    sling["gc sling rig/packer.packsmith child"]
 
     request --> mode
     mode --> named --> metadata

@@ -259,7 +259,7 @@ Dispatch each child bead to the shared packsmith pool and formula.
 Typical shape:
 
 ```bash
-gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work
+gc sling <rig>/packer.packsmith <child-bead-id>
 ```
 
 The child bead must carry `gc.pack` and `gc.pack_root` metadata so packsmith's
@@ -267,6 +267,11 @@ pre-start hook can sparse-checkout the correct pack before the bead is claimed.
 If `gc.pack_workspace` is set, packsmith uses that named workspace under the
 pack; otherwise GC reuses the pack-named integration workspace itself. Do not
 dispatch a bead whose target pack is ambiguous.
+
+Do not add `--on mol-packer-work` when routing to `packer.packsmith`.
+`packer.packsmith` already declares that formula. `--on` creates or routes
+through a formula root, so the session can start before the original child
+bead's `gc.pack` metadata is visible to pre-start.
 
 After dispatch, update the parent bead notes with the child bead IDs, their
 target packs, their workspace keys, and any convoy grouping. This visibility

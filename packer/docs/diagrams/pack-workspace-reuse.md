@@ -7,7 +7,7 @@ flowchart TD
     router["packrouter or create-pack-bead.sh"]
     child["bd create child bead"]
     metadata["metadata:<br/>gc.pack = pack<br/>gc.pack_root = pack_root<br/>gc.pack_workspace omitted"]
-    sling["gc sling rig/packer.packsmith child --on mol-packer-work"]
+    sling["gc sling rig/packer.packsmith child"]
 
     request --> router --> child --> metadata --> sling
   end

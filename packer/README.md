@@ -69,7 +69,7 @@ each child bead to the shared packsmith pool.
 Typical route shape:
 
 ```bash
-gc sling <pack-agent-target> <child-bead-id> --on mol-packer-work
+gc sling <pack-agent-target> <child-bead-id>
 ```
 
 The child bead should name the target pack in its title and metadata. For the
@@ -151,7 +151,10 @@ packer/assets/scripts/create-pack-bead.sh \
 
 The helper reuses the pack workspace by default. It writes `gc.pack` /
 `gc.pack_root` metadata, then runs
-`gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work`.
+`gc sling <rig>/packer.packsmith <child-bead-id>`. Do not add
+`--on mol-packer-work`: `packer.packsmith` already declares that formula, and
+`--on` launches through a formula root that does not carry the child bead's pack
+metadata before `pre_start` needs it.
 
 To route work into an explicit named workspace, add:
 
@@ -168,3 +171,61 @@ workspace named from the child bead id and title, add:
 
 When the target does not match the current sparse workspace, stop and report the
 mismatch instead of editing from the wrong checkout.
+
+## Pack Dev-Mode Self-Review
+
+Imported packs can use the packer-provided self-review and handoff formulas
+instead of reimplementing pack routing:
+
+- `mol-packer-self-review` writes structured pack-improvement findings.
+- `mol-packer-improvement-handoff` turns concrete findings into normal
+  `mol-packer-work` beads routed to packsmith.
+
+The shared mode variable is `packer_mode`:
+
+| value | behavior |
+| --- | --- |
+| `off` | do not run packer self-review or handoff behavior |
+| `self-review` | inspect the pack and write findings only |
+| `handoff` | consume existing findings and create packsmith work beads |
+| `self-review-handoff` | write findings, then hand concrete findings to packsmith |
+
+Findings use this top-level JSON shape:
+
+```json
+{
+  "schema": "gc.packer.pack-improvement-findings.v1",
+  "packer_mode": "self-review",
+  "source": {
+    "pack": "target-pack",
+    "pack_root": "target-pack",
+    "workspace": "optional-source-workspace",
+    "change_id": "optional-source-change-id"
+  },
+  "findings": [
+    {
+      "schema": "gc.packer.pack-improvement-finding.v1",
+      "id": "PKR-001",
+      "severity": "P2",
+      "title": "target-pack: fix concrete pack issue",
+      "pack": "target-pack",
+      "pack_root": "target-pack",
+      "pack_workspace": "optional-child-workspace",
+      "description": "Specific work for packsmith to perform.",
+      "acceptance": "gc lint target-pack passes",
+      "evidence": [
+        {"path": "target-pack/file", "line": 12, "note": "Why this matters."}
+      ]
+    }
+  ]
+}
+```
+
+`pack_workspace` is optional. Omit it when the follow-up should use the
+pack-named integration workspace; set it only for a named child workspace.
+
+The handoff formula writes `gc.pack`, `gc.pack_root`, `gc.formula`,
+`gc.route_target`, and optional `gc.pack_workspace` only on generated child
+beads. Its own review and handoff steps use `gc.packer.*` metadata plus the
+`gc.docs.source_*` keys used by gascity-jj-base document workflows, so ordinary
+non-pack workflow steps do not inherit pack workdir routing.
