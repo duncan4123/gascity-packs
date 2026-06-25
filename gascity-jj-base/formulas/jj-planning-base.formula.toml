@@ -90,5 +90,5 @@ description_file = "../assets/workflows/jj-docs/describe-jj-change.md"
 id = "plan-review"
 title = "Approve jj-managed implementation plan"
 needs = ["plan", "describe-plan-review-change"]
-metadata = { "gc.run_target" = "gc.review-synthesizer", "gc.docs.managed" = "true", "gc.docs.document" = "plan-review", "gc.docs.document_schema" = "gc.docs.plan-review.v1", "gc.docs.document_path_keys" = "gc.docs.plan-review.path,gc.build.plan_review_path,gc.var.plan_review_path", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path" }
+metadata = { "gc.run_target" = "gc.review-synthesizer", "gc.docs.managed" = "true", "gc.docs.document" = "plan-review", "gc.docs.document_schema" = "gc.docs.plan_review.v1", "gc.docs.document_path_keys" = "gc.docs.plan_review.path,gc.build.plan_review_path,gc.var.plan_review_path", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path" }
 description_file = "../assets/workflows/jj-docs/review-document.md"

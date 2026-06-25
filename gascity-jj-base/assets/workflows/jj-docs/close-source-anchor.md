@@ -17,7 +17,7 @@ Required behavior:
 - Confirm the implementation summary document exists and its manifest entry has
   a path, schema, hash, and document change ID.
 - Do not overwrite `gc.docs.source_change_id` with the implementation summary's
-  document change ID. The summary's `gc.docs.implementation-summary.change_id`
+  document change ID. The summary's `gc.docs.implementation_summary.change_id`
   and `gc.docs.change_id` record default@ document edits;
   `gc.docs.source_change_id` records source state.
 

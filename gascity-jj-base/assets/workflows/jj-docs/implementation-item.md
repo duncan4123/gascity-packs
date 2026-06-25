@@ -25,15 +25,15 @@ Required behavior:
   source workspace, source change ID, default@ artifact root, document path,
   hash, and document change ID.
 - Do not substitute document change IDs for source state.
-  `gc.docs.implementation-summary.change_id` and `gc.docs.change_id` are
+  `gc.docs.implementation_summary.change_id` and `gc.docs.change_id` are
   default@ document-workspace IDs; only `gc.docs.source_change_id` anchors the
   source implementation state.
 - Update `manifest.json`, the claimed step bead, and the workflow root bead with
   the implementation summary path, schema, SHA-256 content hash, and jj document
-  change ID. Use `gc.docs.implementation-summary.path`,
-  `gc.docs.implementation-summary.schema`,
-  `gc.docs.implementation-summary.hash`, and
-  `gc.docs.implementation-summary.change_id`.
+  change ID. Use `gc.docs.implementation_summary.path`,
+  `gc.docs.implementation_summary.schema`,
+  `gc.docs.implementation_summary.hash`, and
+  `gc.docs.implementation_summary.change_id`.
 - Record the latest source change ID on `gc.docs.source_change_id`.
 - If `.gc/scripts/checks/build-artifact-valid.sh` is available from the
   launcher rig root, validate the claimed step with

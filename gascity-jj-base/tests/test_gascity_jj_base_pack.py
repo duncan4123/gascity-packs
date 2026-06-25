@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import re
 import stat
 import tomllib
 
@@ -33,6 +34,7 @@ BASE_TMUX_HELPERS = {
     "tmux-keybindings.sh",
     "tmux-theme.sh",
 }
+METADATA_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.]*$")
 
 
 def load_pack_toml() -> dict:
@@ -50,6 +52,18 @@ def formula_files() -> list[pathlib.Path]:
 
 def steps_by_id(formula: dict) -> dict[str, dict]:
     return {step["id"]: step for step in formula.get("steps", [])}
+
+
+def iter_metadata_blocks(value: object, context: str = "root"):
+    if isinstance(value, dict):
+        metadata = value.get("metadata")
+        if isinstance(metadata, dict):
+            yield context, metadata
+        for key, child in value.items():
+            yield from iter_metadata_blocks(child, f"{context}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from iter_metadata_blocks(child, f"{context}[{index}]")
 
 
 def is_executable(path: pathlib.Path) -> bool:
@@ -104,6 +118,7 @@ def test_mayor_overlay_declares_jj_document_handoff_contract() -> None:
     assert "DoltLite" in skill
     assert "manifest.json" in skill
     assert "gc.docs.workspace" in skill
+    assert "metadata-safe document" in skill
     assert "gc.docs.<name>.path" in skill
     assert "jj-do-work-item" in skill
 
@@ -138,6 +153,32 @@ def test_pack_declares_all_jj_formula_files() -> None:
     }
 
     assert found == EXPECTED_FORMULAS
+
+
+def test_formula_metadata_key_references_are_beads_safe() -> None:
+    failures: list[str] = []
+
+    for path in formula_files():
+        formula = tomllib.loads(path.read_text(encoding="utf-8"))
+        for context, metadata in iter_metadata_blocks(formula):
+            for key, value in metadata.items():
+                if not METADATA_KEY_RE.fullmatch(key):
+                    failures.append(f"{path.name}:{context}: metadata key {key!r}")
+
+                if not key.endswith(("_key", "_keys")):
+                    continue
+
+                for raw_reference in str(value).split(","):
+                    reference = raw_reference.strip()
+                    if not reference or "{{" in reference or "}}" in reference:
+                        continue
+                    if not METADATA_KEY_RE.fullmatch(reference):
+                        failures.append(
+                            f"{path.name}:{context}: {key} references "
+                            f"invalid metadata key {reference!r}"
+                        )
+
+    assert failures == []
 
     for name in EXPECTED_FORMULAS:
         formula = load_formula(name)
@@ -310,7 +351,7 @@ def test_fix_loop_apply_fixes_declares_implementation_summary_contract() -> None
         "gc.build.implementation-summary.v1"
     )
     assert metadata["gc.docs.document_path_keys"] == (
-        "gc.docs.implementation-summary.path,"
+        "gc.docs.implementation_summary.path,"
         "gc.implementation.summary_path,"
         "gc.build.implementation_summary_path,"
         "gc.var.summary_path"
@@ -319,7 +360,7 @@ def test_fix_loop_apply_fixes_declares_implementation_summary_contract() -> None
         "gc.implementation.summary_path,"
         "gc.build.implementation_summary_path,"
         "gc.var.summary_path,"
-        "gc.docs.implementation-summary.path"
+        "gc.docs.implementation_summary.path"
     )
 
 
@@ -344,7 +385,7 @@ def test_implementation_item_prompt_requires_durable_closeout() -> None:
     ).read_text(encoding="utf-8")
 
     assert "the claimed step bead, and the workflow root bead" in doc
-    assert "gc.docs.implementation-summary.path" in doc
+    assert "gc.docs.implementation_summary.path" in doc
     assert "GC_BEAD_ID=<claimed-step-id>" in doc
     assert "gc.outcome=pass" in doc
     assert "bd close <claimed-step-id> --reason" in doc
@@ -448,6 +489,6 @@ def test_root_task_stage_report_uses_tracked_document_generator() -> None:
     assert metadata["gc.docs.managed"] == "true"
     assert metadata["gc.docs.document"] == "root-task-stage-report"
     assert metadata["gc.docs.document_schema"] == "gc.reports.root-task-stage.v1"
-    assert "gc.docs.root-task-stage-report.path" in metadata[
+    assert "gc.docs.root_task_stage_report.path" in metadata[
         "gc.docs.document_path_keys"
     ]

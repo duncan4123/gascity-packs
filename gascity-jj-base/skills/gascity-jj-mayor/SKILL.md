@@ -41,7 +41,12 @@ bead notes, comments, or prompts. The manifest should name each workflow
 document, its schema or phase, its path under the default@ artifact root, its hash,
 and the jj change ID that last updated it.
 
-For each generated document, record bead metadata using the pattern:
+For each generated document, record bead metadata using a metadata-safe document
+key. Replace characters outside the Beads metadata key alphabet with
+underscores; for example, the document `implementation-summary` uses
+`implementation_summary` in metadata keys.
+
+Record bead metadata using the pattern:
 
 - `gc.docs.<name>.path`
 - `gc.docs.<name>.schema`

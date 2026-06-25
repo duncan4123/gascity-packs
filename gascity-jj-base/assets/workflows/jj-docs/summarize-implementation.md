@@ -15,11 +15,11 @@ Required behavior:
 - Write the summary as a document under the default@ artifact root.
 - Update `manifest.json` with the summary path, schema, hash, and document
   change ID.
-- Keep `gc.docs.implementation-summary.change_id` and `gc.docs.change_id` as
+- Keep `gc.docs.implementation_summary.change_id` and `gc.docs.change_id` as
   document-workspace anchors. They do not identify source state.
-- Record `gc.docs.implementation-summary.path`,
-  `gc.docs.implementation-summary.schema`,
-  `gc.docs.implementation-summary.hash`,
-  `gc.docs.implementation-summary.change_id`,
+- Record `gc.docs.implementation_summary.path`,
+  `gc.docs.implementation_summary.schema`,
+  `gc.docs.implementation_summary.hash`,
+  `gc.docs.implementation_summary.change_id`,
   `gc.docs.source_workspace`, `gc.docs.source_change_id`, and
   `gc.docs.change_id` on the workflow root bead.

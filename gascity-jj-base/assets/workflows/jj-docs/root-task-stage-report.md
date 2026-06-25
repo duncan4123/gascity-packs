@@ -34,11 +34,11 @@ node {{script_path}} \
   (`jj file list -r @` should include both paths, or run `jj file track` for
   those concrete files).
 - Update bead metadata via the manifest path and per-document keys:
-  `gc.docs.root-task-stage-report.path`,
-  `gc.docs.root-task-stage-report.schema`,
-  `gc.docs.root-task-stage-report.hash`, and
-  `gc.docs.root-task-stage-report.change_id`.
-- `gc.docs.root-task-stage-report.change_id` is a document-workspace change ID.
+  `gc.docs.root_task_stage_report.path`,
+  `gc.docs.root_task_stage_report.schema`,
+  `gc.docs.root_task_stage_report.hash`, and
+  `gc.docs.root_task_stage_report.change_id`.
+- `gc.docs.root_task_stage_report.change_id` is a document-workspace change ID.
   Do not use it as `gc.docs.source_change_id`.
 
 Keep the report body in the JJ workspace. Put only paths, schemas, hashes, and
