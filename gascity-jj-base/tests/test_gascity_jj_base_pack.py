@@ -18,7 +18,19 @@ EXPECTED_FORMULAS = {
     "jj-review",
     "jj-fix-loop",
     "jj-publish",
+    "jj-pack-build",
+    "jj-pack-implement",
+    "jj-pack-fix-loop",
     "root-task-stage-report",
+}
+PACK_AWARE_FORMULAS = {
+    "jj-pack-build",
+    "jj-pack-implement",
+    "jj-pack-fix-loop",
+}
+FORMULAS_WITH_INHERITED_DESCRIBE_STEPS = {
+    "jj-pack-build",
+    "jj-pack-implement",
 }
 EXPECTED_TMUX_SESSION_LIVE = [
     "{{.ConfigDir}}/../gastown/assets/scripts/tmux-theme.sh "
@@ -76,6 +88,7 @@ def test_pack_imports_gascity_and_jjw_without_copying_base_pack() -> None:
     assert pack["pack"]["name"] == "gascity-jj-base"
     assert pack["imports"]["gc"]["source"] == "../gascity"
     assert pack["imports"]["jjw"]["source"] == "../jjw"
+    assert pack["imports"]["packer"]["source"] == "../packer"
     assert "gastown" not in pack["imports"]
     assert not (PACK / "schemas").exists()
     assert not (PACK / "roles").exists()
@@ -103,6 +116,9 @@ def test_readme_declares_default_document_workspace_contract() -> None:
     assert "`default@` checkout" in readme
     assert "The live bead database remains DoltLite" in readme
     assert "does not copy the base pack" in readme
+    assert "source = \"../packer\"" in readme
+    assert "jj-pack-build" in readme
+    assert "pack_route_formula" in readme
     assert "gascity-jj-mayor" in readme
     assert "docs/formula-improvement-plan.md" in readme
 
@@ -140,6 +156,12 @@ def test_formula_improvement_plan_declares_jj_extension_surface() -> None:
         "jj-review",
         "jj-fix-loop",
         "jj-publish",
+        "jj-pack-build",
+        "jj-pack-implement",
+        "jj-pack-fix-loop",
+        "gc.pack",
+        "gc.pack_root",
+        "gc.pack_workspace",
         "root-task-stage-report",
         "DoltLite",
     ]:
@@ -202,10 +224,90 @@ def test_jj_formulas_extend_upstream_contracts() -> None:
         "jj-review": ["review"],
         "jj-fix-loop": ["fix-loop-base"],
         "jj-publish": ["publish"],
+        "jj-pack-build": ["jj-build"],
+        "jj-pack-implement": ["jj-implement"],
+        "jj-pack-fix-loop": ["jj-fix-loop"],
     }
 
     for name, extends in expected_extends.items():
         assert load_formula(name)["extends"] == extends
+
+
+def test_pack_aware_formulas_define_pack_route_vars() -> None:
+    for name in PACK_AWARE_FORMULAS:
+        vars_ = load_formula(name)["vars"]
+
+        assert vars_["pack"]["required"] is True
+        assert vars_["pack_root"]["required"] is True
+        assert vars_["pack_workspace"]["default"] == ""
+        assert vars_["pack_route_target"]["default"] == "packer.packsmith"
+        assert vars_["pack_route_formula"]["default"] == "mol-packer-work"
+        assert vars_["source_workspace"]["default"] == ""
+        assert vars_["source_workspace_path"]["default"] == ""
+        assert vars_["source_change_id"]["default"] == ""
+
+
+def test_pack_aware_source_steps_carry_pack_route_metadata() -> None:
+    expected_steps = {
+        "jj-pack-build": {"implement", "implement-same-session"},
+        "jj-pack-implement": {"drain-separate", "drain-same-session"},
+        "jj-pack-fix-loop": {
+            "prepare-worktree",
+            "describe-source-fix-change",
+            "apply-fixes",
+        },
+    }
+
+    for formula_name, step_ids in expected_steps.items():
+        steps = steps_by_id(load_formula(formula_name))
+
+        for step_id in step_ids:
+            metadata = steps[step_id]["metadata"]
+
+            assert metadata["gc.formula"] == "{{pack_route_formula}}"
+            assert metadata["gc.route_target"] == "{{pack_route_target}}"
+            assert metadata["gc.pack"] == "{{pack}}"
+            assert metadata["gc.pack_root"] == "{{pack_root}}"
+            assert metadata["gc.pack_workspace"] == "{{pack_workspace}}"
+            assert metadata["gc.docs.managed"] == "true"
+            assert metadata["gc.docs.manifest_path_keys"] == (
+                "gc.docs.manifest_path,gc.var.manifest_path"
+            )
+            assert metadata["gc.docs.source_workspace_key"] == (
+                "gc.docs.source_workspace,gc.var.source_workspace"
+            )
+            assert metadata["gc.docs.source_workspace_path_key"] == (
+                "gc.docs.source_workspace_path,gc.var.source_workspace_path"
+            )
+            assert metadata["gc.docs.source_change_id_key"] == (
+                "gc.docs.source_change_id,gc.var.source_change_id"
+            )
+
+            if "drain" in steps[step_id]:
+                assert steps[step_id]["drain"]["formula"] == (
+                    "{{pack_route_formula}}"
+                )
+
+
+def test_ordinary_jj_formulas_do_not_carry_pack_route_metadata() -> None:
+    ordinary = EXPECTED_FORMULAS - PACK_AWARE_FORMULAS
+    pack_keys = {
+        "gc.pack",
+        "gc.pack_root",
+        "gc.pack_workspace",
+        "gc.route_target",
+    }
+
+    for name in ordinary:
+        formula = load_formula(name)
+        assert "pack" not in formula.get("vars", {})
+        assert "pack_root" not in formula.get("vars", {})
+        assert "pack_workspace" not in formula.get("vars", {})
+        for step in formula.get("steps", []):
+            metadata = step.get("metadata", {})
+            assert pack_keys.isdisjoint(metadata), name
+            if "drain" in step:
+                assert step["drain"].get("formula") != "{{pack_route_formula}}"
 
 
 def test_jj_build_and_implement_route_drains_to_jj_item_formulas() -> None:
@@ -405,6 +507,9 @@ def test_describe_workflow_declares_pre_edit_jj_semantics() -> None:
 
 def test_every_formula_has_concrete_describe_step() -> None:
     for name in EXPECTED_FORMULAS:
+        if name in FORMULAS_WITH_INHERITED_DESCRIBE_STEPS:
+            continue
+
         formula = load_formula(name)
         describe_steps = [
             step

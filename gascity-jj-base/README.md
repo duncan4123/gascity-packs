@@ -36,9 +36,9 @@ mkdir proj && cd proj && jj git init && gc rig add .
    ```
 
 2. **Keep the pack-internal imports together.** `gascity-jj-base/pack.toml`
-   imports the Gas City base contracts and jj workspace helpers from sibling
-   packs, and its `session_live` hooks reuse the sibling `gastown` tmux helper
-   scripts instead of carrying local copies
+   imports the Gas City base contracts, jj workspace helpers, and packsmith
+   routing formulas from sibling packs. Its `session_live` hooks reuse the
+   sibling `gastown` tmux helper scripts instead of carrying local copies
 
    ```toml
    [imports.gc]
@@ -46,12 +46,16 @@ mkdir proj && cd proj && jj git init && gc rig add .
 
    [imports.jjw]
    source = "../jjw"
+
+   [imports.packer]
+   source = "../packer"
    ```
 
    These are pack-internal imports. City users import `gascity-jj-base`; the
-   pack brings `gc` and `jjw` with it. Keep `gastown/assets/scripts` available
-   beside the pack so `tmux-theme.sh`, `tmux-keybindings.sh`, and their helper
-   scripts resolve from the shared base implementation.
+   pack brings `gc`, `jjw`, and `packer` with it. Keep
+   `gastown/assets/scripts` available beside the pack so `tmux-theme.sh`,
+   `tmux-keybindings.sh`, and their helper scripts resolve from the shared base
+   implementation.
 
 3. **Import the rig roles in `city.toml`.** The target rig also needs the
    `gascity/roles` import so the `gc.*` role agents, including
@@ -120,6 +124,25 @@ path when `gc.pack_workspace` is present, and record both
 describe/edit/review/publish steps run. Source workspaces land back through the
 pack-named source workspace before any tested state moves to `default@`.
 
+Pack-aware entry points are available when the source edits themselves are pack
+maintenance work. `jj-pack-build`, `jj-pack-implement`, and
+`jj-pack-fix-loop` keep workflow documents in the same default@ manifest model
+but route source implementation and follow-up fix steps to packsmith. The
+lifecycle is:
+
+1. The parent formula request supplies `pack`, `pack_root`, optional
+   `pack_workspace`, `pack_route_target`, and `pack_route_formula` vars.
+2. The pack-aware source step copies those vars into child/routed bead metadata
+   as `gc.pack`, `gc.pack_root`, optional `gc.pack_workspace`,
+   `gc.route_target`, and `gc.formula`.
+3. Packsmith pre-start uses that metadata to select the sparse pack workspace.
+4. Packsmith performs the source edits and records source workspace/change
+   anchors.
+5. The normal JJ summary, review, and fix-loop document steps consume those
+   anchors from the manifest and bead metadata.
+6. Follow-up pack fixes are routed back through the same pack metadata instead
+   of re-deriving paths from titles or session names.
+
 ## Ownership Boundary
 
 This pack should extend the imported `gascity` contracts instead of editing or
@@ -158,3 +181,6 @@ surface:
 - `jj-review`
 - `jj-fix-loop`
 - `jj-publish`
+- `jj-pack-build`
+- `jj-pack-implement`
+- `jj-pack-fix-loop`

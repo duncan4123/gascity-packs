@@ -193,6 +193,34 @@ Review fixes should preserve the existing document references while adding:
 - updated review report path
 - iteration number
 
+### Pack-aware JJ entry points
+
+`jj-pack-build`, `jj-pack-implement`, and `jj-pack-fix-loop` are source-work
+entry points for workflows whose implementation target is a Gas City pack.
+They preserve the default@ document metadata and `source_change_id` handoff from
+the ordinary JJ formulas, but route source edits through the imported `packer`
+pack.
+
+The pack lifecycle is explicit:
+
+```text
+parent formula request
+  -> pack vars: pack, pack_root, optional pack_workspace
+  -> route vars: pack_route_target, pack_route_formula
+  -> source anchors: source_workspace, source_workspace_path, source_change_id
+  -> child/routed bead metadata: gc.pack, gc.pack_root, gc.pack_workspace
+  -> packsmith sparse workspace selected from metadata
+  -> source edits and source change anchor updates
+  -> JJ summary/review/fix-loop documents under default@
+  -> follow-up pack edits routed with the same pack metadata
+```
+
+The pack-aware formulas must not add pack workdir behavior to ordinary
+non-pack JJ steps. Normal `jj-build`, `jj-implement`, and `jj-fix-loop` keep
+their existing source workspace metadata contract. Pack behavior is opt-in via
+the `jj-pack-*` formulas or by selecting those formulas through parent formula
+vars.
+
 ### `root-task-stage-report`
 
 Report-only formula for the city-wide active root task stage summary.
@@ -246,6 +274,9 @@ assets:
 - `jj-review`
 - `jj-fix-loop`
 - `jj-publish`
+- `jj-pack-build`
+- `jj-pack-implement`
+- `jj-pack-fix-loop`
 
 The formulas are intentionally thin. They extend upstream `gascity` formulas,
 add default@ document variables/metadata, and override only the steps that need
