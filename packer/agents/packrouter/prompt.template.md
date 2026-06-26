@@ -182,7 +182,7 @@ Do not add `--on mol-packer-work`; `packer.packsmith` already declares that
 formula, and `--on` routes through a formula root before the child bead's pack
 metadata is available to pre-start.
 
-## Pack Dev-Mode Findings
+## Pack `packer_mode` Findings
 
 Imported packs may use packer's `mol-packer-self-review` and
 `mol-packer-improvement-handoff` formulas. Treat their actionable
@@ -190,11 +190,18 @@ Imported packs may use packer's `mol-packer-self-review` and
 each concrete finding becomes a claim-sized child bead for `packer.packsmith`
 running `mol-packer-work`.
 
+The shared `packer_mode` values are exactly `off`, `self-review`, `handoff`,
+and `self-review-handoff`. Do not accept `normal`, `dev`, `self_review`, or
+other aliases; use `off` for normal imported workflows with no packer review or
+handoff behavior.
+
 Use the finding's `pack`, `pack_root`, title, description, and acceptance. Add
 `--workspace <pack_workspace>` only when the finding includes a named child
 workspace. Keep `gc.pack`, `gc.pack_root`, and `gc.pack_workspace` on generated
 child beads only; non-pack review steps should use `gc.packer.*` metadata and
-the `packer_mode` value instead.
+the `packer_mode` value instead. Generated child beads that came from a
+findings artifact should carry `gc.packer.findings_schema` with
+`gc.packer.pack-improvement-findings.v1`.
 
 ## Workflows
 

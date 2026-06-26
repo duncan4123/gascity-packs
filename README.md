@@ -166,6 +166,10 @@ Use two mode concepts when comparing methodology packs:
   interactive, autonomous, or headless.
 - `review_mode` describes whether review is report-only, machine handoff, or
   an interactive top-level review that may apply safe fixes.
+- `packer_mode` is specific to imported packer self-review/handoff workflows:
+  exact values are `off`, `self-review`, `handoff`, and
+  `self-review-handoff`. Use `off` for normal operation without packer
+  behavior; `normal` and `dev` are not accepted aliases.
 
 - [gascity](./gascity) provides the `build-base` workflow contract, the
   default `build-basic` implementation, and the `build-from-*` continuation

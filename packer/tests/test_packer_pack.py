@@ -10,6 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKER = ROOT / "packer"
 JJW = ROOT / "jjw"
+PACKER_MODE_VALUES = ("off", "self-review", "handoff", "self-review-handoff")
+PACKER_MODE_DESCRIPTION = "Packer mode. Exact values: off, self-review, handoff, self-review-handoff."
 
 
 def load_toml(path: Path) -> dict:
@@ -234,11 +236,62 @@ def test_create_pack_bead_dry_run_can_attach_pack_improvement_finding_metadata()
         "gc.pack_root": "gascity-jj-base",
         "gc.pack_workspace": "review-followup",
         "gc.packer.finding_id": "PKR-001",
-        "gc.packer.finding_schema": "gc.packer.pack-improvement-finding.v1",
+        "gc.packer.findings_schema": "gc.packer.pack-improvement-findings.v1",
         "gc.packer.findings_path": "reviews/packer/findings.json",
         "gc.packer.mode": "self-review-handoff",
         "gc.route_target": "gascity-packs/packer.packsmith",
     }
+
+
+def test_create_pack_bead_accepts_exact_documented_packer_modes() -> None:
+    script = PACKER / "assets" / "scripts" / "create-pack-bead.sh"
+
+    for mode in PACKER_MODE_VALUES:
+        result = subprocess.run(
+            [
+                str(script),
+                "--pack",
+                "jjw",
+                "--title",
+                f"jjw: mode {mode}",
+                "--packer-mode",
+                mode,
+                "--dry-run",
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        metadata_line = next(line for line in result.stdout.splitlines() if line.startswith("metadata: "))
+        metadata = json.loads(metadata_line.removeprefix("metadata: "))
+        assert metadata["gc.packer.mode"] == mode
+
+
+def test_create_pack_bead_rejects_packer_mode_aliases() -> None:
+    script = PACKER / "assets" / "scripts" / "create-pack-bead.sh"
+
+    for mode in ("normal", "dev", "self_review"):
+        result = subprocess.run(
+            [
+                str(script),
+                "--pack",
+                "jjw",
+                "--title",
+                f"jjw: invalid mode {mode}",
+                "--packer-mode",
+                mode,
+                "--dry-run",
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+
+        assert result.returncode == 2
+        assert f"invalid --packer-mode: {mode}" in result.stderr
+        assert "expected one of: off self-review handoff self-review-handoff" in result.stderr
 
 
 def test_create_pack_bead_rejects_invalid_workspace_name() -> None:
@@ -358,22 +411,27 @@ def test_packer_formulas_describe_pack_integration_lane() -> None:
     assert "lands back into the pack-named workspace, not directly to `default@`" in basics
 
 
-def test_packer_self_review_formula_declares_mode_and_finding_schema() -> None:
+def test_packer_self_review_formula_declares_mode_and_findings_schema() -> None:
     formula = formula_config("mol-packer-self-review")
     steps = steps_by_id(formula)
     review = steps["write-pack-improvement-findings"]
     metadata = review["metadata"]
     readme = (PACKER / "README.md").read_text(encoding="utf-8")
+    root_readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    prompt = (PACKER / "agents" / "packrouter" / "prompt.template.md").read_text(encoding="utf-8")
 
     assert formula["formula"] == "mol-packer-self-review"
     assert formula["vars"]["packer_mode"]["default"] == "self-review"
-    assert "off, self-review, handoff, or self-review-handoff" in formula["vars"]["packer_mode"]["description"]
+    assert formula["vars"]["packer_mode"]["description"] == PACKER_MODE_DESCRIPTION
     assert metadata["gc.build.artifact_schema"] == "gc.packer.pack-improvement-findings.v1"
-    assert metadata["gc.packer.finding_schema"] == "gc.packer.pack-improvement-finding.v1"
+    assert metadata["gc.packer.finding_item_schema"] == "gc.packer.pack-improvement-finding.v1"
     assert metadata["gc.packer.mode_key"] == "gc.packer.mode,gc.var.packer_mode"
     assert "gc.pack" not in metadata
     assert "gc.pack_root" not in metadata
     assert "gc.pack_workspace" not in metadata
+    assert "normal`, `dev`, `self_review`" in readme
+    assert "`normal` and `dev` are not accepted aliases" in root_readme
+    assert "normal`, `dev`, `self_review`" in prompt
     assert '"schema": "gc.packer.pack-improvement-findings.v1"' in readme
     assert '"schema": "gc.packer.pack-improvement-finding.v1"' in readme
     assert '"pack_workspace": "optional-child-workspace"' in readme
@@ -387,11 +445,17 @@ def test_packer_improvement_handoff_metadata_routes_only_child_beads() -> None:
 
     assert formula["formula"] == "mol-packer-improvement-handoff"
     assert formula["vars"]["packer_mode"]["default"] == "handoff"
+    assert formula["vars"]["packer_mode"]["description"] == PACKER_MODE_DESCRIPTION
     assert metadata["gc.packer.handoff"] == "pack-improvement"
     assert metadata["gc.packer.handoff_child_formula"] == "mol-packer-work"
     assert metadata["gc.packer.child_metadata_keys"] == "gc.pack,gc.pack_root,gc.formula,gc.route_target"
     assert "gc.pack_workspace" in metadata["gc.packer.optional_child_metadata_keys"]
     assert "gc.packer.finding_id" in metadata["gc.packer.optional_child_metadata_keys"]
+    assert "gc.packer.findings_schema" in metadata["gc.packer.optional_child_metadata_keys"]
+    retired_schema_key = "gc.packer.finding" + "_schema"
+    assert retired_schema_key not in metadata["gc.packer.optional_child_metadata_keys"]
+    assert metadata["gc.packer.findings_schema"] == "gc.packer.pack-improvement-findings.v1"
+    assert metadata["gc.packer.finding_item_schema"] == "gc.packer.pack-improvement-finding.v1"
 
     for step in formula["steps"]:
         step_metadata = step.get("metadata", {})
@@ -400,7 +464,7 @@ def test_packer_improvement_handoff_metadata_routes_only_child_beads() -> None:
         assert "gc.pack_workspace" not in step_metadata
 
 
-def test_packer_self_review_uses_gascity_jj_base_dev_mode_handoff_keys() -> None:
+def test_packer_self_review_uses_gascity_jj_base_packer_mode_handoff_keys() -> None:
     formula = formula_config("mol-packer-self-review")
     metadata = steps_by_id(formula)["load-pack-review-context"]["metadata"]
     readme = (PACKER / "README.md").read_text(encoding="utf-8")

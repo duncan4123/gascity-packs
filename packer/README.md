@@ -172,7 +172,7 @@ workspace named from the child bead id and title, add:
 When the target does not match the current sparse workspace, stop and report the
 mismatch instead of editing from the wrong checkout.
 
-## Pack Dev-Mode Self-Review
+## Pack `packer_mode` Self-Review
 
 Imported packs can use the packer-provided self-review and handoff formulas
 instead of reimplementing pack routing:
@@ -189,6 +189,15 @@ The shared mode variable is `packer_mode`:
 | `self-review` | inspect the pack and write findings only |
 | `handoff` | consume existing findings and create packsmith work beads |
 | `self-review-handoff` | write findings, then hand concrete findings to packsmith |
+
+These values are exact. `normal`, `dev`, `self_review`, and other spellings are
+not accepted aliases; use `off` when an imported workflow should behave
+normally without packer review or handoff work.
+
+The top-level `gc.packer.pack-improvement-findings.v1` artifact is the
+canonical handoff contract for imported packs. Individual findings inside the
+artifact use `gc.packer.pack-improvement-finding.v1` so handoff code can route
+claim-sized child beads without treating each finding as a standalone contract.
 
 Findings use this top-level JSON shape:
 
@@ -226,6 +235,9 @@ pack-named integration workspace; set it only for a named child workspace.
 
 The handoff formula writes `gc.pack`, `gc.pack_root`, `gc.formula`,
 `gc.route_target`, and optional `gc.pack_workspace` only on generated child
-beads. Its own review and handoff steps use `gc.packer.*` metadata plus the
-`gc.docs.source_*` keys used by gascity-jj-base document workflows, so ordinary
-non-pack workflow steps do not inherit pack workdir routing.
+beads. Generated child beads may also carry `gc.packer.finding_id`,
+`gc.packer.findings_path`, `gc.packer.findings_schema`, and `gc.packer.mode`
+when they came from a findings artifact. Its own review and handoff steps use
+`gc.packer.*` metadata plus the `gc.docs.source_*` keys used by
+gascity-jj-base document workflows, so ordinary non-pack workflow steps do not
+inherit pack workdir routing.

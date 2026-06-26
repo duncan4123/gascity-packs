@@ -26,8 +26,8 @@ Options:
   --target <agent>           Sling target (default: <rig>/packer.packsmith)
   --finding-id <id>          Source pack-improvement finding id
   --findings-path <path>     Source pack-improvement findings artifact path
-  --finding-schema <schema>  Source finding schema id
-  --packer-mode <mode>       Packer dev-mode that produced the handoff
+  --findings-schema <schema> Source findings artifact schema id
+  --packer-mode <mode>       Packer mode: off, self-review, handoff, self-review-handoff
   --dry-run                  Print commands without creating or slinging
 EOF
 }
@@ -44,9 +44,10 @@ PARENT=""
 TARGET=""
 FINDING_ID=""
 FINDINGS_PATH=""
-FINDING_SCHEMA=""
+FINDINGS_SCHEMA=""
 PACKER_MODE=""
 DRY_RUN=""
+PACKER_MODE_VALUES="off self-review handoff self-review-handoff"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -142,12 +143,12 @@ while [ "$#" -gt 0 ]; do
             FINDINGS_PATH="${1#--findings-path=}"
             shift
             ;;
-        --finding-schema)
-            FINDING_SCHEMA="${2:-}"
+        --findings-schema)
+            FINDINGS_SCHEMA="${2:-}"
             shift 2
             ;;
-        --finding-schema=*)
-            FINDING_SCHEMA="${1#--finding-schema=}"
+        --findings-schema=*)
+            FINDINGS_SCHEMA="${1#--findings-schema=}"
             shift
             ;;
         --packer-mode)
@@ -199,15 +200,17 @@ if [ -n "$WORKSPACE" ] && [ -n "$TASK_WORKSPACE" ]; then
     echo "create-pack-bead: --workspace and --task-workspace are mutually exclusive" >&2
     exit 2
 fi
-case "$PACKER_MODE" in
-    ""|off|self-review|handoff|self-review-handoff) ;;
-    *)
-        echo "create-pack-bead: invalid --packer-mode: $PACKER_MODE" >&2
+if [ -n "$PACKER_MODE" ]; then
+    case " $PACKER_MODE_VALUES " in
+        *" $PACKER_MODE "*) ;;
+        *)
+        echo "create-pack-bead: invalid --packer-mode: $PACKER_MODE (expected one of: $PACKER_MODE_VALUES)" >&2
         exit 2
         ;;
-esac
-if [ -z "$FINDING_SCHEMA" ] && { [ -n "$FINDING_ID" ] || [ -n "$FINDINGS_PATH" ]; }; then
-    FINDING_SCHEMA="gc.packer.pack-improvement-finding.v1"
+    esac
+fi
+if [ -z "$FINDINGS_SCHEMA" ] && { [ -n "$FINDING_ID" ] || [ -n "$FINDINGS_PATH" ]; }; then
+    FINDINGS_SCHEMA="gc.packer.pack-improvement-findings.v1"
 fi
 
 RIG_NAME="${GC_RIG:-}"
@@ -223,7 +226,7 @@ fi
 
 metadata_file=$(mktemp)
 trap 'rm -f "$metadata_file"' EXIT HUP INT TERM
-python3 - "$metadata_file" "$PACK" "$PACK_ROOT" "$TARGET" "$WORKSPACE" "$FINDING_ID" "$FINDINGS_PATH" "$FINDING_SCHEMA" "$PACKER_MODE" <<'PY'
+python3 - "$metadata_file" "$PACK" "$PACK_ROOT" "$TARGET" "$WORKSPACE" "$FINDING_ID" "$FINDINGS_PATH" "$FINDINGS_SCHEMA" "$PACKER_MODE" <<'PY'
 import json
 import sys
 
@@ -235,7 +238,7 @@ import sys
     workspace,
     finding_id,
     findings_path,
-    finding_schema,
+    findings_schema,
     packer_mode,
 ) = sys.argv[1:10]
 metadata = {
@@ -250,8 +253,8 @@ if finding_id:
     metadata["gc.packer.finding_id"] = finding_id
 if findings_path:
     metadata["gc.packer.findings_path"] = findings_path
-if finding_schema:
-    metadata["gc.packer.finding_schema"] = finding_schema
+if findings_schema:
+    metadata["gc.packer.findings_schema"] = findings_schema
 if packer_mode:
     metadata["gc.packer.mode"] = packer_mode
 with open(path, "w", encoding="utf-8") as f:
