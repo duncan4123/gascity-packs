@@ -18,6 +18,7 @@ EXPECTED_FORMULAS = {
     "jj-do-work",
     "jj-do-work-item",
     "jj-review",
+    "jj-gap-analysis",
     "jj-fix-loop",
     "jj-publish",
     "jj-pack-build",
@@ -245,6 +246,7 @@ def test_formula_improvement_plan_declares_jj_extension_surface() -> None:
         "jj-do-work",
         "jj-do-work-item",
         "jj-review",
+        "jj-gap-analysis",
         "jj-fix-loop",
         "jj-publish",
         "jj-pack-build",
@@ -317,6 +319,7 @@ def test_jj_formulas_extend_upstream_contracts() -> None:
         "jj-do-work": ["do-work"],
         "jj-do-work-item": ["do-work-item"],
         "jj-review": ["review"],
+        "jj-gap-analysis": ["gap-analysis"],
         "jj-fix-loop": ["fix-loop-base"],
         "jj-publish": ["publish"],
         "jj-pack-build": ["jj-build"],
@@ -570,6 +573,61 @@ def test_parent_drain_steps_carry_source_workspace_reuse_metadata() -> None:
             assert metadata["gc.docs.source_change_id_key"] == (
                 "gc.docs.source_change_id,gc.var.source_change_id"
             )
+
+
+def test_jj_build_implements_build_base_document_workspace_contract() -> None:
+    formula = load_formula("jj-build")
+    steps = steps_by_id(formula)
+
+    expected_document_steps = {
+        "requirements": ("requirements", "gc.build.requirements.v1"),
+        "plan": ("plan", "gc.build.plan.v1"),
+        "decompose": ("decomposition", "gc.build.decomposition.v1"),
+        "summarize-implementation": (
+            "implementation-summary",
+            "gc.build.implementation-summary.v1",
+        ),
+        "review": ("review", "gc.build.review.v1"),
+        "finalize": ("final-report", "gc.build.final-report.v1"),
+    }
+
+    assert steps["prepare"]["description_file"] == (
+        "../assets/workflows/jj-docs/prepare-document-workspace.md"
+    )
+    assert steps["prepare"]["metadata"]["gc.docs.artifact_root_keys"] == (
+        "gc.docs.artifact_root,gc.var.docs_artifact_root,gc.var.artifact_root"
+    )
+
+    for step_id, (document_name, schema) in expected_document_steps.items():
+        metadata = steps[step_id]["metadata"]
+
+        assert metadata["gc.docs.managed"] == "true"
+        assert metadata["gc.docs.document"] == document_name
+        assert metadata["gc.docs.document_schema"] == schema
+        assert metadata["gc.docs.manifest_path_keys"] == (
+            "gc.docs.manifest_path,gc.var.manifest_path"
+        )
+        assert (
+            steps[step_id]["description_file"]
+            != f"../assets/workflows/build-base/{step_id}.md"
+        )
+
+    for step_id in {"implement", "implement-same-session"}:
+        metadata = steps[step_id]["metadata"]
+
+        assert metadata["gc.docs.managed"] == "true"
+        assert metadata["gc.docs.manifest_path_keys"] == (
+            "gc.docs.manifest_path,gc.var.manifest_path"
+        )
+        assert metadata["gc.docs.source_workspace_key"] == (
+            "gc.docs.source_workspace,gc.var.source_workspace"
+        )
+        assert metadata["gc.docs.source_workspace_path_key"] == (
+            "gc.docs.source_workspace_path,gc.var.source_workspace_path"
+        )
+        assert metadata["gc.docs.source_change_id_key"] == (
+            "gc.docs.source_change_id,gc.var.source_change_id"
+        )
 
 
 def test_document_steps_carry_manifest_metadata() -> None:

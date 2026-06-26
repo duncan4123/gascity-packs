@@ -1,4 +1,5 @@
 scope = "city"
+prompt_template = "prompt.template.md"
 wake_mode = "fresh"
 work_dir = ".gc/agents/mayor"
 idle_timeout = "1h"

@@ -182,6 +182,16 @@ Review steps should consume document paths and source change IDs:
 The review report is written under the `default@` artifact root and recorded in
 `manifest.json`.
 
+### `jj-gap-analysis`
+
+Extends `gap-analysis`.
+
+Gap-analysis steps compare a jj source state to a reference context such as an
+upstream implementation, approved design, or generated audit bundle. The report
+is written under the `default@` artifact root and records the concrete probes
+used to prove parity or mismatch, including `bd` and DoltLite direct-read probes
+when storage behavior is in scope.
+
 ### `jj-fix-loop`
 
 Extends `fix-loop-base`.
@@ -286,6 +296,7 @@ assets:
 - `jj-do-work`
 - `jj-do-work-item`
 - `jj-review`
+- `jj-gap-analysis`
 - `jj-fix-loop`
 - `jj-publish`
 - `jj-pack-build`
