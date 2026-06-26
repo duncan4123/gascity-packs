@@ -221,18 +221,19 @@ their existing source workspace metadata contract. Pack behavior is opt-in via
 the `jj-pack-*` formulas or by selecting those formulas through parent formula
 vars.
 
-Pack-aware formulas may additionally run in `packer_mode=dev`. In that mode,
-they complete the requested user workflow while self-reviewing the pack
-workflow for pack-maintenance friction: metadata gaps, unclear handoffs,
-`source_change_id` visibility, workdir/workspace assumptions, prompt gaps, and
-check gaps. Concrete findings use `gc.packer.pack-improvement-finding.v1` with
-source formula, source step ID, trigger bead, observed friction, suggested pack
-change, evidence, and acceptance criteria. The default
-`pack_improvement_routing_policy=record-only` preserves normal behavior; when
-set to `route-concrete`, a concrete finding can be routed to
-`gascity-packs/packer.packsmith` with `gc.pack={{self_pack}}`,
-`gc.pack_root={{self_pack_root}}`, optional
-`gc.pack_workspace={{self_pack_workspace}}`, and `gc.formula=mol-packer-work`.
+Pack-aware formulas may additionally run with `packer_mode=off`,
+`self-review`, `handoff`, or `self-review-handoff`. The default `off` mode
+preserves normal behavior. Self-review modes complete the requested user
+workflow while reviewing pack-maintenance friction: metadata gaps, unclear
+handoffs, `source_change_id` visibility, workdir/workspace assumptions, prompt
+gaps, and check gaps. Concrete findings use the canonical
+`gc.packer.pack-improvement-findings.v1` JSON artifact with
+`gc.packer.pack-improvement-finding.v1` items. Handoff modes route actionable
+findings to `gascity-packs/packer.packsmith` by creating generated child beads
+with `gc.pack`, `gc.pack_root`, `gc.formula=mol-packer-work`,
+`gc.route_target=packer.packsmith`, and optional `gc.pack_workspace`. Ordinary
+self-review and handoff steps carry only `gc.packer.*` handoff metadata and
+the document/source handoff keys.
 
 ### `root-task-stage-report`
 

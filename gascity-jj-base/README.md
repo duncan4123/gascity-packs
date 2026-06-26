@@ -144,15 +144,19 @@ lifecycle is:
 6. Follow-up pack fixes are routed back through the same pack metadata instead
    of re-deriving paths from titles or session names.
 
-Pack-aware formulas also support an opt-in dev-mode self-review layer. Passing
-`packer_mode=dev` asks the JJ workflow to finish the user task while evaluating
-the pack workflow itself for concrete friction such as missing metadata,
-unclear handoffs, source change visibility, workspace assumptions, prompt gaps,
-and check gaps. Findings use the `gc.packer.pack-improvement-finding.v1`
-format. The default `pack_improvement_routing_policy=record-only` records the
-finding without creating work; `route-concrete` may create a pack-routed
-follow-up to `gascity-packs/packer.packsmith` using `self_pack`,
-`self_pack_root`, and optional `self_pack_workspace`.
+Pack-aware formulas also support an opt-in packer self-review layer. The
+default `packer_mode=off` preserves normal behavior. `packer_mode=self-review`
+asks the JJ workflow to finish the user task while evaluating the pack workflow
+itself for concrete friction such as missing metadata, unclear handoffs, source
+change visibility, workspace assumptions, prompt gaps, and check gaps.
+`packer_mode=handoff` consumes an existing findings artifact, and
+`packer_mode=self-review-handoff` writes findings and then routes concrete
+follow-up work. Findings use the canonical
+`gc.packer.pack-improvement-findings.v1` JSON artifact shape with
+`gc.packer.pack-improvement-finding.v1` items. Handoff creates generated
+packsmith child beads; `gc.pack`, `gc.pack_root`, optional
+`gc.pack_workspace`, `gc.formula`, and `gc.route_target` belong on those child
+beads, not on ordinary self-review or handoff steps.
 
 ## Ownership Boundary
 
