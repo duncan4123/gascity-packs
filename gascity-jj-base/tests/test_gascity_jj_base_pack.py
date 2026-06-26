@@ -33,10 +33,10 @@ FORMULAS_WITH_INHERITED_DESCRIBE_STEPS = {
     "jj-pack-implement",
 }
 EXPECTED_TMUX_SESSION_LIVE = [
-    "{{.ConfigDir}}/../gastown/assets/scripts/tmux-theme.sh "
-    "{{.Session}} {{.Agent}} {{.ConfigDir}}/../gastown",
-    "{{.ConfigDir}}/../gastown/assets/scripts/tmux-keybindings.sh "
-    "{{.ConfigDir}}/../gastown",
+    "{{.ConfigDir}}/assets/scripts/tmux-theme.sh "
+    "{{.Session}} {{.Agent}} {{.ConfigDir}}",
+    "{{.ConfigDir}}/assets/scripts/tmux-keybindings.sh "
+    "{{.ConfigDir}}",
 ]
 BASE_TMUX_HELPERS = {
     "agent-menu.sh",
@@ -95,16 +95,13 @@ def test_pack_imports_gascity_and_jjw_without_copying_base_pack() -> None:
     assert not (PACK / "assets" / "workflows" / "build-base").exists()
 
 
-def test_pack_reuses_base_tmux_session_live_scripts() -> None:
+def test_pack_owns_tmux_session_live_scripts() -> None:
     pack = load_pack_toml()
 
     assert pack["global"]["session_live"] == EXPECTED_TMUX_SESSION_LIVE
-    assert not (PACK / "assets" / "scripts" / "tmux-theme.sh").exists()
-    assert not (PACK / "assets" / "scripts" / "tmux-keybindings.sh").exists()
 
-    base_scripts = ROOT / "gastown" / "assets" / "scripts"
     for script in BASE_TMUX_HELPERS:
-        helper = base_scripts / script
+        helper = PACK / "assets" / "scripts" / script
 
         assert helper.is_file(), script
         assert is_executable(helper), script

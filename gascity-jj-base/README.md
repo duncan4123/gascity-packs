@@ -2,8 +2,8 @@
 
 `gascity-jj-base` is a thin extension pack over the upstream-owned Gas City base
 pack. It imports `gascity` for the workflow contracts and `jjw` for jj
-workspace support. It reuses sibling `gastown` tmux helper scripts without
-importing the `gastown` pack. It does not copy the base pack.
+workspace support. It carries the tmux helper scripts its `session_live` hooks
+use, but it does not copy the base pack.
 
 ## Quick Start
 
@@ -37,8 +37,9 @@ mkdir proj && cd proj && jj git init && gc rig add .
 
 2. **Keep the pack-internal imports together.** `gascity-jj-base/pack.toml`
    imports the Gas City base contracts, jj workspace helpers, and packsmith
-   routing formulas from sibling packs. Its `session_live` hooks reuse the
-   sibling `gastown` tmux helper scripts instead of carrying local copies
+   routing formulas from sibling packs. Its `session_live` hooks use local
+   tmux helper scripts in `gascity-jj-base/assets/scripts`, so the pack works
+   from a git install without relying on an undeclared sibling checkout:
 
    ```toml
    [imports.gc]
@@ -52,10 +53,10 @@ mkdir proj && cd proj && jj git init && gc rig add .
    ```
 
    These are pack-internal imports. City users import `gascity-jj-base`; the
-   pack brings `gc`, `jjw`, and `packer` with it. Keep
-   `gastown/assets/scripts` available beside the pack so `tmux-theme.sh`,
-   `tmux-keybindings.sh`, and their helper scripts resolve from the shared base
-   implementation.
+   pack brings `gc`, `jjw`, and `packer` with it. Keep the six local tmux
+   helper scripts executable when publishing the pack: `tmux-theme.sh`,
+   `tmux-keybindings.sh`, `status-line.sh`, `agent-menu.sh`, `bind-key.sh`,
+   and `cycle.sh`.
 
 3. **Import the rig roles in `city.toml`.** The target rig also needs the
    `gascity/roles` import so the `gc.*` role agents, including
