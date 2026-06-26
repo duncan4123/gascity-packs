@@ -84,6 +84,26 @@ default = "packer.packsmith"
 description = "Formula used by routed packsmith work."
 default = "mol-packer-work"
 
+[vars.packer_mode]
+description = "Pack workflow trial mode. Use dev to enable self-review of pack workflow friction."
+default = "normal"
+
+[vars.self_pack]
+description = "Pack to receive concrete improvements found while this pack workflow runs in dev mode."
+default = "gascity-jj-base"
+
+[vars.self_pack_root]
+description = "Pack root to receive concrete improvements found while this pack workflow runs in dev mode."
+default = "gascity-jj-base"
+
+[vars.self_pack_workspace]
+description = "Optional stable workspace key for routed self-pack improvement work."
+default = ""
+
+[vars.pack_improvement_routing_policy]
+description = "Policy for concrete pack-improvement findings: record-only or route-concrete."
+default = "record-only"
+
 [[steps]]
 id = "implement"
 title = "Route pack implementation convoy to separate packsmith sessions"
@@ -113,3 +133,19 @@ member_access = "exclusive"
 
 [steps.drain.item]
 single_lane = true
+
+[[steps]]
+id = "pack-self-review"
+title = "Review pack workflow friction"
+needs = ["review"]
+condition = "{{packer_mode}} == dev"
+metadata = { "gc.run_target" = "gc.run-operator", "gc.packer.mode" = "{{packer_mode}}", "gc.packer.self_pack" = "{{self_pack}}", "gc.packer.self_pack_root" = "{{self_pack_root}}", "gc.packer.self_pack_workspace" = "{{self_pack_workspace}}", "gc.packer.finding_schema" = "gc.packer.pack-improvement-finding.v1", "gc.packer.routing_policy" = "{{pack_improvement_routing_policy}}", "gc.docs.managed" = "true", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_workspace_key" = "gc.docs.source_workspace,gc.var.source_workspace", "gc.docs.source_workspace_path_key" = "gc.docs.source_workspace_path,gc.var.source_workspace_path", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
+description_file = "../assets/workflows/jj-docs/pack-self-review.md"
+
+[[steps]]
+id = "route-pack-improvement"
+title = "Route concrete pack-improvement finding"
+needs = ["pack-self-review"]
+condition = "{{pack_improvement_routing_policy}} == route-concrete"
+metadata = { "gc.run_target" = "gc.run-operator", "gc.formula" = "mol-packer-work", "gc.route_target" = "gascity-packs/packer.packsmith", "gc.pack" = "{{self_pack}}", "gc.pack_root" = "{{self_pack_root}}", "gc.pack_workspace" = "{{self_pack_workspace}}", "gc.packer.mode" = "{{packer_mode}}", "gc.packer.finding_schema" = "gc.packer.pack-improvement-finding.v1", "gc.packer.routing_policy" = "{{pack_improvement_routing_policy}}", "gc.docs.managed" = "true", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path" }
+description_file = "../assets/workflows/jj-docs/pack-self-review.md"

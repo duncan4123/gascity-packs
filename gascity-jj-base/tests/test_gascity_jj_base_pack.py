@@ -119,6 +119,8 @@ def test_readme_declares_default_document_workspace_contract() -> None:
     assert "source = \"../packer\"" in readme
     assert "jj-pack-build" in readme
     assert "pack_route_formula" in readme
+    assert "packer_mode=dev" in readme
+    assert "pack_improvement_routing_policy=record-only" in readme
     assert "gascity-jj-mayor" in readme
     assert "docs/formula-improvement-plan.md" in readme
 
@@ -162,6 +164,8 @@ def test_formula_improvement_plan_declares_jj_extension_surface() -> None:
         "gc.pack",
         "gc.pack_root",
         "gc.pack_workspace",
+        "packer_mode=dev",
+        "gc.packer.pack-improvement-finding.v1",
         "root-task-stage-report",
         "DoltLite",
     ]:
@@ -247,6 +251,20 @@ def test_pack_aware_formulas_define_pack_route_vars() -> None:
         assert vars_["source_change_id"]["default"] == ""
 
 
+def test_pack_aware_formulas_define_dev_mode_self_review_vars() -> None:
+    for name in PACK_AWARE_FORMULAS:
+        vars_ = load_formula(name)["vars"]
+
+        assert vars_["packer_mode"]["default"] == "normal"
+        assert vars_["self_pack"]["default"] == "gascity-jj-base"
+        assert vars_["self_pack_root"]["default"] == "gascity-jj-base"
+        assert vars_["self_pack_workspace"]["default"] == ""
+        assert (
+            vars_["pack_improvement_routing_policy"]["default"]
+            == "record-only"
+        )
+
+
 def test_pack_aware_source_steps_carry_pack_route_metadata() -> None:
     expected_steps = {
         "jj-pack-build": {"implement", "implement-same-session"},
@@ -289,6 +307,65 @@ def test_pack_aware_source_steps_carry_pack_route_metadata() -> None:
                 )
 
 
+def test_pack_self_review_steps_are_dev_mode_and_policy_gated() -> None:
+    expected_review_needs = {
+        "jj-pack-build": ["review"],
+        "jj-pack-implement": ["summarize"],
+        "jj-pack-fix-loop": ["re-review"],
+    }
+
+    for formula_name, needs in expected_review_needs.items():
+        steps = steps_by_id(load_formula(formula_name))
+        self_review = steps["pack-self-review"]
+        route = steps["route-pack-improvement"]
+        self_metadata = self_review["metadata"]
+        route_metadata = route["metadata"]
+
+        assert self_review["needs"] == needs
+        assert self_review["condition"] == "{{packer_mode}} == dev"
+        assert self_review["description_file"] == (
+            "../assets/workflows/jj-docs/pack-self-review.md"
+        )
+        assert self_metadata["gc.run_target"] == "gc.run-operator"
+        assert self_metadata["gc.packer.mode"] == "{{packer_mode}}"
+        assert self_metadata["gc.packer.self_pack"] == "{{self_pack}}"
+        assert self_metadata["gc.packer.self_pack_root"] == (
+            "{{self_pack_root}}"
+        )
+        assert self_metadata["gc.packer.self_pack_workspace"] == (
+            "{{self_pack_workspace}}"
+        )
+        assert self_metadata["gc.packer.finding_schema"] == (
+            "gc.packer.pack-improvement-finding.v1"
+        )
+        assert self_metadata["gc.packer.routing_policy"] == (
+            "{{pack_improvement_routing_policy}}"
+        )
+        assert "gc.pack" not in self_metadata
+        assert "gc.pack_root" not in self_metadata
+
+        assert route["needs"] == ["pack-self-review"]
+        assert (
+            route["condition"]
+            == "{{pack_improvement_routing_policy}} == route-concrete"
+        )
+        assert route["description_file"] == (
+            "../assets/workflows/jj-docs/pack-self-review.md"
+        )
+        assert route_metadata["gc.run_target"] == "gc.run-operator"
+        assert route_metadata["gc.formula"] == "mol-packer-work"
+        assert (
+            route_metadata["gc.route_target"]
+            == "gascity-packs/packer.packsmith"
+        )
+        assert route_metadata["gc.pack"] == "{{self_pack}}"
+        assert route_metadata["gc.pack_root"] == "{{self_pack_root}}"
+        assert route_metadata["gc.pack_workspace"] == (
+            "{{self_pack_workspace}}"
+        )
+        assert route_metadata["gc.packer.mode"] == "{{packer_mode}}"
+
+
 def test_ordinary_jj_formulas_do_not_carry_pack_route_metadata() -> None:
     ordinary = EXPECTED_FORMULAS - PACK_AWARE_FORMULAS
     pack_keys = {
@@ -296,13 +373,24 @@ def test_ordinary_jj_formulas_do_not_carry_pack_route_metadata() -> None:
         "gc.pack_root",
         "gc.pack_workspace",
         "gc.route_target",
+        "gc.packer.self_pack",
+        "gc.packer.self_pack_root",
+        "gc.packer.self_pack_workspace",
+    }
+    pack_vars = {
+        "pack",
+        "pack_root",
+        "pack_workspace",
+        "packer_mode",
+        "self_pack",
+        "self_pack_root",
+        "self_pack_workspace",
+        "pack_improvement_routing_policy",
     }
 
     for name in ordinary:
         formula = load_formula(name)
-        assert "pack" not in formula.get("vars", {})
-        assert "pack_root" not in formula.get("vars", {})
-        assert "pack_workspace" not in formula.get("vars", {})
+        assert pack_vars.isdisjoint(formula.get("vars", {})), name
         for step in formula.get("steps", []):
             metadata = step.get("metadata", {})
             assert pack_keys.isdisjoint(metadata), name
@@ -492,6 +580,37 @@ def test_implementation_item_prompt_requires_durable_closeout() -> None:
     assert "gc.outcome=pass" in doc
     assert "bd close <claimed-step-id> --reason" in doc
     assert "Do not pass" in doc
+
+
+def test_pack_self_review_prompt_declares_structured_finding_format() -> None:
+    doc = (
+        PACK / "assets" / "workflows" / "jj-docs" / "pack-self-review.md"
+    ).read_text(encoding="utf-8")
+
+    for expected in [
+        "packer_mode=dev",
+        "missing metadata",
+        "step handoff clarity",
+        "`source_change_id` visibility",
+        "workdir and workspace assumptions",
+        "prompt gaps",
+        "check gaps",
+        "PACK_IMPROVEMENT_FINDING v1",
+        "source_formula:",
+        "source_step_id:",
+        "trigger_bead:",
+        "observed_friction:",
+        "suggested_pack_change:",
+        "evidence:",
+        "acceptance_criteria:",
+        "pack_improvement_routing_policy=route-concrete",
+        "gascity-packs/packer.packsmith",
+        "gc.pack={{self_pack}}",
+        "gc.pack_root={{self_pack_root}}",
+        "gc.pack_workspace={{self_pack_workspace}}",
+        "gc.formula=mol-packer-work",
+    ]:
+        assert expected in doc
 
 
 def test_describe_workflow_declares_pre_edit_jj_semantics() -> None:
