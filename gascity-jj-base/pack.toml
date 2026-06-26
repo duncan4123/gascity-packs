@@ -7,7 +7,7 @@ description = "JJ-oriented extension of the Gas City base pack for rig-repo work
 [global]
 session_live = [
     "{{.ConfigDir}}/assets/scripts/tmux-theme.sh {{.Session}} {{.Agent}} {{.ConfigDir}}",
-    "{{.ConfigDir}}/assets/scripts/tmux-keybindings.sh {{.ConfigDir}}",
+    "{{.ConfigDir}}/assets/scripts/tmux-keybindings.sh {{.ConfigDir}} {{.Agent}}",
 ]
 
 [imports.gc]

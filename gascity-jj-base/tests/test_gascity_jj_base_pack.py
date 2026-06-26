@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import pathlib
 import re
 import stat
+import subprocess
 import tomllib
 
 
@@ -42,13 +44,14 @@ EXPECTED_TMUX_SESSION_LIVE = [
     "{{.ConfigDir}}/assets/scripts/tmux-theme.sh "
     "{{.Session}} {{.Agent}} {{.ConfigDir}}",
     "{{.ConfigDir}}/assets/scripts/tmux-keybindings.sh "
-    "{{.ConfigDir}}",
+    "{{.ConfigDir}} {{.Agent}}",
 ]
 BASE_TMUX_HELPERS = {
     "agent-menu.sh",
     "bind-key.sh",
     "cycle.sh",
     "status-line.sh",
+    "status-popup.sh",
     "tmux-keybindings.sh",
     "tmux-theme.sh",
 }
@@ -111,6 +114,87 @@ def test_pack_owns_tmux_session_live_scripts() -> None:
 
         assert helper.is_file(), script
         assert is_executable(helper), script
+
+    keybindings = (PACK / "assets" / "scripts" / "tmux-keybindings.sh").read_text(
+        encoding="utf-8"
+    )
+    status_popup = (PACK / "assets" / "scripts" / "status-popup.sh").read_text(
+        encoding="utf-8"
+    )
+    status_line = (PACK / "assets" / "scripts" / "status-line.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "status-popup.sh" in keybindings
+    assert 'hook "$agent"' in status_popup
+    assert "--claim" not in status_popup
+    assert "bd ready" not in status_popup
+    assert "mail inbox" in status_popup
+    assert 'hook "$agent"' in status_line
+    assert "GC_STATUSLINE_TTL" in status_line
+
+
+def test_status_popup_lists_hook_ready_work_without_claiming_and_keeps_mail(
+    tmp_path: pathlib.Path,
+) -> None:
+    script = PACK / "assets" / "scripts" / "status-popup.sh"
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    log = tmp_path / "gc.log"
+    fake_gc = fake_bin / "gc"
+    fake_gc.write_text(
+        """#!/bin/sh
+city=""
+if [ "$1" = "--city" ]; then
+    city="$2"
+    shift 2
+fi
+printf 'PWD=%s CITY=%s ARGS=%s\\n' "$PWD" "$city" "$*" >> "$GC_FAKE_LOG"
+case "$1 $2" in
+    "hook gascity-packs/packer.packsmith-1")
+        printf '[{"id":"gp-123","title":"Fix tmux popup"},{"bead_id":"gp-456","title":"Review mail"}]'
+        ;;
+    "mail inbox")
+        printf 'from mayor: review ready\\n'
+        ;;
+    *)
+        echo "unexpected gc $*" >&2
+        exit 7
+        ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_gc.chmod(0o755)
+    fake_bd = fake_bin / "bd"
+    fake_bd.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+    fake_bd.chmod(0o755)
+
+    result = subprocess.run(
+        [str(script), "gascity-packs/packer.packsmith-1", str(tmp_path)],
+        cwd="/",
+        env={
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "GC_BIN": str(fake_gc),
+            "GC_FAKE_LOG": str(log),
+            "GC_HOOK_POPUP_LIMIT": "10",
+        },
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "Hook-ready work for gascity-packs/packer.packsmith-1" in result.stdout
+    assert "gp-123 - Fix tmux popup" in result.stdout
+    assert "gp-456 - Review mail" in result.stdout
+    assert "Mail preview" in result.stdout
+    assert "from mayor: review ready" in result.stdout
+
+    calls = log.read_text(encoding="utf-8")
+    assert f"PWD={tmp_path}" in calls
+    assert f"CITY={tmp_path} ARGS=hook gascity-packs/packer.packsmith-1" in calls
+    assert f"CITY={tmp_path} ARGS=mail inbox" in calls
+    assert "--claim" not in calls
 
 
 def test_readme_declares_default_document_workspace_contract() -> None:
