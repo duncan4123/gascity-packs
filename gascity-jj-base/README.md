@@ -160,6 +160,14 @@ packsmith child beads; `gc.pack`, `gc.pack_root`, optional
 `gc.pack_workspace`, `gc.formula`, and `gc.route_target` belong on those child
 beads, not on ordinary self-review or handoff steps.
 
+For history surgery, `jj-clean-history` provides a pack-owned clean-history
+workflow with a dedicated `clean-history` rig agent. It follows the same
+extension model as packs such as `gstack` and `bmad`: the generic Gas City pack
+continues to own the base workflow contracts, while this pack owns the
+JJ-specific methodology, agent prompt, and formula surface. The workflow uses
+`jj-hunk` for non-interactive hunk selection and keeps source history edits in
+the source workspace named by `source_workspace_path`.
+
 ## Ownership Boundary
 
 This pack should extend the imported `gascity` contracts instead of editing or
@@ -201,3 +209,5 @@ surface:
 - `jj-pack-build`
 - `jj-pack-implement`
 - `jj-pack-fix-loop`
+- `jj-clean-history`
+- `root-task-stage-report`

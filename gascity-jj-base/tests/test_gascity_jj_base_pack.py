@@ -24,6 +24,7 @@ EXPECTED_FORMULAS = {
     "jj-pack-build",
     "jj-pack-implement",
     "jj-pack-fix-loop",
+    "jj-clean-history",
     "root-task-stage-report",
 }
 PACK_AWARE_FORMULAS = {
@@ -135,6 +136,39 @@ def test_pack_owns_tmux_session_live_scripts() -> None:
     assert "GC_STATUSLINE_TTL" in status_line
 
 
+def test_pack_owns_mayor_agent_without_gastown_dependency() -> None:
+    agent = tomllib.loads(
+        (PACK / "agents" / "mayor" / "agent.toml").read_text(encoding="utf-8")
+    )
+    prompt = (PACK / "agents" / "mayor" / "prompt.template.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert agent == {
+        "scope": "city",
+        "prompt_template": "prompt.template.md",
+        "wake_mode": "resume",
+        "work_dir": "/data/projects/doltlite-gascity",
+        "idle_timeout": "1h",
+        "max_active_sessions": 1,
+    }
+    assert "{{ template \"propulsion-mayor\" . }}" in prompt
+    assert "{{ template \"capability-ledger-work\" . }}" in prompt
+    assert "{{ template \"architecture\" . }}" in prompt
+    assert "DoltLite Build/Install Rule" in prompt
+    assert "gascity-jj-doltlite" in prompt
+    assert "beads-doltlite.doltlite" in prompt
+    assert "../gastown" not in prompt
+
+    for fragment in [
+        "architecture.template.md",
+        "capability-ledger.template.md",
+        "propulsion.template.md",
+    ]:
+        text = (PACK / "template-fragments" / fragment).read_text(encoding="utf-8")
+        assert "gastown" not in text.lower()
+
+
 def test_status_popup_lists_hook_ready_work_without_claiming_and_keeps_mail(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -231,6 +265,18 @@ def test_mayor_overlay_declares_jj_document_handoff_contract() -> None:
     assert "jj-do-work-item" in skill
 
 
+def test_doltlite_overlay_declares_pack_managed_build_contract() -> None:
+    skill = (
+        PACK / "skills" / "gascity-jj-doltlite" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    assert "name: gascity-jj-doltlite" in skill
+    assert "beads-doltlite.doltlite" in skill
+    assert "gc beads-doltlite build gc --install --no-restart" in skill
+    assert "Do not use plain `go install`" in skill
+    assert "doltlite-client" in skill
+
+
 def test_formula_improvement_plan_declares_jj_extension_surface() -> None:
     plan = (PACK / "docs" / "formula-improvement-plan.md").read_text(
         encoding="utf-8"
@@ -252,6 +298,7 @@ def test_formula_improvement_plan_declares_jj_extension_surface() -> None:
         "jj-pack-build",
         "jj-pack-implement",
         "jj-pack-fix-loop",
+        "jj-clean-history",
         "gc.pack",
         "gc.pack_root",
         "gc.pack_workspace",
@@ -272,6 +319,65 @@ def test_pack_declares_all_jj_formula_files() -> None:
     }
 
     assert found == EXPECTED_FORMULAS
+
+
+def test_pack_owns_clean_history_agent_and_formula() -> None:
+    agent = tomllib.loads(
+        (PACK / "agents" / "clean-history" / "agent.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    prompt = (PACK / "agents" / "clean-history" / "prompt.template.md").read_text(
+        encoding="utf-8"
+    )
+    formula = load_formula("jj-clean-history")
+    steps = steps_by_id(formula)
+
+    assert agent == {
+        "description": "JJ clean-history specialist",
+        "scope": "rig",
+        "provider": "codex",
+        "wake_mode": "fresh",
+        "formula": "jj-clean-history",
+        "prompt_template": "prompt.template.md",
+        "work_dir": "{{.RigRoot}}",
+        "fallback": True,
+        "idle_timeout": "2h",
+        "min_active_sessions": 0,
+        "max_active_sessions": 3,
+    }
+    assert "jj-hunk" in prompt
+    assert "jj split -i" in prompt
+    assert "Preserve the final diff" in prompt
+    assert formula["catalog"]["name"] == "jj-clean-history"
+    assert formula["target_required"] is True
+    assert formula["single_lane"] is True
+    assert formula["vars"]["source_workspace_path"]["required"] is True
+    assert formula["vars"]["target_revset"]["default"] == "@"
+    assert formula["vars"]["base_revset"]["default"] == "trunk()"
+    assert steps["describe-source-history"]["metadata"]["gc.jj.describe"] == "true"
+    assert steps["describe-source-history"]["metadata"]["gc.jj.describe_scope"] == (
+        "source"
+    )
+    assert steps["describe-source-history"]["metadata"]["gc.work_dir"] == (
+        "{{source_workspace_path}}"
+    )
+    assert steps["describe-source-history"]["metadata"]["work_dir"] == (
+        "{{source_workspace_path}}"
+    )
+    assert steps["clean-history"]["needs"] == ["describe-source-history"]
+    assert steps["clean-history"]["metadata"]["gc.run_target"] == (
+        "gascity-jj-base.clean-history"
+    )
+    assert steps["clean-history"]["metadata"]["gc.work_dir"] == (
+        "{{source_workspace_path}}"
+    )
+    assert steps["clean-history"]["metadata"]["work_dir"] == (
+        "{{source_workspace_path}}"
+    )
+    assert steps["clean-history"]["description_file"] == (
+        "../assets/workflows/jj-docs/clean-history.md"
+    )
 
 
 def test_formula_metadata_key_references_are_beads_safe() -> None:

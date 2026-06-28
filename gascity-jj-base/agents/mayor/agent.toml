@@ -1,0 +1,6 @@
+scope = "city"
+prompt_template = "prompt.template.md"
+wake_mode = "resume"
+work_dir = "/data/projects/doltlite-gascity"
+idle_timeout = "1h"
+max_active_sessions = 1

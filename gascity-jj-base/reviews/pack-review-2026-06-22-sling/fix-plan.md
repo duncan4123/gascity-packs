@@ -3,16 +3,22 @@
 Schema: `gc.review.fix-plan.v1`
 Source workspace: `gascity-packs`
 Source workspace path: `/data/projects/doltlite-gascity/gascity-packs`
-Source change: `tynmlvxmoqkw` (`a8e075e1dc58`)
+Reviewed source change: `tynmlvxmoqkw` (`a8e075e1dc58`)
+Current source fix change: `wwppnzmw` (`a62e1259ad7a`)
 Review document: `gascity-jj-base/reviews/pack-review-2026-06-22-sling/review.md`
 Review change: `xylxutzm`
-Fix-plan document change: `twxnwoow`
+Fix-plan document change: `vquuztqrwtmzxqpmunrrmruorsquzsqk`
+Manifest: `gascity-jj-base/reviews/pack-review-2026-06-22-sling/manifest.json`
 
 ## Intent
 
-Apply the single P2 review finding: the `jj-fix-loop` document-scoped describe
-steps must carry the document workspace metadata required by
-`describe-jj-change.md`.
+Apply the single P2 review finding from the sling review: the `jj-fix-loop`
+document-scoped describe steps must carry the document workspace metadata
+required by `describe-jj-change.md`.
+
+The source workspace and change identities above are authoritative for this
+handoff. `tynmlvxmoqkw` is the reviewed source change; `wwppnzmw` is the source
+fix change recorded in the manifest after fix application.
 
 ## Required Source Fix
 
@@ -57,6 +63,7 @@ pytest -q gascity-jj-base/tests/test_gascity_jj_base_pack.py
 
 Keep the manifest at
 `gascity-jj-base/reviews/pack-review-2026-06-22-sling/manifest.json` as the
-handoff document. Downstream fix application should update the manifest source
-change metadata after the source fix is applied, and re-review should append or
-update the review document metadata without removing this fix-plan entry.
+handoff document. Downstream fix application must keep `documents.fix_plan`
+present, update `source.change_id` and `source.commit_id` if the source fix is
+rewritten, and refresh implementation/re-review document entries without
+removing this fix-plan entry.

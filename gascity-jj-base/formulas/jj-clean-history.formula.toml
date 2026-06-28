@@ -1,0 +1,79 @@
+description = """
+JJ clean-history workflow for turning a broad source change into a narrative
+stack using non-interactive jj-hunk selection.
+"""
+formula = "jj-clean-history"
+version = 1
+contract = "graph.v2"
+target_required = true
+single_lane = true
+
+[catalog]
+name = "jj-clean-history"
+description = "Split a messy JJ source change into a clean narrative stack with jj-hunk."
+
+[vars]
+[vars.docs_workspace]
+description = "JJ workspace name that owns workflow documents."
+default = "default"
+
+[vars.docs_workspace_path]
+description = "Absolute path to the default@ checkout used for workflow documents."
+default = ""
+
+[vars.docs_base_revset]
+description = "Revset used to resolve the document checkout."
+default = "default@"
+
+[vars.docs_artifact_root]
+description = "Artifact root inside the default@ checkout."
+default = ""
+
+[vars.manifest_path]
+description = "Path to the workflow document manifest."
+default = ""
+
+[vars.source_workspace]
+description = "JJ workspace used for source clean-history work."
+default = ""
+
+[vars.source_workspace_path]
+description = "Absolute path to the jj source workspace to clean."
+required = true
+
+[vars.source_change_id]
+description = "JJ change ID containing the source state to split."
+default = ""
+
+[vars.target_revset]
+description = "Revset to clean inside the source workspace."
+default = "@"
+
+[vars.base_revset]
+description = "Base revset used to verify the aggregate final diff."
+default = "trunk()"
+
+[vars.plan_path]
+description = "Optional path for the clean-history split plan."
+default = ""
+
+[vars.report_path]
+description = "Optional path for the clean-history completion report."
+default = ""
+
+[vars.max_commits]
+description = "Optional target upper bound for resulting commits; empty means use judgment."
+default = ""
+
+[[steps]]
+id = "describe-source-history"
+title = "Describe source clean-history change"
+metadata = { "gc.run_target" = "gascity-jj-base.clean-history", "gc.work_dir" = "{{source_workspace_path}}", "work_dir" = "{{source_workspace_path}}", "gc.jj.describe" = "true", "gc.jj.describe_scope" = "source", "gc.docs.managed" = "true", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_workspace_key" = "gc.docs.source_workspace,gc.var.source_workspace", "gc.docs.source_workspace_path_key" = "gc.docs.source_workspace_path,gc.var.source_workspace_path", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
+description_file = "../assets/workflows/jj-docs/describe-jj-change.md"
+
+[[steps]]
+id = "clean-history"
+title = "Clean JJ source history"
+needs = ["describe-source-history"]
+metadata = { "gc.run_target" = "gascity-jj-base.clean-history", "gc.work_dir" = "{{source_workspace_path}}", "work_dir" = "{{source_workspace_path}}", "gc.docs.managed" = "true", "gc.docs.workspace_key" = "gc.docs.workspace,gc.var.docs_workspace", "gc.docs.workspace_path_key" = "gc.docs.workspace_path,gc.var.docs_workspace_path", "gc.docs.base_revset" = "{{docs_base_revset}}", "gc.docs.artifact_root_keys" = "gc.docs.artifact_root,gc.var.docs_artifact_root,gc.var.artifact_root", "gc.docs.manifest_path_keys" = "gc.docs.manifest_path,gc.var.manifest_path", "gc.docs.source_workspace_key" = "gc.docs.source_workspace,gc.var.source_workspace", "gc.docs.source_workspace_path_key" = "gc.docs.source_workspace_path,gc.var.source_workspace_path", "gc.docs.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id", "gc.clean_history.target_revset" = "{{target_revset}}", "gc.clean_history.base_revset" = "{{base_revset}}", "gc.clean_history.plan_path" = "{{plan_path}}", "gc.clean_history.report_path" = "{{report_path}}", "gc.clean_history.max_commits" = "{{max_commits}}" }
+description_file = "../assets/workflows/jj-docs/clean-history.md"

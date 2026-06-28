@@ -10,6 +10,11 @@ session_live = [
     "{{.ConfigDir}}/assets/scripts/tmux-keybindings.sh {{.ConfigDir}} {{.Agent}}",
 ]
 
+[[named_session]]
+template = "mayor"
+scope = "city"
+mode = "always"
+
 [imports.gc]
 source = "../gascity"
 

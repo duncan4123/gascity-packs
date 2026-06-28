@@ -255,6 +255,27 @@ schema, SHA-256 hash, and document jj change ID. The canonical report must not
 be written only to `.gc/reports`, because `.gc` is local runtime state rather
 than the durable document handoff surface.
 
+### `jj-clean-history`
+
+Source-mutating formula for cleaning a messy JJ change into a narrative stack.
+
+The formula owns the JJ-specific history-surgery methodology that generic Gas
+City should not know about:
+
+- source history edits happen only in `source_workspace_path`
+- the `clean-history` rig agent uses `jj-hunk` specs instead of interactive
+  `jj split -i`
+- the source change is described before mutation
+- the starting aggregate diff is captured and compared to the final aggregate
+  diff so the cleanup preserves source content
+- optional split plans and reports can still be written as durable default@
+  documents through the normal `manifest.json` handoff
+
+This follows the same extension pattern as methodology packs such as BMAD and
+gstack: `gascity-jj-base` imports the base pack, adds its own specialist agent,
+and exposes a named formula rather than embedding JJ history rules in the
+generic Gas City contracts.
+
 ### `jj-publish`
 
 Extends or wraps `publish`.

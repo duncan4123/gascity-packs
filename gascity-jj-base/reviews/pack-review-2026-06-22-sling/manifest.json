@@ -17,8 +17,8 @@
     "fix_plan": {
       "path": "gascity-jj-base/reviews/pack-review-2026-06-22-sling/fix-plan.md",
       "schema": "gc.review.fix-plan.v1",
-      "hash": "8a63eb120f7554ac97edb329d88031203fdb0ff9613f85a433d2d6f595e1c76d",
-      "change_id": "twxnwoow"
+      "hash": "f427bacc16a30602df31ddd150ed95e97542e869dab121103f5dd48a57240af8",
+      "change_id": "vquuztqrwtmzxqpmunrrmruorsquzsqk"
     },
     "implementation_summary": {
       "path": "gascity-jj-base/reviews/pack-review-2026-06-22-sling/implementation-summary.md",

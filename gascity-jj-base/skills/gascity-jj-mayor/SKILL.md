@@ -69,6 +69,52 @@ that pack when `gc.pack_workspace` is present, and records
 `gc.docs.source_workspace` plus `gc.docs.source_workspace_path` before source
 describe/edit/review/publish steps run. Keep workflow documents in `default@`.
 
+## Fork Stack Template
+
+Use this template when the rig is a fork that contributes changes back to an
+upstream repository while carrying local integration work, such as a DoltLite
+stack for Gas City. The goal is a clean, topical stack that can be repeatedly
+rebased onto upstream `main`, tested, and split into PRs. As upstream accepts
+pieces, the carried stack should get smaller.
+
+Use the upstream remote as the rebase base and the fork remote as the push
+target:
+
+```toml
+git.fetch = ["upstream"]
+git.push = "origin"
+revset-aliases."trunk()" = "main@upstream"
+```
+
+Keep the meanings stable:
+
+- `main@upstream` is the upstream project `main` and the `trunk()` base.
+- Local `main` should stay at parity with `main@upstream` when following the
+  standard fork-contribution workflow.
+- The fork's carried work should live on a separate stack bookmark, for example
+  `gc/<topic>` or another review/integration bookmark, not as local `main`.
+- `origin` is the publication target for that stack.
+
+The normal maintenance loop is:
+
+```bash
+jj git fetch --remote upstream
+jj bookmark set main -r main@upstream
+jj rebase -s <stack-root-change-id> -d main@upstream
+jj log -r 'main@upstream::<stack-head-change-id>' --no-graph
+```
+
+After the rebase, run the focused tests and local integration checks that prove
+the stack still works. Publish from explicit stack bookmarks; do not rely on a
+detached Git HEAD or an ambiguous bare `main`.
+
+If `main` becomes conflicted because both `main@upstream` and `main@origin` are
+tracked while the fork intentionally diverges, resolve the workflow first:
+decide whether local `main` represents upstream parity or the fork integration
+head, then move the local bookmark explicitly with `jj bookmark set main -r
+<revision>`. For the standard contribution workflow, prefer upstream parity and
+keep fork work on the separate stack bookmark.
+
 ## Formula Selection
 
 Prefer the jj-aware formulas from this pack once they exist:
