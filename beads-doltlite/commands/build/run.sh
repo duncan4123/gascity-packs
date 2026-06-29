@@ -14,9 +14,9 @@ Targets:
           fixes, or build-tag changes.
   bd      Rebuild only after beads-doltlite source or bd link inputs change.
   client  Rebuild the DoltLite diagnostic client only when that tool changes.
-  all     Bootstrap/coordinated rebuild. Builds bd, doltlite-client, then gc.
-          Use after changing libdoltlite/link inputs or when setting up a fresh
-          DoltLite city. It does not skip unchanged targets.
+  all     Coordinated rebuild. Builds bd, doltlite-client, then gc.
+          Use after changing optional diagnostic client/link inputs. It does
+          not skip unchanged targets.
 
 Examples:
   gc beads-doltlite build gc --install --no-restart
@@ -24,11 +24,13 @@ Examples:
 
 Options:
   --source DIR       Source checkout for the selected single target.
-  --gc-source DIR    Gas City source checkout. Default: ./gascity, current dir, or script checkout.
-  --bd-source DIR    beads-doltlite source checkout. Default: discover a DoltLite-capable
-                     checkout or fetch one into pack runtime state.
-  --lib DIR          Directory containing libdoltlite.so. Default: discover an existing
-                     libdoltlite build or fetch/build one into pack runtime state.
+  --gc-source DIR    Gas City source checkout. Default: ./gascity, current dir,
+                     script checkout, or pack runtime source cache.
+  --bd-source DIR    beads-doltlite source checkout. Default: ./beads-doltlite,
+                     adjacent checkout, or pack runtime source cache.
+  --lib DIR          Directory containing doltlite.h and libdoltlite.
+                     Default: standard install locations or downloaded release
+                     library under the pack runtime cache.
   --output FILE      Build output path for the selected single target.
   --gc-output FILE   Build output path for gc. Default: <gc-source>/bin/gc.
   --bd-output FILE   Build output path for bd. Default: <bd-source>/bin/bd.
@@ -47,18 +49,6 @@ Options:
   --build-details-dir DIR
                      Directory for last-build-*.json.
                      Default: runtime pack state dir.
-  --bd-source-url URL
-                     Git URL for managed beads-doltlite source bootstrap.
-  --bd-source-ref REF
-                     Git ref for managed beads-doltlite source bootstrap.
-  --gascity-source-url URL
-                     Git URL for managed Gas City source bootstrap.
-  --gascity-source-ref REF
-                     Git ref for managed Gas City source bootstrap.
-  --doltlite-source-url URL
-                     Git URL for managed DoltLite source bootstrap.
-  --doltlite-source-ref REF
-                     Git ref for managed DoltLite source bootstrap.
   --restart          Stop supervisor/city before building gc, then start after install. Default.
   --no-restart       Do not restart supervisor/city after installing gc.
   --version VALUE    Version string embedded in gc. Default: dev.
@@ -73,9 +63,10 @@ Environment overrides:
   GC_DOLTLITE_GC_INSTALL, GC_DOLTLITE_BD_INSTALL
   GC_DOLTLITE_CLIENT_OUTPUT
   GC_DOLTLITE_BUILD_DETAILS_DIR
-  GC_DOLTLITE_GASCITY_SOURCE_URL, GC_DOLTLITE_GASCITY_SOURCE_REF
-  GC_DOLTLITE_BD_SOURCE_URL, GC_DOLTLITE_BD_SOURCE_REF
-  GC_DOLTLITE_SOURCE_URL, GC_DOLTLITE_SOURCE_REF
+  GC_DOLTLITE_VERSION
+  GC_DOLTLITE_DOWNLOAD_BASE
+  GC_DOLTLITE_GASCITY_REPO, GC_DOLTLITE_GASCITY_REF
+  GC_DOLTLITE_BD_REPO, GC_DOLTLITE_BD_REF
   GC_DOLTLITE_GO_CACHE_ROOT, GOCACHE, GOMODCACHE, GOTMPDIR
   GC_DOLTLITE_RESTART_AFTER_INSTALL, GC_DOLTLITE_RESTART_WAIT_SECONDS
   GC_VERSION, GC_COMMIT, GC_BUILD_DATE
@@ -112,18 +103,144 @@ has_bd_source() {
   [ -f "$1/go.mod" ] && [ -d "$1/cmd/bd" ]
 }
 
-has_doltlite_bd_source() {
-  has_bd_source "$1" && [ -d "$1/internal/storage/doltlite" ] &&
-    grep -R -q 'backend=doltlite\|--backend=doltlite\|internal/storage/doltlite' "$1/cmd/bd" "$1/internal" 2>/dev/null
+has_doltlite_lib() {
+  [ -r "$1/doltlite.h" ] || return 1
+  [ -r "$1/libdoltlite.a" ] || [ -r "$1/libdoltlite.so" ] || [ -r "$1/libdoltlite.so.0" ] || [ -r "$1/libdoltlite.dylib" ]
 }
 
-has_doltlite_lib() {
-  [ -r "$1/libdoltlite.so" ] || [ -r "$1/libdoltlite.so.0" ] || [ -r "$1/libdoltlite.dylib" ]
+pack_state_dir() {
+  echo "${GC_PACK_STATE_DIR:-$CITY_ROOT/.gc/runtime/packs/beads-doltlite}"
+}
+
+host_os() {
+  case "$(uname -s)" in
+    Linux) echo "linux" ;;
+    Darwin) echo "osx" ;;
+    MINGW*|MSYS*|CYGWIN*) echo "win" ;;
+    *) die "unsupported OS for DoltLite release download: $(uname -s)" ;;
+  esac
+}
+
+host_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) echo "x64" ;;
+    aarch64|arm64) echo "arm64" ;;
+    *) die "unsupported architecture for DoltLite release download: $(uname -m)" ;;
+  esac
+}
+
+download_file() {
+  local url="$1"
+  local dest="$2"
+  mkdir -p "$(dirname "$dest")"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$url" "$dest" <<'PY'
+import os
+import sys
+import tempfile
+import urllib.request
+
+url, dest = sys.argv[1], sys.argv[2]
+directory = os.path.dirname(dest) or "."
+fd, tmp = tempfile.mkstemp(prefix=".download-", dir=directory)
+os.close(fd)
+try:
+    with urllib.request.urlopen(url, timeout=120) as response:
+        with open(tmp, "wb") as out:
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                out.write(chunk)
+    os.replace(tmp, dest)
+except Exception:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
+PY
+    return 0
+  fi
+  die "python3 is required to download DoltLite release artifacts"
+}
+
+extract_zip_strip_one() {
+  local zip_path="$1"
+  local dest="$2"
+  local tmp
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/doltlite-release.XXXXXX")"
+  python3 - "$zip_path" "$tmp" "$dest" <<'PY'
+import os
+import shutil
+import sys
+import zipfile
+
+zip_path, tmp, dest = sys.argv[1], sys.argv[2], sys.argv[3]
+with zipfile.ZipFile(zip_path) as archive:
+    archive.extractall(tmp)
+entries = [os.path.join(tmp, name) for name in os.listdir(tmp)]
+src = entries[0] if len(entries) == 1 and os.path.isdir(entries[0]) else tmp
+if os.path.exists(dest):
+    shutil.rmtree(dest)
+os.makedirs(os.path.dirname(dest), exist_ok=True)
+shutil.copytree(src, dest)
+PY
+  rm -rf "$tmp"
+}
+
+ensure_doltlite_release_lib() {
+  local version os_name arch_name state_dir dest zip_name zip_path base url
+  version="${GC_DOLTLITE_VERSION:-0.11.23}"
+  os_name="$(host_os)"
+  arch_name="$(host_arch)"
+  state_dir="$(pack_state_dir)"
+  dest="$state_dir/doltlite/$version/${os_name}-${arch_name}"
+  if has_doltlite_lib "$dest"; then
+    echo "$dest"
+    return 0
+  fi
+
+  zip_name="doltlite-lib-${os_name}-${arch_name}-${version}.zip"
+  zip_path="$state_dir/downloads/$zip_name"
+  base="${GC_DOLTLITE_DOWNLOAD_BASE:-https://github.com/dolthub/doltlite/releases/download/v${version}}"
+  url="${base%/}/$zip_name"
+  if [ ! -s "$zip_path" ]; then
+    echo "downloading DoltLite $version library: $url" >&2
+    download_file "$url" "$zip_path"
+  fi
+  extract_zip_strip_one "$zip_path" "$dest"
+  if ! has_doltlite_lib "$dest"; then
+    die "downloaded DoltLite library is missing doltlite.h or libdoltlite: $dest"
+  fi
+  echo "$dest"
+}
+
+ensure_git_source() {
+  local name="$1"
+  local repo="$2"
+  local ref="$3"
+  local dest="$4"
+  if has_gascity_source "$dest" || has_bd_source "$dest"; then
+    echo "$dest"
+    return 0
+  fi
+  if ! command -v git >/dev/null 2>&1; then
+    die "git is required to fetch $name source; install git or pass --${name}-source"
+  fi
+  mkdir -p "$(dirname "$dest")"
+  if [ -d "$dest/.git" ]; then
+    git -C "$dest" fetch --depth 1 origin "$ref" >&2
+    git -C "$dest" checkout -q FETCH_HEAD
+  else
+    rm -rf "$dest"
+    git clone --depth 1 --branch "$ref" "$repo" "$dest" >&2
+  fi
+  echo "$dest"
 }
 
 find_gascity_source() {
   for candidate in \
-    "$BUILD_DETAILS_DIR/src/gascity" \
     "$CITY_ROOT/gascity" \
     "$CITY_ROOT/../gascity" \
     "$(pwd)" \
@@ -136,38 +253,21 @@ find_gascity_source() {
   return 1
 }
 
-ensure_gascity_source() {
-  if [ -n "$GASCITY_SRC" ]; then
-    if ! has_gascity_source "$GASCITY_SRC"; then
-      die "Gas City source at $GASCITY_SRC is invalid; pass a checkout with cmd/gc"
-    fi
-    GASCITY_SRC="$(abs_dir "$GASCITY_SRC")"
-    return 0
-  fi
-
-  GASCITY_SRC="$(find_gascity_source || true)"
-  if [ -n "$GASCITY_SRC" ]; then
-    return 0
-  fi
-
-  GASCITY_SRC="$BUILD_DETAILS_DIR/src/gascity"
-  git_fetch_checkout "$GASCITY_SOURCE_URL" "$GASCITY_SOURCE_REF" "$GASCITY_SRC" "Gas City"
-  if ! has_gascity_source "$GASCITY_SRC"; then
-    die "fetched Gas City source is invalid: $GASCITY_SRC"
-  fi
-  GASCITY_SRC="$(abs_dir "$GASCITY_SRC")"
+fetch_gascity_source() {
+  ensure_git_source \
+    "gc" \
+    "${GC_DOLTLITE_GASCITY_REPO:-https://github.com/duncan4123/gascity.git}" \
+    "${GC_DOLTLITE_GASCITY_REF:-pr-doltlite-foundation}" \
+    "$(pack_state_dir)/src/gascity"
 }
 
 find_bd_source() {
   for candidate in \
-    "$BUILD_DETAILS_DIR/src/beads-doltlite" \
     "$CITY_ROOT/beads-doltlite" \
     "$CITY_ROOT/../beads-doltlite" \
-    "$CITY_ROOT/beads-doltlite-ci" \
-    "$CITY_ROOT/../beads-doltlite-ci" \
     "$SCRIPT_CHECKOUT/../beads-doltlite" \
     "$(pwd)"; do
-    if has_doltlite_bd_source "$candidate"; then
+    if has_bd_source "$candidate"; then
       abs_dir "$candidate"
       return 0
     fi
@@ -175,9 +275,20 @@ find_bd_source() {
   return 1
 }
 
+fetch_bd_source() {
+  ensure_git_source \
+    "bd" \
+    "${GC_DOLTLITE_BD_REPO:-https://github.com/duncan4123/beads-doltlite.git}" \
+    "${GC_DOLTLITE_BD_REF:-beads-doltlite}" \
+    "$(pack_state_dir)/src/beads-doltlite"
+}
+
 find_doltlite_lib() {
   for candidate in \
-    "$BUILD_DETAILS_DIR/src/doltlite/build" \
+    "$(pack_state_dir)/doltlite/${GC_DOLTLITE_VERSION:-0.11.23}/$(host_os)-$(host_arch)" \
+    "/usr/local/lib" \
+    "/usr/lib" \
+    "/usr/lib/$(uname -m)-linux-gnu" \
     "$CITY_ROOT/doltlite-work/build" \
     "$CITY_ROOT/doltlite/build" \
     "$CITY_ROOT/../doltlite-work/build" \
@@ -187,82 +298,7 @@ find_doltlite_lib() {
       return 0
     fi
   done
-  return 1
-}
-
-git_fetch_checkout() {
-  local url="$1"
-  local ref="$2"
-  local dest="$3"
-  local label="$4"
-
-  command -v git >/dev/null 2>&1 || die "git is required to fetch $label source"
-  mkdir -p "$(dirname "$dest")"
-  if [ ! -d "$dest/.git" ]; then
-    rm -rf "$dest"
-    mkdir -p "$dest"
-    git -C "$dest" init -q
-    git -C "$dest" remote add origin "$url"
-  else
-    git -C "$dest" remote set-url origin "$url"
-  fi
-  echo "fetching $label source from $url ref $ref"
-  git -C "$dest" fetch --depth 1 origin "$ref"
-  git -C "$dest" checkout -q --detach FETCH_HEAD
-}
-
-ensure_bd_source() {
-  if [ -n "$BD_SRC" ]; then
-    if ! has_doltlite_bd_source "$BD_SRC"; then
-      die "bd source at $BD_SRC is not DoltLite-capable; pass a checkout with internal/storage/doltlite"
-    fi
-    BD_SRC="$(abs_dir "$BD_SRC")"
-    return 0
-  fi
-
-  BD_SRC="$(find_bd_source || true)"
-  if [ -n "$BD_SRC" ]; then
-    return 0
-  fi
-
-  BD_SRC="$BUILD_DETAILS_DIR/src/beads-doltlite"
-  git_fetch_checkout "$BD_SOURCE_URL" "$BD_SOURCE_REF" "$BD_SRC" "beads-doltlite"
-  if ! has_doltlite_bd_source "$BD_SRC"; then
-    die "fetched bd source is not DoltLite-capable: $BD_SRC"
-  fi
-  BD_SRC="$(abs_dir "$BD_SRC")"
-}
-
-ensure_doltlite_lib() {
-  if [ -n "$DOLTLITE_LIB" ]; then
-    if ! has_doltlite_lib "$DOLTLITE_LIB"; then
-      die "could not find libdoltlite under $DOLTLITE_LIB"
-    fi
-    DOLTLITE_LIB="$(abs_dir "$DOLTLITE_LIB")"
-    return 0
-  fi
-
-  DOLTLITE_LIB="$(find_doltlite_lib || true)"
-  if [ -n "$DOLTLITE_LIB" ]; then
-    DOLTLITE_LIB="$(abs_dir "$DOLTLITE_LIB")"
-    return 0
-  fi
-
-  local source_dir="$BUILD_DETAILS_DIR/src/doltlite"
-  git_fetch_checkout "$DOLTLITE_SOURCE_URL" "$DOLTLITE_SOURCE_REF" "$source_dir" "DoltLite"
-  echo "building libdoltlite in $source_dir/build"
-  mkdir -p "$source_dir/build"
-  (
-    cd "$source_dir/build"
-    ../configure
-    make sqlite3.c sqlite3.h sqlite3ext.h
-    make doltlite-lib
-  )
-  DOLTLITE_LIB="$source_dir/build"
-  if ! has_doltlite_lib "$DOLTLITE_LIB"; then
-    die "DoltLite build did not produce libdoltlite under $DOLTLITE_LIB"
-  fi
-  DOLTLITE_LIB="$(abs_dir "$DOLTLITE_LIB")"
+  ensure_doltlite_release_lib
 }
 
 revision_for() {
@@ -287,7 +323,12 @@ common_env_prefix() {
   local tags="$1"
   export CGO_ENABLED=1
   export GOFLAGS="${BASE_GOFLAGS:+$BASE_GOFLAGS }-tags=${tags}"
-  export CGO_LDFLAGS="${BASE_CGO_LDFLAGS:+$BASE_CGO_LDFLAGS }-L${DOLTLITE_LIB} -Wl,-rpath,${DOLTLITE_LIB} -ldoltlite -lm"
+  export CGO_CFLAGS="${BASE_CGO_CFLAGS:+$BASE_CGO_CFLAGS }-I${DOLTLITE_LIB}"
+  if [ -r "$DOLTLITE_LIB/libdoltlite.a" ]; then
+    export CGO_LDFLAGS="${BASE_CGO_LDFLAGS:+$BASE_CGO_LDFLAGS }-L${DOLTLITE_LIB} ${DOLTLITE_LIB}/libdoltlite.a -lz -lpthread -lm"
+  else
+    export CGO_LDFLAGS="${BASE_CGO_LDFLAGS:+$BASE_CGO_LDFLAGS }-L${DOLTLITE_LIB} -Wl,-rpath,${DOLTLITE_LIB} -ldoltlite -lm"
+  fi
   export LD_LIBRARY_PATH="${DOLTLITE_LIB}${BASE_LD_LIBRARY_PATH:+:${BASE_LD_LIBRARY_PATH}}"
 }
 
@@ -296,6 +337,12 @@ verify_linked_binary() {
   local name="$2"
   if ! go version -m "$output" 2>/dev/null | grep -q 'CGO_ENABLED=1'; then
     die "built $name binary does not report CGO_ENABLED=1"
+  fi
+  if [ -r "$DOLTLITE_LIB/libdoltlite.a" ]; then
+    if ! grep -aiq 'doltlite' "$output" 2>/dev/null; then
+      die "built $name binary does not appear to contain DoltLite symbols"
+    fi
+    return 0
   fi
   if command -v ldd >/dev/null 2>&1; then
     if ! ldd "$output" 2>/dev/null | grep -q 'libdoltlite'; then
@@ -833,7 +880,16 @@ start_after_gc_install() {
 }
 
 build_gc() {
-  ensure_gascity_source
+  if [ -z "$GASCITY_SRC" ]; then
+    GASCITY_SRC="$(find_gascity_source || true)"
+  fi
+  if [ -z "$GASCITY_SRC" ]; then
+    GASCITY_SRC="$(fetch_gascity_source)"
+  fi
+  if [ -z "$GASCITY_SRC" ] || ! has_gascity_source "$GASCITY_SRC"; then
+    die "could not find Gas City source; set GASCITY_SRC=/path/to/gascity or pass --gc-source"
+  fi
+  GASCITY_SRC="$(abs_dir "$GASCITY_SRC")"
 
   if [ -z "$GC_OUTPUT" ]; then
     GC_OUTPUT="$GASCITY_SRC/bin/gc"
@@ -885,7 +941,16 @@ build_gc() {
 }
 
 build_bd() {
-  ensure_bd_source
+  if [ -z "$BD_SRC" ]; then
+    BD_SRC="$(find_bd_source || true)"
+  fi
+  if [ -z "$BD_SRC" ]; then
+    BD_SRC="$(fetch_bd_source)"
+  fi
+  if [ -z "$BD_SRC" ] || ! has_bd_source "$BD_SRC"; then
+    die "could not find beads-doltlite source; set BD_SRC=/path/to/beads-doltlite or pass --bd-source"
+  fi
+  BD_SRC="$(abs_dir "$BD_SRC")"
 
   if [ -z "$BD_OUTPUT" ]; then
     BD_OUTPUT="$BD_SRC/bin/bd"
@@ -937,7 +1002,16 @@ build_bd() {
 }
 
 build_client() {
-  ensure_gascity_source
+  if [ -z "$GASCITY_SRC" ]; then
+    GASCITY_SRC="$(find_gascity_source || true)"
+  fi
+  if [ -z "$GASCITY_SRC" ]; then
+    GASCITY_SRC="$(fetch_gascity_source)"
+  fi
+  if [ -z "$GASCITY_SRC" ] || ! has_gascity_source "$GASCITY_SRC"; then
+    die "could not find Gas City source; set GASCITY_SRC=/path/to/gascity or pass --gc-source"
+  fi
+  GASCITY_SRC="$(abs_dir "$GASCITY_SRC")"
 
   if [ ! -f "$GASCITY_SRC/tools/doltlite-client/main.go" ]; then
     die "could not find doltlite-client source under $GASCITY_SRC/tools/doltlite-client"
@@ -978,6 +1052,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACK_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SCRIPT_CHECKOUT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 BASE_GOFLAGS="${GOFLAGS:-}"
+BASE_CGO_CFLAGS="${CGO_CFLAGS:-}"
 BASE_CGO_LDFLAGS="${CGO_LDFLAGS:-}"
 BASE_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 
@@ -994,12 +1069,6 @@ INSTALL_BUILT="${GC_DOLTLITE_INSTALL:-0}"
 INSTALL_DIR="${GC_DOLTLITE_INSTALL_DIR:-}"
 GC_INSTALL="${GC_DOLTLITE_GC_INSTALL:-}"
 BD_INSTALL="${GC_DOLTLITE_BD_INSTALL:-}"
-GASCITY_SOURCE_URL="${GC_DOLTLITE_GASCITY_SOURCE_URL:-https://github.com/duncan4123/gascity.git}"
-GASCITY_SOURCE_REF="${GC_DOLTLITE_GASCITY_SOURCE_REF:-doltlite-all}"
-BD_SOURCE_URL="${GC_DOLTLITE_BD_SOURCE_URL:-https://github.com/duncan4123/beads-doltlite.git}"
-BD_SOURCE_REF="${GC_DOLTLITE_BD_SOURCE_REF:-gascity-doltlite-pin}"
-DOLTLITE_SOURCE_URL="${GC_DOLTLITE_SOURCE_URL:-https://github.com/dolthub/doltlite.git}"
-DOLTLITE_SOURCE_REF="${GC_DOLTLITE_SOURCE_REF:-master}"
 GC_INSTALL_EXPLICIT=0
 if [ -n "${GC_DOLTLITE_GC_INSTALL:-}" ]; then
   GC_INSTALL_EXPLICIT=1
@@ -1148,60 +1217,6 @@ while [ "$#" -gt 0 ]; do
       BUILD_DETAILS_DIR="${1#*=}"
       shift
       ;;
-    --gascity-source-url)
-      require_value "$1" "${2:-}"
-      GASCITY_SOURCE_URL="$2"
-      shift 2
-      ;;
-    --gascity-source-url=*)
-      GASCITY_SOURCE_URL="${1#*=}"
-      shift
-      ;;
-    --gascity-source-ref)
-      require_value "$1" "${2:-}"
-      GASCITY_SOURCE_REF="$2"
-      shift 2
-      ;;
-    --gascity-source-ref=*)
-      GASCITY_SOURCE_REF="${1#*=}"
-      shift
-      ;;
-    --bd-source-url)
-      require_value "$1" "${2:-}"
-      BD_SOURCE_URL="$2"
-      shift 2
-      ;;
-    --bd-source-url=*)
-      BD_SOURCE_URL="${1#*=}"
-      shift
-      ;;
-    --bd-source-ref)
-      require_value "$1" "${2:-}"
-      BD_SOURCE_REF="$2"
-      shift 2
-      ;;
-    --bd-source-ref=*)
-      BD_SOURCE_REF="${1#*=}"
-      shift
-      ;;
-    --doltlite-source-url)
-      require_value "$1" "${2:-}"
-      DOLTLITE_SOURCE_URL="$2"
-      shift 2
-      ;;
-    --doltlite-source-url=*)
-      DOLTLITE_SOURCE_URL="${1#*=}"
-      shift
-      ;;
-    --doltlite-source-ref)
-      require_value "$1" "${2:-}"
-      DOLTLITE_SOURCE_REF="$2"
-      shift 2
-      ;;
-    --doltlite-source-ref=*)
-      DOLTLITE_SOURCE_REF="${1#*=}"
-      shift
-      ;;
     --restart)
       RESTART_AFTER_INSTALL=1
       shift
@@ -1278,6 +1293,14 @@ case "$RESTART_WAIT_SECONDS" in
   0) usage_error "GC_DOLTLITE_RESTART_WAIT_SECONDS must be greater than zero" ;;
 esac
 
+if [ -z "$DOLTLITE_LIB" ]; then
+  DOLTLITE_LIB="$(find_doltlite_lib || true)"
+fi
+if [ -z "$DOLTLITE_LIB" ] || ! has_doltlite_lib "$DOLTLITE_LIB"; then
+  die "could not find libdoltlite; set DOLTLITE_LIB=/path/to/doltlite-work/build or pass --lib"
+fi
+DOLTLITE_LIB="$(abs_dir "$DOLTLITE_LIB")"
+
 if [ -z "$BUILD_DETAILS_DIR" ]; then
   BUILD_DETAILS_DIR="${GC_PACK_STATE_DIR:-$CITY_ROOT/.gc/runtime/packs/beads-doltlite}"
 fi
@@ -1299,7 +1322,6 @@ if ! command -v go >/dev/null 2>&1; then
   die "go is required to build DoltLite-linked binaries"
 fi
 
-ensure_doltlite_lib
 prepare_gc_install_path
 stop_before_gc_build
 

@@ -44,19 +44,8 @@ func TestDoltliteBuildScriptBuildsGCWithNativeReadTag(t *testing.T) {
 		`installed $name does not match built binary`,
 		`"tags": "%s"`,
 		`-ldoltlite -lm`,
-		`ensure_bd_source`,
-		`ensure_doltlite_lib`,
-		`ensure_gascity_source`,
-		`"$BUILD_DETAILS_DIR/src/gascity"`,
-		`"$BUILD_DETAILS_DIR/src/beads-doltlite"`,
-		`"$BUILD_DETAILS_DIR/src/doltlite/build"`,
-		`GC_DOLTLITE_GASCITY_SOURCE_URL`,
-		`GC_DOLTLITE_BD_SOURCE_URL`,
-		`GC_DOLTLITE_SOURCE_URL`,
-		`Gas City source at $GASCITY_SRC is invalid`,
-		`bd source at $BD_SRC is not DoltLite-capable`,
-		`make sqlite3.c sqlite3.h sqlite3ext.h`,
-		`make doltlite-lib`,
+		`-L${DOLTLITE_LIB} ${DOLTLITE_LIB}/libdoltlite.a`,
+		`grep -aiq 'doltlite' "$output"`,
 	} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("build script missing %q", required)
@@ -72,9 +61,9 @@ func TestDoltliteBuildHelpExplainsTargetSelection(t *testing.T) {
 
 	for _, required := range []string{
 		`gc      Normal iteration path`,
-		`all     Bootstrap/coordinated rebuild`,
+		`all     Coordinated rebuild`,
 		`Builds bd, doltlite-client, then gc`,
-		`It does not skip unchanged targets`,
+		`not skip unchanged targets`,
 		`gc beads-doltlite build gc --install --no-restart`,
 	} {
 		if !strings.Contains(script, required) {
@@ -86,12 +75,8 @@ func TestDoltliteBuildHelpExplainsTargetSelection(t *testing.T) {
 		`The default target is ` + "`gc`",
 		`normal Gas City iteration`,
 		`all` + "` builds `" + `bd` + "`, `" + `doltlite-client` + "`, then `" + `gc`,
-		`does not skip unchanged targets`,
-		`If Gas City source, a DoltLite-capable ` + "`bd`" + ` checkout, or ` + "`libdoltlite`" + ` is not present`,
-		`fetches/builds managed copies under ` + "`.gc/runtime/packs/beads-doltlite/src/`",
-		`--gascity-source-url`,
-		`--bd-source-url`,
-		`--doltlite-source-ref`,
+		`does not skip unchanged`,
+		`pinned DoltLite release library`,
 		`updates every distinct home-owned entrypoint`,
 		`running supervisor binary`,
 		`active controller ` + "`gc`" + ` path`,
@@ -105,8 +90,8 @@ func TestDoltliteBuildHelpExplainsTargetSelection(t *testing.T) {
 	for _, required := range []string{
 		`build only ` + "`gc`",
 		`gc beads-doltlite build gc --install --no-restart`,
-		`only for bootstrap`,
-		`fetches/builds missing Gas City source, DoltLite-capable ` + "`bd`" + `, and`,
+		`only for coordinated`,
+		`download a pinned DoltLite release library`,
 	} {
 		if !strings.Contains(skill, required) {
 			t.Fatalf("doltlite skill missing %q", required)

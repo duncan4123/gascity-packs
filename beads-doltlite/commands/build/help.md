@@ -10,15 +10,18 @@ beads-doltlite source or bd link inputs change.
 Use `gc beads-doltlite build client --no-restart` only when refreshing the
 DoltLite diagnostic client.
 
-Use `gc beads-doltlite build all --install --no-restart` for bootstrap or a coordinated rebuild.
+Use `gc beads-doltlite build all --install --no-restart` only for a coordinated
+rebuild that includes the optional diagnostic client.
 
-`all` builds `bd`, `doltlite-client`, then `gc`; it does not skip unchanged targets. If Gas City source, a DoltLite-capable `bd` checkout, or `libdoltlite` is not present, the command fetches/builds managed copies under `.gc/runtime/packs/beads-doltlite/src/`.
+`all` builds `bd`, `doltlite-client`, then `gc`; it does not skip unchanged
+targets. Fresh `gc init` installs only the required `bd` and `gc` targets.
 
-Pass `--gc-source DIR`, `--bd-source DIR`, or `--lib DIR` to use local development checkouts.
-Use `--gascity-source-url`/`--gascity-source-ref`,
-`--bd-source-url`/`--bd-source-ref`, and
-`--doltlite-source-url`/`--doltlite-source-ref` to override the managed
-bootstrap sources.
+The command first looks for an installed `libdoltlite` and then downloads the
+pinned DoltLite release library into the pack runtime cache when needed. Pass
+`--lib DIR` or set `DOLTLITE_LIB`/`GC_DOLTLITE_LIB` to use a development build.
+Likewise, local source checkouts are preferred, but the command can fetch
+default Gas City and beads-doltlite sources into the pack runtime cache on a
+fresh machine.
 
 With `--install`, the `gc` target updates every distinct home-owned entrypoint
 the city may use: the running supervisor binary, the configured supervisor unit
@@ -30,5 +33,5 @@ Examples:
 
 ```bash
 gc beads-doltlite build gc --install --no-restart
-gc beads-doltlite build all --install --no-restart
+gc beads-doltlite build bd --install --no-restart
 ```
