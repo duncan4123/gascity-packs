@@ -26,5 +26,5 @@ name = "beads-doltlite"
 schema = 2
 
 [imports.bd]
-source = "../bd"
+source = "https://github.com/gastownhall/gascity.git//examples/bd"
 export = true
