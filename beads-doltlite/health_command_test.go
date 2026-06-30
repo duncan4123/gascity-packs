@@ -279,9 +279,24 @@ func TestDoltlitePackEmbedsHQAndRigBrowserExample(t *testing.T) {
 		"examples/formula-progress/generate-formula-progress-sql.py",
 		"examples/formula-progress/doltlite-gascity-formula-progress.sql",
 		"examples/formula-progress/doltlite-gascity-formula-progress-no-attach.sql",
+		"assets/scripts/gc-beads-doltlite-bd.sh",
 	} {
 		if _, err := fs.Stat(beadsdoltlite.PackFS, path); err != nil {
 			t.Fatalf("embedded pack missing %s: %v", path, err)
+		}
+	}
+	provider, err := fs.ReadFile(beadsdoltlite.PackFS, "assets/scripts/gc-beads-doltlite-bd.sh")
+	if err != nil {
+		t.Fatalf("reading embedded provider: %v", err)
+	}
+	for _, required := range []string{
+		"gc-beads-bd",
+		"is_doltlite_backend",
+		"BEADS_BACKEND",
+		"init --backend doltlite",
+	} {
+		if !strings.Contains(string(provider), required) {
+			t.Fatalf("embedded provider missing %q", required)
 		}
 	}
 

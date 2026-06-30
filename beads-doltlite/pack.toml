@@ -11,20 +11,16 @@
 # health probes. Suitable for local dev, single-host deployments, and
 # environments where running a separate database server is undesirable.
 #
-# This pack is layered on top of the bd pack, not a replacement for it. The bd
-# pack supplies the gc-beads-bd.sh exec provider wrapper used for normal beads
-# operations and writes; this pack imports and exports bd and adds
-# doltlite-specific maintenance operations: flatten (compact the SQLite WAL),
-# gc (remove deleted beads), health (schema integrity check), and build
-# (rebuild gc or bd against libdoltlite).
+# This pack carries the full gc-beads-doltlite-bd.sh exec provider wrapper
+# used for normal beads operations and writes. The builtin beads-doltlite-init
+# pack only supplies the small bootstrap provider needed before external packs
+# are installed. This pack also adds DoltLite-specific maintenance operations:
+# flatten (compact the SQLite WAL), gc (remove deleted beads), health (schema
+# integrity check), and build (rebuild gc or bd against libdoltlite).
 #
-# The doltlite backend in gc-beads-bd.sh uses sqlite3 CLI for schema
+# The doltlite backend in gc-beads-doltlite-bd.sh uses sqlite3 CLI for schema
 # initialization and bd CLI for bead operations. Both must be in PATH.
 
 [pack]
 name = "beads-doltlite"
 schema = 2
-
-[imports.bd]
-source = "https://github.com/gastownhall/gascity.git//examples/bd"
-export = true
