@@ -230,9 +230,9 @@ schema = 1
   [[pack.release]]
     version = "0.1.0"
     ref = "main"
-    commit = "4ab1e2b7ddce87eca9fec6bbc2d241bba1567259"
-    hash = "sha256:358396ae9f4ccd25b1e7839bd99b0fce1149e85e38ed6b31f08e8b457fd573df"
-    description = "Beads DoltLite pack release with reproducible init build source and library selection."
+    commit = "eb8ea4c7025a7a2e44d09f05311a3cac3dd53fb8"
+    hash = "sha256:547ceeeb4816f83aa6ced2fecc394e5fc1167fa87fffb007ee27ae341b4e63c5"
+    description = "Beads DoltLite pack release with reproducible init builds using the DoltLite init branch."
 
 [[pack]]
   name = "beads-doltlite-init"
