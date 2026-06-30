@@ -23,6 +23,10 @@ Likewise, local source checkouts are preferred, but the command can fetch
 default Gas City and beads-doltlite sources into the pack runtime cache on a
 fresh machine.
 
+Pass `--skip-local-source`, or set `GC_DOLTLITE_SKIP_LOCAL_SOURCE=1`, to skip
+automatic local source checkout discovery. Explicit `--gc-source`, `--bd-source`,
+or `--source` values still take precedence.
+
 With `--install`, the `gc` target updates every distinct home-owned entrypoint
 the city may use: the running supervisor binary, the configured supervisor unit
 binary, and the active controller `gc` path. Symlinks are resolved before

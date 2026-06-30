@@ -28,6 +28,10 @@ Options:
                      script checkout, or pack runtime source cache.
   --bd-source DIR    beads-doltlite source checkout. Default: ./beads-doltlite,
                      adjacent checkout, or pack runtime source cache.
+  --skip-local-source
+                     Skip automatic local source checkout discovery and fetch
+                     the default remote source unless explicit source paths are
+                     provided. Alias: --no-local-source.
   --lib DIR          Directory containing doltlite.h and libdoltlite.
                      Default: standard install locations or downloaded release
                      library under the pack runtime cache.
@@ -65,6 +69,7 @@ Environment overrides:
   GC_DOLTLITE_BUILD_DETAILS_DIR
   GC_DOLTLITE_VERSION
   GC_DOLTLITE_DOWNLOAD_BASE
+  GC_DOLTLITE_SKIP_LOCAL_SOURCE
   GC_DOLTLITE_GASCITY_REPO, GC_DOLTLITE_GASCITY_REF
   GC_DOLTLITE_BD_REPO, GC_DOLTLITE_BD_REF
   GC_DOLTLITE_GO_CACHE_ROOT, GOCACHE, GOMODCACHE, GOTMPDIR
@@ -880,7 +885,7 @@ start_after_gc_install() {
 }
 
 build_gc() {
-  if [ -z "$GASCITY_SRC" ]; then
+  if [ -z "$GASCITY_SRC" ] && [ "$SKIP_LOCAL_SOURCE" != "1" ]; then
     GASCITY_SRC="$(find_gascity_source || true)"
   fi
   if [ -z "$GASCITY_SRC" ]; then
@@ -941,7 +946,7 @@ build_gc() {
 }
 
 build_bd() {
-  if [ -z "$BD_SRC" ]; then
+  if [ -z "$BD_SRC" ] && [ "$SKIP_LOCAL_SOURCE" != "1" ]; then
     BD_SRC="$(find_bd_source || true)"
   fi
   if [ -z "$BD_SRC" ]; then
@@ -1002,7 +1007,7 @@ build_bd() {
 }
 
 build_client() {
-  if [ -z "$GASCITY_SRC" ]; then
+  if [ -z "$GASCITY_SRC" ] && [ "$SKIP_LOCAL_SOURCE" != "1" ]; then
     GASCITY_SRC="$(find_gascity_source || true)"
   fi
   if [ -z "$GASCITY_SRC" ]; then
@@ -1077,6 +1082,7 @@ BUILD_DETAILS_DIR="${GC_DOLTLITE_BUILD_DETAILS_DIR:-}"
 GO_CACHE_ROOT="${GC_DOLTLITE_GO_CACHE_ROOT:-}"
 RESTART_AFTER_INSTALL="${GC_DOLTLITE_RESTART_AFTER_INSTALL:-1}"
 RESTART_WAIT_SECONDS="${GC_DOLTLITE_RESTART_WAIT_SECONDS:-180}"
+SKIP_LOCAL_SOURCE="${GC_DOLTLITE_SKIP_LOCAL_SOURCE:-0}"
 GC_SERVICES_STOPPED_FOR_BUILD=0
 LAST_INSTALLED_PATH=""
 VERSION="${GC_VERSION:-dev}"
@@ -1122,6 +1128,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --bd-source=*)
       BD_SRC="${1#*=}"
+      shift
+      ;;
+    --skip-local-source|--no-local-source)
+      SKIP_LOCAL_SOURCE=1
+      shift
+      ;;
+    --use-local-source)
+      SKIP_LOCAL_SOURCE=0
       shift
       ;;
     --lib)
@@ -1286,6 +1300,12 @@ case "${RESTART_AFTER_INSTALL,,}" in
   1|true|yes|on) RESTART_AFTER_INSTALL=1 ;;
   ""|0|false|no|off) RESTART_AFTER_INSTALL=0 ;;
   *) usage_error "GC_DOLTLITE_RESTART_AFTER_INSTALL must be true or false" ;;
+esac
+
+case "${SKIP_LOCAL_SOURCE,,}" in
+  1|true|yes|on) SKIP_LOCAL_SOURCE=1 ;;
+  ""|0|false|no|off) SKIP_LOCAL_SOURCE=0 ;;
+  *) usage_error "GC_DOLTLITE_SKIP_LOCAL_SOURCE must be true or false" ;;
 esac
 
 case "$RESTART_WAIT_SECONDS" in
