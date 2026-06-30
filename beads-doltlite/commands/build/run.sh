@@ -32,6 +32,9 @@ Options:
                      Skip automatic local source checkout discovery and fetch
                      the default remote source unless explicit source paths are
                      provided. Alias: --no-local-source.
+  --skip-local-lib  Skip automatic local libdoltlite discovery and use the
+                     pinned DoltLite release library unless --lib or
+                     DOLTLITE_LIB/GC_DOLTLITE_LIB is provided.
   --lib DIR          Directory containing doltlite.h and libdoltlite.
                      Default: standard install locations or downloaded release
                      library under the pack runtime cache.
@@ -70,6 +73,7 @@ Environment overrides:
   GC_DOLTLITE_VERSION
   GC_DOLTLITE_DOWNLOAD_BASE
   GC_DOLTLITE_SKIP_LOCAL_SOURCE
+  GC_DOLTLITE_SKIP_LOCAL_LIB
   GC_DOLTLITE_GASCITY_REPO, GC_DOLTLITE_GASCITY_REF
   GC_DOLTLITE_BD_REPO, GC_DOLTLITE_BD_REF
   GC_DOLTLITE_GO_CACHE_ROOT, GOCACHE, GOMODCACHE, GOTMPDIR
@@ -289,6 +293,10 @@ fetch_bd_source() {
 }
 
 find_doltlite_lib() {
+  if [ "$SKIP_LOCAL_LIB" = "1" ]; then
+    ensure_doltlite_release_lib
+    return 0
+  fi
   for candidate in \
     "$(pack_state_dir)/doltlite/${GC_DOLTLITE_VERSION:-0.11.23}/$(host_os)-$(host_arch)" \
     "/usr/local/lib" \
@@ -1083,6 +1091,7 @@ GO_CACHE_ROOT="${GC_DOLTLITE_GO_CACHE_ROOT:-}"
 RESTART_AFTER_INSTALL="${GC_DOLTLITE_RESTART_AFTER_INSTALL:-1}"
 RESTART_WAIT_SECONDS="${GC_DOLTLITE_RESTART_WAIT_SECONDS:-180}"
 SKIP_LOCAL_SOURCE="${GC_DOLTLITE_SKIP_LOCAL_SOURCE:-0}"
+SKIP_LOCAL_LIB="${GC_DOLTLITE_SKIP_LOCAL_LIB:-0}"
 GC_SERVICES_STOPPED_FOR_BUILD=0
 LAST_INSTALLED_PATH=""
 VERSION="${GC_VERSION:-dev}"
@@ -1136,6 +1145,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --use-local-source)
       SKIP_LOCAL_SOURCE=0
+      shift
+      ;;
+    --skip-local-lib|--no-local-lib)
+      SKIP_LOCAL_LIB=1
+      shift
+      ;;
+    --use-local-lib)
+      SKIP_LOCAL_LIB=0
       shift
       ;;
     --lib)
@@ -1306,6 +1323,12 @@ case "${SKIP_LOCAL_SOURCE,,}" in
   1|true|yes|on) SKIP_LOCAL_SOURCE=1 ;;
   ""|0|false|no|off) SKIP_LOCAL_SOURCE=0 ;;
   *) usage_error "GC_DOLTLITE_SKIP_LOCAL_SOURCE must be true or false" ;;
+esac
+
+case "${SKIP_LOCAL_LIB,,}" in
+  1|true|yes|on) SKIP_LOCAL_LIB=1 ;;
+  ""|0|false|no|off) SKIP_LOCAL_LIB=0 ;;
+  *) usage_error "GC_DOLTLITE_SKIP_LOCAL_LIB must be true or false" ;;
 esac
 
 case "$RESTART_WAIT_SECONDS" in

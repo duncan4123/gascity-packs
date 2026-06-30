@@ -27,6 +27,11 @@ Pass `--skip-local-source`, or set `GC_DOLTLITE_SKIP_LOCAL_SOURCE=1`, to skip
 automatic local source checkout discovery. Explicit `--gc-source`, `--bd-source`,
 or `--source` values still take precedence.
 
+Pass `--skip-local-lib`, or set `GC_DOLTLITE_SKIP_LOCAL_LIB=1`, to skip
+automatic local libdoltlite discovery and use the pinned DoltLite release
+library. Explicit `--lib`, `DOLTLITE_LIB`, or `GC_DOLTLITE_LIB` values still
+take precedence.
+
 With `--install`, the `gc` target updates every distinct home-owned entrypoint
 the city may use: the running supervisor binary, the configured supervisor unit
 binary, and the active controller `gc` path. Symlinks are resolved before
