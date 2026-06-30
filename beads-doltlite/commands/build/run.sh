@@ -6,13 +6,14 @@ usage() {
   cat <<'EOF'
 usage: gc beads-doltlite build [gc|bd|client|all] [options]
 
-Builds DoltLite-linked binaries from the Gas City and beads-doltlite source trees.
+Builds or installs DoltLite-linked binaries for Gas City and beads-doltlite.
 The default target is gc.
 
 Targets:
-  gc      Normal iteration path. Rebuild after Gas City changes, native fastpath
-          fixes, or build-tag changes.
-  bd      Rebuild only after beads-doltlite source or bd link inputs change.
+  gc      Normal init path. Installs the released DoltLite-linked gc binary by
+          default; rebuild only after Gas City source or build-tag changes.
+  bd      Installs the released bd-doltlite binary by default; rebuild only
+          after beads-doltlite source or bd link inputs change.
   client  Rebuild the DoltLite diagnostic client only when that tool changes.
   all     Coordinated rebuild. Builds bd, doltlite-client, then gc.
           Use after changing optional diagnostic client/link inputs. It does
@@ -35,6 +36,9 @@ Options:
   --build-bd-from-source
                      Build bd from source instead of installing the released
                      bd-doltlite binary.
+  --build-gc-from-source
+                     Build gc from source instead of installing the released
+                     DoltLite-linked gc binary.
   --skip-local-lib  Skip automatic local libdoltlite discovery and use the
                      pinned DoltLite release library unless --lib or
                      DOLTLITE_LIB/GC_DOLTLITE_LIB is provided.
@@ -75,7 +79,9 @@ Environment overrides:
   GC_DOLTLITE_BUILD_DETAILS_DIR
   GC_DOLTLITE_VERSION
   GC_DOLTLITE_DOWNLOAD_BASE
+  GC_DOLTLITE_GC_RELEASE_VERSION, GC_DOLTLITE_GC_RELEASE_BASE
   GC_DOLTLITE_BD_RELEASE_VERSION, GC_DOLTLITE_BD_RELEASE_BASE
+  GC_DOLTLITE_BUILD_GC_FROM_SOURCE
   GC_DOLTLITE_BUILD_BD_FROM_SOURCE
   GC_DOLTLITE_SKIP_LOCAL_SOURCE
   GC_DOLTLITE_SKIP_LOCAL_LIB
@@ -147,6 +153,13 @@ bd_release_platform() {
   case "$(uname -s):$(uname -m)" in
     Linux:x86_64|Linux:amd64) echo "linux-amd64" ;;
     *) die "unsupported OS/architecture for bd-doltlite release download: $(uname -s)/$(uname -m); use --build-bd-from-source" ;;
+  esac
+}
+
+gc_release_platform() {
+  case "$(uname -s):$(uname -m)" in
+    Linux:x86_64|Linux:amd64) echo "linux_amd64" ;;
+    *) die "unsupported OS/architecture for DoltLite-linked gc release download: $(uname -s)/$(uname -m); use --build-gc-from-source" ;;
   esac
 }
 
@@ -239,6 +252,39 @@ PY
   rm -rf "$tmp"
 }
 
+extract_tar_binary() {
+  local archive_path="$1"
+  local binary_name="$2"
+  local dest="$3"
+  python3 - "$archive_path" "$binary_name" "$dest" <<'PY'
+import os
+import shutil
+import stat
+import sys
+import tarfile
+import tempfile
+
+archive_path, binary_name, dest = sys.argv[1], sys.argv[2], sys.argv[3]
+tmp = tempfile.mkdtemp(prefix="gascity-release-")
+try:
+    with tarfile.open(archive_path, "r:gz") as archive:
+        archive.extractall(tmp)
+    found = None
+    for root, _, files in os.walk(tmp):
+        if binary_name in files:
+            found = os.path.join(root, binary_name)
+            break
+    if not found:
+        raise SystemExit(f"{binary_name} not found in {archive_path}")
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    shutil.copy2(found, dest)
+    mode = os.stat(dest).st_mode
+    os.chmod(dest, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+finally:
+    shutil.rmtree(tmp, ignore_errors=True)
+PY
+}
+
 ensure_doltlite_release_lib() {
   local version os_name arch_name state_dir dest zip_name zip_path base url
   version="${GC_DOLTLITE_VERSION:-0.11.23}"
@@ -289,6 +335,42 @@ ensure_bd_release_binary() {
   fi
   verify_checksum_file "$checksum_path" "$bin_path"
   chmod +x "$bin_path"
+  echo "$bin_path"
+}
+
+ensure_gc_release_binary() {
+  local version platform state_dir asset checksum_name base archive_path checksum_path bin_path asset_url checksum_url binary_name
+  version="${GC_DOLTLITE_GC_RELEASE_VERSION:-edge}"
+  platform="$(gc_release_platform)"
+  state_dir="$(pack_state_dir)"
+  checksum_name="gascity_${version#v}_checksums.txt"
+  binary_name="gc"
+  bin_path="$state_dir/gc-release/$version/$platform/$binary_name"
+
+  if [ "$version" = "edge" ]; then
+    asset="gascity_doltlite_edge_linux_amd64.tar.gz"
+    checksum_name="gascity_edge_checksums.txt"
+    base="${GC_DOLTLITE_GC_RELEASE_BASE:-https://github.com/gastownhall/gascity/releases/download/edge}"
+  else
+    asset="gascity-doltlite_${version#v}_${platform}.tar.gz"
+    base="${GC_DOLTLITE_GC_RELEASE_BASE:-https://github.com/gastownhall/gascity/releases/download/${version}}"
+  fi
+
+  archive_path="$state_dir/gc-release/$version/$asset"
+  checksum_path="$state_dir/gc-release/$version/$checksum_name"
+  asset_url="${base%/}/$asset"
+  checksum_url="${base%/}/$checksum_name"
+
+  if [ ! -s "$archive_path" ]; then
+    echo "downloading DoltLite-linked gc release archive: $asset_url" >&2
+    download_file "$asset_url" "$archive_path"
+  fi
+  if [ ! -s "$checksum_path" ]; then
+    echo "downloading DoltLite-linked gc release checksums: $checksum_url" >&2
+    download_file "$checksum_url" "$checksum_path"
+  fi
+  verify_checksum_file "$checksum_path" "$archive_path"
+  extract_tar_binary "$archive_path" "$binary_name" "$bin_path"
   echo "$bin_path"
 }
 
@@ -1020,6 +1102,38 @@ start_after_gc_install() {
 }
 
 build_gc() {
+  if [ "$BUILD_GC_FROM_SOURCE" != "1" ] && [ -z "$GASCITY_SRC" ]; then
+    local release_bin installed_to date version commit source_label
+    if release_bin="$(ensure_gc_release_binary)"; then
+      version="${GC_DOLTLITE_GC_RELEASE_VERSION:-edge}"
+      commit="${GC_COMMIT:-unknown}"
+      date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      source_label="release:$version"
+      echo "using released DoltLite-linked gc binary: $release_bin"
+      verify_gc_binary "$release_bin"
+      installed_to=""
+      if [ "$INSTALL_BUILT" = "1" ]; then
+        if [ -z "$GC_INSTALL" ]; then
+          GC_INSTALL="$(default_install_path gc)"
+        fi
+        while IFS= read -r install_path; do
+          [ -n "$install_path" ] || continue
+          install_binary "$release_bin" "$install_path" "gc"
+          if [ -z "$installed_to" ]; then
+            installed_to="$LAST_INSTALLED_PATH"
+          fi
+        done < <(gc_install_paths "$GC_INSTALL")
+      fi
+      write_build_details "gc" "$source_label" "$release_bin" "$installed_to" "$commit" "$version" "release" "gascity_doltlite_lib,libsqlite3" "$date"
+      if [ -n "$installed_to" ]; then
+        start_after_gc_install "$installed_to"
+        write_build_details "gc" "$source_label" "$release_bin" "$installed_to" "$commit" "$version" "release" "gascity_doltlite_lib,libsqlite3" "$date"
+      fi
+      return 0
+    fi
+    echo "DoltLite-linked gc release unavailable; falling back to source build" >&2
+  fi
+
   if [ -z "$GASCITY_SRC" ] && [ "$SKIP_LOCAL_SOURCE" != "1" ]; then
     GASCITY_SRC="$(find_gascity_source || true)"
   fi
@@ -1248,6 +1362,7 @@ RESTART_WAIT_SECONDS="${GC_DOLTLITE_RESTART_WAIT_SECONDS:-180}"
 SKIP_LOCAL_SOURCE="${GC_DOLTLITE_SKIP_LOCAL_SOURCE:-0}"
 SKIP_LOCAL_LIB="${GC_DOLTLITE_SKIP_LOCAL_LIB:-0}"
 BUILD_BD_FROM_SOURCE="${GC_DOLTLITE_BUILD_BD_FROM_SOURCE:-0}"
+BUILD_GC_FROM_SOURCE="${GC_DOLTLITE_BUILD_GC_FROM_SOURCE:-0}"
 GC_SERVICES_STOPPED_FOR_BUILD=0
 LAST_INSTALLED_PATH=""
 VERSION="${GC_VERSION:-dev}"
@@ -1305,6 +1420,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --build-bd-from-source)
       BUILD_BD_FROM_SOURCE=1
+      shift
+      ;;
+    --build-gc-from-source)
+      BUILD_GC_FROM_SOURCE=1
       shift
       ;;
     --skip-local-lib|--no-local-lib)
@@ -1491,6 +1610,18 @@ case "${SKIP_LOCAL_LIB,,}" in
   1|true|yes|on) SKIP_LOCAL_LIB=1 ;;
   ""|0|false|no|off) SKIP_LOCAL_LIB=0 ;;
   *) usage_error "GC_DOLTLITE_SKIP_LOCAL_LIB must be true or false" ;;
+esac
+
+case "${BUILD_GC_FROM_SOURCE,,}" in
+  1|true|yes|on) BUILD_GC_FROM_SOURCE=1 ;;
+  ""|0|false|no|off) BUILD_GC_FROM_SOURCE=0 ;;
+  *) usage_error "GC_DOLTLITE_BUILD_GC_FROM_SOURCE must be true or false" ;;
+esac
+
+case "${BUILD_BD_FROM_SOURCE,,}" in
+  1|true|yes|on) BUILD_BD_FROM_SOURCE=1 ;;
+  ""|0|false|no|off) BUILD_BD_FROM_SOURCE=0 ;;
+  *) usage_error "GC_DOLTLITE_BUILD_BD_FROM_SOURCE must be true or false" ;;
 esac
 
 case "$RESTART_WAIT_SECONDS" in

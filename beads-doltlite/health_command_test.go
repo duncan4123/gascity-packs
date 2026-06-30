@@ -28,6 +28,13 @@ func TestDoltliteBuildScriptBuildsGCWithNativeReadTag(t *testing.T) {
 
 	for _, required := range []string{
 		`common_env_prefix "gascity_doltlite_lib,libsqlite3"`,
+		`ensure_gc_release_binary`,
+		`gascity-doltlite_${version#v}_${platform}.tar.gz`,
+		`gascity_doltlite_edge_linux_amd64.tar.gz`,
+		`DoltLite-linked gc release unavailable; falling back to source build`,
+		`--build-gc-from-source`,
+		`GC_DOLTLITE_BUILD_GC_FROM_SOURCE`,
+		`GC_DOLTLITE_GC_RELEASE_VERSION, GC_DOLTLITE_GC_RELEASE_BASE`,
 		`binary_has_go_build_tag "$output" "gascity_doltlite_lib"`,
 		`built gc binary does not report -tags including gascity_doltlite_lib`,
 		`built gc binary is missing native DoltLite read-store symbols`,
@@ -60,10 +67,11 @@ func TestDoltliteBuildHelpExplainsTargetSelection(t *testing.T) {
 	skill := string(mustReadFile(t, filepath.Join(root, "skills", "doltlite", "SKILL.md")))
 
 	for _, required := range []string{
-		`gc      Normal iteration path`,
+		`gc      Normal init path`,
 		`all     Coordinated rebuild`,
 		`Builds bd, doltlite-client, then gc`,
 		`not skip unchanged targets`,
+		`DoltLite-linked gc binary`,
 		`gc beads-doltlite build gc --install --no-restart`,
 	} {
 		if !strings.Contains(script, required) {
@@ -73,7 +81,9 @@ func TestDoltliteBuildHelpExplainsTargetSelection(t *testing.T) {
 
 	for _, required := range []string{
 		`The default target is ` + "`gc`",
-		`normal Gas City iteration`,
+		`normal Gas City`,
+		`released DoltLite-linked ` + "`gc`" + ` archive`,
+		`--build-gc-from-source`,
 		`all` + "` builds `" + `bd` + "`, `" + `doltlite-client` + "`, then `" + `gc`,
 		`does not skip unchanged`,
 		`pinned DoltLite release library`,
@@ -88,10 +98,11 @@ func TestDoltliteBuildHelpExplainsTargetSelection(t *testing.T) {
 	}
 
 	for _, required := range []string{
-		`build only ` + "`gc`",
+		`install only ` + "`gc`",
 		`gc beads-doltlite build gc --install --no-restart`,
 		`only for coordinated`,
-		`download a pinned DoltLite release library`,
+		`released DoltLite-linked Gas City archive`,
+		`download pinned DoltLite and Gas City release artifacts`,
 	} {
 		if !strings.Contains(skill, required) {
 			t.Fatalf("doltlite skill missing %q", required)
