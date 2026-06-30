@@ -266,7 +266,7 @@ fetch_gascity_source() {
   ensure_git_source \
     "gc" \
     "${GC_DOLTLITE_GASCITY_REPO:-https://github.com/duncan4123/gascity.git}" \
-    "${GC_DOLTLITE_GASCITY_REF:-pr-doltlite-foundation}" \
+    "${GC_DOLTLITE_GASCITY_REF:-pr/doltlite-init-external-pack-release}" \
     "$(pack_state_dir)/src/gascity"
 }
 
