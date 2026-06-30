@@ -425,8 +425,21 @@ verify_linked_binary() {
     return 0
   fi
   if command -v ldd >/dev/null 2>&1; then
-    if ! ldd "$output" 2>/dev/null | grep -q 'libdoltlite'; then
+    local ldd_out resolved_lib resolved_dir
+    ldd_out="$(LD_LIBRARY_PATH="$DOLTLITE_LIB${BASE_LD_LIBRARY_PATH:+:${BASE_LD_LIBRARY_PATH}}" ldd "$output" 2>/dev/null || true)"
+    if ! grep -q 'libdoltlite' <<<"$ldd_out"; then
       die "built $name binary does not appear to link libdoltlite"
+    fi
+    if grep -q 'libdoltlite.*not found' <<<"$ldd_out"; then
+      die "built $name binary links libdoltlite but the runtime loader cannot find it"
+    fi
+    resolved_lib="$(awk '/libdoltlite/ { for (i = 1; i <= NF; i++) if ($i == "=>") { print $(i+1); exit } }' <<<"$ldd_out")"
+    if [ -z "$resolved_lib" ]; then
+      resolved_lib="$(awk '/libdoltlite/ { print $1; exit }' <<<"$ldd_out")"
+    fi
+    resolved_dir="$(dirname "$resolved_lib" 2>/dev/null || true)"
+    if [ -n "$resolved_lib" ] && [ -e "$resolved_lib" ] && ! [[ "$resolved_dir" -ef "$DOLTLITE_LIB" ]]; then
+      die "built $name binary resolves libdoltlite from $resolved_dir, want $DOLTLITE_LIB"
     fi
   fi
 }
@@ -627,6 +640,53 @@ install_binary() {
   fi
   LAST_INSTALLED_PATH="$dest"
   echo "installed $name: $dest"
+
+  current="$(command -v "$name" 2>/dev/null || true)"
+  if [ -n "$current" ] && [ "$current" != "$dest" ] && ! [[ "$current" -ef "$dest" ]]; then
+    echo "note: current $name resolves to $current; ensure $dest is earlier on PATH"
+  fi
+}
+
+install_bd_release_wrapper() {
+  local source="$1"
+  local dest="$2"
+  local name="bd"
+  local requested_dest dest_dir real_dest wrapper_tmp resolved current
+
+  requested_dest="$dest"
+  if [ -L "$dest" ]; then
+    resolved="$(readlink -f "$dest" 2>/dev/null || true)"
+    if [ -z "$resolved" ]; then
+      die "installing $name refused to replace unresolved symlink: $dest"
+    fi
+    dest="$resolved"
+    echo "resolved $name install symlink: $requested_dest -> $dest"
+  fi
+  dest_dir="$(dirname "$dest")"
+  mkdir -p "$dest_dir"
+  real_dest="$dest.doltlite-release-${GC_DOLTLITE_BD_RELEASE_VERSION:-v1.0.5-doltlite.1}"
+  install_binary "$source" "$real_dest" "$name"
+
+  wrapper_tmp="$dest_dir/.${name}.wrapper.$$"
+  rm -f "$wrapper_tmp"
+  cat >"$wrapper_tmp" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+lib_dir='${DOLTLITE_LIB}'
+real_bd='${real_dest}'
+export LD_LIBRARY_PATH="\${lib_dir}\${LD_LIBRARY_PATH:+:\${LD_LIBRARY_PATH}}"
+exec "\${real_bd}" "\$@"
+EOF
+  chmod 0755 "$wrapper_tmp"
+  if ! mv -f "$wrapper_tmp" "$dest"; then
+    rm -f "$wrapper_tmp"
+    die "installing $name wrapper failed: $dest"
+  fi
+  if ! "$dest" version >/dev/null 2>&1; then
+    die "installed $name wrapper could not execute release binary with libdoltlite from $DOLTLITE_LIB"
+  fi
+  LAST_INSTALLED_PATH="$dest"
+  echo "installed $name wrapper: $dest"
 
   current="$(command -v "$name" 2>/dev/null || true)"
   if [ -n "$current" ] && [ "$current" != "$dest" ] && ! [[ "$current" -ef "$dest" ]]; then
@@ -1023,6 +1083,10 @@ build_gc() {
 build_bd() {
   if [ "$BUILD_BD_FROM_SOURCE" != "1" ] && [ -z "$BD_SRC" ]; then
     local release_bin installed_to date version commit
+    if [ "$DOLTLITE_LIB_EXPLICIT" != "1" ]; then
+      DOLTLITE_LIB="$(ensure_doltlite_release_lib)"
+      DOLTLITE_LIB="$(abs_dir "$DOLTLITE_LIB")"
+    fi
     release_bin="$(ensure_bd_release_binary)"
     version="${GC_DOLTLITE_BD_RELEASE_VERSION:-v1.0.5-doltlite.1}"
     commit="${BD_COMMIT:-02bc3e532a54683bac4df3f78578511fe3cf931f}"
@@ -1034,7 +1098,7 @@ build_bd() {
       if [ -z "$BD_INSTALL" ]; then
         BD_INSTALL="$(default_install_path bd)"
       fi
-      install_binary "$release_bin" "$BD_INSTALL" "bd"
+      install_bd_release_wrapper "$release_bin" "$BD_INSTALL"
       installed_to="$LAST_INSTALLED_PATH"
     fi
     write_build_details "bd" "release:$version" "$release_bin" "$installed_to" "$commit" "$version" "main" "libsqlite3" "$date"
@@ -1162,6 +1226,10 @@ COMMON_OUTPUT="${OUTPUT:-}"
 GASCITY_SRC="${GASCITY_SRC:-${GC_GASCITY_SRC:-}}"
 BD_SRC="${BD_SRC:-${BEADS_DOLTLITE_SRC:-${GC_BEADS_DOLTLITE_SRC:-}}}"
 DOLTLITE_LIB="${DOLTLITE_LIB:-${GC_DOLTLITE_LIB:-}}"
+DOLTLITE_LIB_EXPLICIT=0
+if [ -n "${DOLTLITE_LIB:-}" ]; then
+  DOLTLITE_LIB_EXPLICIT=1
+fi
 GC_OUTPUT="${GC_DOLTLITE_GC_OUTPUT:-}"
 BD_OUTPUT="${BD_OUTPUT:-${GC_DOLTLITE_BD_OUTPUT:-}}"
 CLIENT_OUTPUT="${GC_DOLTLITE_CLIENT_OUTPUT:-}"
@@ -1250,10 +1318,12 @@ while [ "$#" -gt 0 ]; do
     --lib)
       require_value "$1" "${2:-}"
       DOLTLITE_LIB="$2"
+      DOLTLITE_LIB_EXPLICIT=1
       shift 2
       ;;
     --lib=*)
       DOLTLITE_LIB="${1#*=}"
+      DOLTLITE_LIB_EXPLICIT=1
       shift
       ;;
     --output)
