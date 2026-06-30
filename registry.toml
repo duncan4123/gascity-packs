@@ -220,3 +220,16 @@ schema = 1
     commit = "55df48a7bb8e099c9098b7e799edff335e606f5e"
     hash = "sha256:f02b003a667bbced8184137f182df13483844d40a753b3e643080a93e96c4b29"
     description = "Initial jj-hunk workflow pack release."
+
+[[pack]]
+  name = "beads-doltlite"
+  description = "DoltLite backend operations pack for Gas City beads storage."
+  source = "https://github.com/duncan4123/gascity-packs/tree/main/beads-doltlite"
+  source_kind = "git"
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "main"
+    commit = "dec799f081103a020ca63a8e5928285028d307d9"
+    hash = "sha256:8a2f744764735784b09eb2683de3b6750e8036d884bbc6de6f0d5210537edd22"
+    description = "Initial beads-doltlite pack release on main."
