@@ -91,6 +91,24 @@ if [ -n "${GC_TRIGGER_BEAD_ID:-}" ]; then
     fi
 fi
 
+if [ -z "$PACK_NAME" ] && command -v jq >/dev/null 2>&1; then
+    for route_target in "${GC_TEMPLATE:-}" "${GC_AGENT:-}" "${GC_ALIAS:-}"; do
+        [ -z "$route_target" ] && continue
+        if trigger_json=$(bd list --metadata-field "gc.routed_to=$route_target" --json --limit=20 2>/dev/null | jq '[.[] | select((.status // "") == "open" and (.assignee // "") == "")] | .[:1]' 2>/dev/null); then
+            trigger_pack=$(printf '%s' "$trigger_json" | jq -r '((if type == "array" then .[0] else . end).metadata // {})["gc.pack"] // empty' 2>/dev/null || printf '')
+            trigger_pack_root=$(printf '%s' "$trigger_json" | jq -r '((if type == "array" then .[0] else . end).metadata // {})["gc.pack_root"] // empty' 2>/dev/null || printf '')
+            TRIGGER_TITLE=$(printf '%s' "$trigger_json" | jq -r '(if type == "array" then .[0] else . end).title // empty' 2>/dev/null || printf '')
+            if [ -n "$trigger_pack" ]; then
+                PACK_NAME="$trigger_pack"
+                if [ -n "$trigger_pack_root" ]; then
+                    PACK_ROOT="$trigger_pack_root"
+                fi
+                break
+            fi
+        fi
+    done
+fi
+
 case "$PACK_NAME" in
     ""|.*|*/*|*' '*)
         echo "packer workspace setup: missing or invalid pack name: $PACK_NAME" >&2
