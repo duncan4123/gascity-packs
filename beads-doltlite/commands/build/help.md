@@ -4,7 +4,8 @@ The default target is `gc`.
 
 Use `gc beads-doltlite build gc --install --no-restart` for normal Gas City iteration, native read fastpath fixes, or build-tag changes.
 
-Use `gc beads-doltlite build bd --install --no-restart` only after the
+Use `gc beads-doltlite build bd --install --no-restart` to install the pinned
+released `bd-doltlite` binary. Pass `--build-bd-from-source` only after the
 beads-doltlite source or bd link inputs change.
 
 Use `gc beads-doltlite build client --no-restart` only when refreshing the
@@ -22,6 +23,11 @@ pinned DoltLite release library into the pack runtime cache when needed. Pass
 Likewise, local source checkouts are preferred, but the command can fetch
 default Gas City and beads-doltlite sources into the pack runtime cache on a
 fresh machine.
+
+The `bd` target defaults to the pinned released `bd-doltlite` binary for the
+current platform and verifies it against the release `checksums.txt`. Pass
+`--build-bd-from-source`, `--bd-source`, or set `GC_DOLTLITE_BUILD_BD_FROM_SOURCE=1`
+when you need a source build.
 
 Pass `--skip-local-source`, or set `GC_DOLTLITE_SKIP_LOCAL_SOURCE=1`, to skip
 automatic local source checkout discovery. Explicit `--gc-source`, `--bd-source`,

@@ -32,6 +32,9 @@ Options:
                      Skip automatic local source checkout discovery and fetch
                      the default remote source unless explicit source paths are
                      provided. Alias: --no-local-source.
+  --build-bd-from-source
+                     Build bd from source instead of installing the released
+                     bd-doltlite binary.
   --skip-local-lib  Skip automatic local libdoltlite discovery and use the
                      pinned DoltLite release library unless --lib or
                      DOLTLITE_LIB/GC_DOLTLITE_LIB is provided.
@@ -72,6 +75,8 @@ Environment overrides:
   GC_DOLTLITE_BUILD_DETAILS_DIR
   GC_DOLTLITE_VERSION
   GC_DOLTLITE_DOWNLOAD_BASE
+  GC_DOLTLITE_BD_RELEASE_VERSION, GC_DOLTLITE_BD_RELEASE_BASE
+  GC_DOLTLITE_BUILD_BD_FROM_SOURCE
   GC_DOLTLITE_SKIP_LOCAL_SOURCE
   GC_DOLTLITE_SKIP_LOCAL_LIB
   GC_DOLTLITE_GASCITY_REPO, GC_DOLTLITE_GASCITY_REF
@@ -138,6 +143,13 @@ host_arch() {
   esac
 }
 
+bd_release_platform() {
+  case "$(uname -s):$(uname -m)" in
+    Linux:x86_64|Linux:amd64) echo "linux-amd64" ;;
+    *) die "unsupported OS/architecture for bd-doltlite release download: $(uname -s)/$(uname -m); use --build-bd-from-source" ;;
+  esac
+}
+
 download_file() {
   local url="$1"
   local dest="$2"
@@ -172,6 +184,35 @@ PY
     return 0
   fi
   die "python3 is required to download DoltLite release artifacts"
+}
+
+verify_checksum_file() {
+  local checksums="$1"
+  local file="$2"
+  local name
+  name="$(basename "$file")"
+  python3 - "$checksums" "$file" "$name" <<'PY'
+import hashlib
+import sys
+
+checksums, path, name = sys.argv[1], sys.argv[2], sys.argv[3]
+expected = None
+with open(checksums, "r", encoding="utf-8") as f:
+    for line in f:
+        parts = line.strip().split()
+        if len(parts) >= 2 and parts[1].lstrip("*") == name:
+            expected = parts[0].lower()
+            break
+if not expected:
+    raise SystemExit(f"no checksum entry for {name} in {checksums}")
+h = hashlib.sha256()
+with open(path, "rb") as f:
+    for chunk in iter(lambda: f.read(1024 * 1024), b""):
+        h.update(chunk)
+actual = h.hexdigest().lower()
+if actual != expected:
+    raise SystemExit(f"checksum mismatch for {name}: got {actual}, want {expected}")
+PY
 }
 
 extract_zip_strip_one() {
@@ -223,6 +264,32 @@ ensure_doltlite_release_lib() {
     die "downloaded DoltLite library is missing doltlite.h or libdoltlite: $dest"
   fi
   echo "$dest"
+}
+
+ensure_bd_release_binary() {
+  local version platform state_dir asset checksum_name base bin_path checksum_path asset_url checksum_url
+  version="${GC_DOLTLITE_BD_RELEASE_VERSION:-v1.0.5-doltlite.1}"
+  platform="$(bd_release_platform)"
+  state_dir="$(pack_state_dir)"
+  asset="bd-doltlite-${platform}"
+  checksum_name="checksums.txt"
+  bin_path="$state_dir/bd-release/$version/$asset"
+  checksum_path="$state_dir/bd-release/$version/$checksum_name"
+  base="${GC_DOLTLITE_BD_RELEASE_BASE:-https://github.com/duncan4123/beads-doltlite/releases/download/${version}}"
+  asset_url="${base%/}/$asset"
+  checksum_url="${base%/}/$checksum_name"
+
+  if [ ! -s "$bin_path" ]; then
+    echo "downloading bd DoltLite release binary: $asset_url" >&2
+    download_file "$asset_url" "$bin_path"
+  fi
+  if [ ! -s "$checksum_path" ]; then
+    echo "downloading bd DoltLite release checksums: $checksum_url" >&2
+    download_file "$checksum_url" "$checksum_path"
+  fi
+  verify_checksum_file "$checksum_path" "$bin_path"
+  chmod +x "$bin_path"
+  echo "$bin_path"
 }
 
 ensure_git_source() {
@@ -954,6 +1021,26 @@ build_gc() {
 }
 
 build_bd() {
+  if [ "$BUILD_BD_FROM_SOURCE" != "1" ] && [ -z "$BD_SRC" ]; then
+    local release_bin installed_to date version commit
+    release_bin="$(ensure_bd_release_binary)"
+    version="${GC_DOLTLITE_BD_RELEASE_VERSION:-v1.0.5-doltlite.1}"
+    commit="${BD_COMMIT:-02bc3e532a54683bac4df3f78578511fe3cf931f}"
+    date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "using released bd DoltLite binary: $release_bin"
+    verify_linked_binary "$release_bin" "bd"
+    installed_to=""
+    if [ "$INSTALL_BUILT" = "1" ]; then
+      if [ -z "$BD_INSTALL" ]; then
+        BD_INSTALL="$(default_install_path bd)"
+      fi
+      install_binary "$release_bin" "$BD_INSTALL" "bd"
+      installed_to="$LAST_INSTALLED_PATH"
+    fi
+    write_build_details "bd" "release:$version" "$release_bin" "$installed_to" "$commit" "$version" "main" "libsqlite3" "$date"
+    return 0
+  fi
+
   if [ -z "$BD_SRC" ] && [ "$SKIP_LOCAL_SOURCE" != "1" ]; then
     BD_SRC="$(find_bd_source || true)"
   fi
@@ -1092,6 +1179,7 @@ RESTART_AFTER_INSTALL="${GC_DOLTLITE_RESTART_AFTER_INSTALL:-1}"
 RESTART_WAIT_SECONDS="${GC_DOLTLITE_RESTART_WAIT_SECONDS:-180}"
 SKIP_LOCAL_SOURCE="${GC_DOLTLITE_SKIP_LOCAL_SOURCE:-0}"
 SKIP_LOCAL_LIB="${GC_DOLTLITE_SKIP_LOCAL_LIB:-0}"
+BUILD_BD_FROM_SOURCE="${GC_DOLTLITE_BUILD_BD_FROM_SOURCE:-0}"
 GC_SERVICES_STOPPED_FOR_BUILD=0
 LAST_INSTALLED_PATH=""
 VERSION="${GC_VERSION:-dev}"
@@ -1145,6 +1233,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --use-local-source)
       SKIP_LOCAL_SOURCE=0
+      shift
+      ;;
+    --build-bd-from-source)
+      BUILD_BD_FROM_SOURCE=1
       shift
       ;;
     --skip-local-lib|--no-local-lib)
