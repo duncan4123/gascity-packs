@@ -230,9 +230,9 @@ schema = 1
   [[pack.release]]
     version = "0.1.0"
     ref = "main"
-    commit = "c2982b75acd88069154b848c9de81a1fda1d2d38"
-    hash = "sha256:e8598c3ca4dd0b88d72b3c62d760eafc6803f17f71798e0c8af3dcb26974c760"
-    description = "Beads DoltLite pack release with verified prebuilt bd install."
+    commit = "6775c8f68fa85c0257329a72f4fc266b1ffa0b43"
+    hash = "sha256:fcf9438b0ee905e6c5098bbf870ebb693840a46dc98a4c1012eb9c64d980e439"
+    description = "Beads DoltLite pack release with pinned libdoltlite wrapper install."
 
 [[pack]]
   name = "beads-doltlite-init"
