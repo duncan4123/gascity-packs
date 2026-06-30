@@ -233,3 +233,16 @@ schema = 1
     commit = "dec799f081103a020ca63a8e5928285028d307d9"
     hash = "sha256:8a2f744764735784b09eb2683de3b6750e8036d884bbc6de6f0d5210537edd22"
     description = "Initial beads-doltlite pack release on main."
+
+[[pack]]
+  name = "beads-doltlite-init"
+  description = "Minimal DoltLite backend init support pack for Gas City."
+  source = "https://github.com/duncan4123/gascity-packs/tree/main/beads-doltlite-init"
+  source_kind = "git"
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "main"
+    commit = "732f78c96890d95e1a11277ebc38e4766213b181"
+    hash = "sha256:98104b77c6a3ddc0aa748228ddb30a4479276ae08981ee19723b7d8e4d54cabb"
+    description = "Initial beads-doltlite-init pack release on main."
