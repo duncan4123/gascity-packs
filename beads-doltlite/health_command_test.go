@@ -31,7 +31,7 @@ func TestDoltliteBuildScriptBuildsGCWithNativeReadTag(t *testing.T) {
 		`ensure_gc_release_binary`,
 		`gascity-doltlite_${version#v}_${platform}.tar.gz`,
 		`gascity_doltlite_edge_linux_amd64.tar.gz`,
-		`v0.0.0-doltlite.workflow.1`,
+		`v0.0.0-doltlite.workflow.3`,
 		`https://github.com/duncan4123/gascity/releases/download/${version}`,
 		`DoltLite-linked gc release unavailable; falling back to source build`,
 		`download_file "$asset_url" "$archive_path" || return $?`,
