@@ -610,37 +610,30 @@ ensure_bd_runtime_config_value() {
 }
 
 ensure_doltlite_runtime_config_value() {
-    local db_path="$1"
+    local dir="$1"
     local key="$2"
     local value="$3"
     local key_sql value_sql
-    [ -n "$db_path" ] || return 0
+    [ -n "$dir" ] || return 0
     [ -n "$value" ] || return 0
-    [ -f "$db_path" ] || die "missing doltlite database: $db_path"
-    command -v sqlite3 >/dev/null 2>&1 || die "sqlite3 is required to configure doltlite runtime state"
     validate_bd_runtime_config_value "$key" "$value"
 
     key_sql=$(printf '%s' "$key" | sed "s/'/''/g")
     value_sql=$(printf '%s' "$value" | sed "s/'/''/g")
-    sqlite3 "$db_path" <<SQL ||
-.parameter init
-.parameter set @gc_config_key '$key_sql'
-.parameter set @gc_config_value '$value_sql'
-REPLACE INTO config ("key", value) VALUES (@gc_config_key, @gc_config_value);
-SQL
-        die "failed to set doltlite runtime $key for $db_path"
+    run_bd_doltlite "$dir" sql "REPLACE INTO config (\"key\", value) VALUES ('$key_sql', '$value_sql')" >/dev/null ||
+        die "failed to set doltlite runtime $key for $dir"
 }
 
 ensure_doltlite_runtime_issue_prefix() {
-    local db_path="$1"
+    local dir="$1"
     local prefix="$2"
-    ensure_doltlite_runtime_config_value "$db_path" "issue_prefix" "$prefix"
+    ensure_doltlite_runtime_config_value "$dir" "issue_prefix" "$prefix"
 }
 
 ensure_doltlite_runtime_custom_types() {
-    local db_path="$1"
+    local dir="$1"
     local types="$2"
-    ensure_doltlite_runtime_config_value "$db_path" "types.custom" "$types"
+    ensure_doltlite_runtime_config_value "$dir" "types.custom" "$types"
 }
 
 bd_runtime_schema_ready() {
@@ -2728,6 +2721,11 @@ op_init() {
         validate_bd_runtime_config_value "types.custom" "$custom_types"
         ensure_beads_dir_permissions "$dir"
         mkdir -p "$dir/.beads/doltlite"
+        if [ -f "$dir/.beads/doltlite/$database.db" ]; then
+            ensure_doltlite_runtime_custom_types "$dir" "$custom_types"
+            ensure_doltlite_runtime_issue_prefix "$dir" "$prefix"
+            ensure_project_identity "$dir"
+        fi
         already_ready=false
         if doltlite_bd_schema_ready "$dir" "$prefix"; then
             already_ready=true
@@ -2738,6 +2736,9 @@ op_init() {
             run_doltlite_existing_db_maintenance "$dir"
         fi
         ensure_types_custom_in_yaml "$dir" "$custom_types"
+        ensure_doltlite_runtime_custom_types "$dir" "$custom_types"
+        ensure_doltlite_runtime_issue_prefix "$dir" "$prefix"
+        ensure_project_identity "$dir"
         exit 0
     fi
 

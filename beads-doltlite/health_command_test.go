@@ -312,6 +312,8 @@ func TestDoltlitePackEmbedsHQAndRigBrowserExample(t *testing.T) {
 		"BEADS_BACKEND",
 		`BEADS_BACKEND="${GC_BEADS_BACKEND:-${BEADS_BACKEND:-doltlite}}"`,
 		"init --backend doltlite",
+		`ensure_doltlite_runtime_custom_types "$dir" "$custom_types"`,
+		`ensure_doltlite_runtime_issue_prefix "$dir" "$prefix"`,
 	} {
 		if !strings.Contains(string(provider), required) {
 			t.Fatalf("embedded provider missing %q", required)
