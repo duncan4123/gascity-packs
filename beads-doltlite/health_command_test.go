@@ -310,6 +310,7 @@ func TestDoltlitePackEmbedsHQAndRigBrowserExample(t *testing.T) {
 		"gc-beads-bd",
 		"is_doltlite_backend",
 		"BEADS_BACKEND",
+		`BEADS_BACKEND="${GC_BEADS_BACKEND:-${BEADS_BACKEND:-doltlite}}"`,
 		"init --backend doltlite",
 	} {
 		if !strings.Contains(string(provider), required) {

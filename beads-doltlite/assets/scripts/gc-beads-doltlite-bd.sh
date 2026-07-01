@@ -12,7 +12,7 @@
 #   GC_CITY_RUNTIME_DIR — canonical hidden runtime root (optional)
 #   GC_PACK_STATE_DIR — canonical pack runtime root for dolt (optional)
 #   GC_DOLT       — set to "skip" to no-op all operations (exit 2)
-#   GC_BEADS_BACKEND — "dolt" (default) or "doltlite"
+#   GC_BEADS_BACKEND — "doltlite" for this provider
 #   GC_DOLT_HOST  — dolt server host (empty = managed local server bound to
 #                   127.0.0.1; 0.0.0.0 = managed local server exposed on all
 #                   interfaces; anything else = remote server GC won't manage)
@@ -42,7 +42,7 @@ DOLT_LOGLEVEL="${GC_DOLT_LOGLEVEL:-warning}"
 LSOF_TIMEOUT_SECONDS="${GC_LSOF_TIMEOUT_SECONDS:-2}"
 CONCURRENT_START_READY_TIMEOUT_MS="${GC_DOLT_CONCURRENT_START_READY_TIMEOUT_MS:-}"
 LOCK_RELEASE_TIMEOUT_MS="${GC_DOLT_LOCK_RELEASE_TIMEOUT_MS:-60000}"
-BEADS_BACKEND="${GC_BEADS_BACKEND:-${BEADS_BACKEND:-dolt}}"
+BEADS_BACKEND="${GC_BEADS_BACKEND:-${BEADS_BACKEND:-doltlite}}"
 
 # Probed once in the parent shell — dolt_data_lock_holder runs in $(...)
 # subshells, so a lazily-set memo there would never persist. Without flock
