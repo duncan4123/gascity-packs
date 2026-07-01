@@ -8,12 +8,19 @@ this city that own the release path:
 - `gascity`: the source repo for `gc init` and the clean-init smoke script.
 - `gascity-packs`: the pack repo that ships this beads-doltlite installer.
 
-The workflow treats every failed release check as product work, not as a local
-repair. Fixes must be made in a new jj revision in the owning rig, described
-before editing, and exported through an explicit bookmark. The release is not
-complete until the final step runs the clean `gc init` smoke script with the
-same DoltLite library, `bd` release, `gc` release, and gascity-packs ref that
-users will receive.
+The workflow covers two install paths:
+
+- local developer install, where `bd` and `gc` are built from local source
+  against the selected local libdoltlite;
+- clean user install, where `gc init` downloads released artifacts and a
+  remote gascity-packs ref without local source discovery.
+
+The workflow treats every failed check as product work, not as a local repair.
+Fixes must be made in a new jj revision in the owning rig, described before
+editing, and exported through an explicit bookmark. The release is not complete
+until the final step runs the clean `gc init` smoke script with the same
+DoltLite library, `bd` release, `gc` release, and gascity-packs ref that users
+will receive.
 """
 formula = "beads-doltlite-release-smoke"
 version = 1
@@ -91,6 +98,35 @@ default = "refs/heads/main"
 [vars.gascity_packs_source]
 description = "Pack source URL expected in the generated root pack.toml."
 default = "https://github.com/duncan4123/gascity-packs/tree/main/beads-doltlite"
+
+[vars.install_mode]
+description = "Install path coverage to run: release, local, or both."
+default = "both"
+enum = ["release", "local", "both"]
+
+[vars.local_install_city]
+description = "Existing developer city used for the local source install path."
+default = "/data/projects/doltlite-gascity"
+
+[vars.local_beads_doltlite_src]
+description = "Local beads-doltlite checkout used to build and install bd for devs."
+default = "/data/projects/doltlite-gascity/beads-doltlite"
+
+[vars.local_gascity_src]
+description = "Local gascity checkout used to build and install gc for devs."
+default = "/data/projects/doltlite-gascity/gascity"
+
+[vars.local_gascity_packs_src]
+description = "Local gascity-packs checkout whose beads-doltlite pack is under test."
+default = "/data/projects/doltlite-gascity/gascity-packs"
+
+[vars.local_doltlite_lib]
+description = "Local libdoltlite build directory used by developer installs."
+default = "/data/projects/doltlite/build"
+
+[vars.local_restart_after_install]
+description = "Set to 1 only when the local dev install should restart the supervisor."
+default = "0"
 
 [vars.release_bookmark]
 description = "jj bookmark to set on each source revision that fixes a release blocker."
@@ -177,6 +213,7 @@ description = """
 Verify the release matrix that the final smoke test will use:
 
 ```bash
+printf 'install mode:      %s\n' "{{install_mode}}"
 printf 'DoltLite library: %s\n' "{{doltlite_version}}"
 printf 'bd release:       %s\n' "{{bd_release_version}}"
 printf 'gc release:       %s\n' "{{gc_release_version}}"
@@ -195,18 +232,83 @@ Do not release if any of these are unknown:
 """
 
 [[steps]]
+id = "local-dev-install"
+title = "Run the local developer install path"
+needs = ["verify-release-inputs"]
+condition = "{{install_mode}} != release"
+metadata = { "gc.run_target" = "gc.run-operator", "gc.target_rigs" = "beads-doltlite,gascity,gascity-packs", "gc.local_dev_install" = "true" }
+description = """
+Run this step when validating the developer path. It deliberately uses local
+source and local libdoltlite, and it must stay separate from the final clean
+user smoke test.
+
+```bash
+test -d "{{local_install_city}}"
+test -d "{{local_beads_doltlite_src}}"
+test -d "{{local_gascity_src}}"
+test -d "{{local_gascity_packs_src}}/beads-doltlite"
+test -d "{{local_doltlite_lib}}"
+
+cd "{{local_install_city}}"
+GASCITY_SRC="{{local_gascity_src}}" \
+GC_GASCITY_SRC="{{local_gascity_src}}" \
+BEADS_DOLTLITE_SRC="{{local_beads_doltlite_src}}" \
+GC_BEADS_DOLTLITE_SRC="{{local_beads_doltlite_src}}" \
+GASCITY_PACKS_SRC="{{local_gascity_packs_src}}" \
+GC_GASCITY_PACKS_SRC="{{local_gascity_packs_src}}" \
+DOLTLITE_LIB="{{local_doltlite_lib}}" \
+GC_DOLTLITE_LIB="{{local_doltlite_lib}}" \
+GC_DOLTLITE_VERSION="{{doltlite_version}}" \
+gc beads-doltlite build bd --install --no-restart
+
+cd "{{local_install_city}}"
+GASCITY_SRC="{{local_gascity_src}}" \
+GC_GASCITY_SRC="{{local_gascity_src}}" \
+BEADS_DOLTLITE_SRC="{{local_beads_doltlite_src}}" \
+GC_BEADS_DOLTLITE_SRC="{{local_beads_doltlite_src}}" \
+GASCITY_PACKS_SRC="{{local_gascity_packs_src}}" \
+GC_GASCITY_PACKS_SRC="{{local_gascity_packs_src}}" \
+DOLTLITE_LIB="{{local_doltlite_lib}}" \
+GC_DOLTLITE_LIB="{{local_doltlite_lib}}" \
+GC_DOLTLITE_VERSION="{{doltlite_version}}" \
+gc beads-doltlite build gc --install --no-restart
+```
+
+Pass criteria for local dev installs:
+- `last-build-bd.json` and `last-build-gc.json` under
+  `{{local_install_city}}/.gc/runtime/packs/beads-doltlite/` identify local
+  source paths, not release downloads.
+- The installed `bd` and installed `gc` both use the same libdoltlite from
+  `{{local_doltlite_lib}}`.
+- `bd create` works in `{{local_install_city}}` without the GH#2950
+  `beads.role` warning.
+- DB-backed `issue_prefix` and `types.custom` are present after init/repair.
+- If `{{local_restart_after_install}}` is `1`, restart the supervisor only
+  after both binaries have been installed successfully.
+
+This step proves the dev loop. It does not prove the release path; the final
+clean smoke test below must still pass with local discovery disabled.
+"""
+
+[[steps]]
 id = "audit-install-gotchas"
 title = "Audit the known clean-init gotchas"
 needs = ["verify-release-inputs"]
 metadata = { "gc.run_target" = "gc.run-operator", "gc.target_rigs" = "gascity,gascity-packs" }
 description = """
-Before the final smoke, inspect the install path for the issues that have
-already broken clean DoltLite users:
+Before the final smoke, inspect both install paths for the issues that have
+already broken DoltLite users:
 
+- When `{{install_mode}}` is `local` or `both`, complete
+  `local-dev-install` before this audit.
+- Local developer install may use local source and local libdoltlite only when
+  explicitly configured through the local variables in this formula.
 - Fresh `gc init` must skip automatic local source and local libdoltlite
-  discovery unless explicitly overridden.
+  discovery unless explicitly overridden for developer use.
 - The `bd` release and the installed `gc` must use the same DoltLite library
   version, `{{doltlite_version}}`.
+- The local `bd` build and local `gc` build must use the same libdoltlite
+  directory, `{{local_doltlite_lib}}`.
 - The pack must default to a valid latest DoltLite-linked `gc` release when no
   explicit `GC_DOLTLITE_GC_RELEASE_VERSION` is provided.
 - Missing release assets and missing checksum entries must fail before a bogus
@@ -277,6 +379,7 @@ KEEP_GC_INIT_SMOKE="{{keep_smoke_city}}" \
 
 Pass criteria:
 - the script ends with a successful clean `gc init`;
+- local source and local libdoltlite discovery are disabled for this smoke;
 - generated `pack.toml` and `packs.lock` match the gascity-packs inputs above;
 - installed `bd` comes from `{{bd_release_version}}`;
 - installed `gc` comes from `{{gc_release_version}}`;
