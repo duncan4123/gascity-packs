@@ -194,7 +194,7 @@ except Exception:
         pass
     raise
 PY
-    return 0
+    return $?
   fi
   die "python3 is required to download DoltLite release artifacts"
 }
@@ -363,14 +363,14 @@ ensure_gc_release_binary() {
 
   if [ ! -s "$archive_path" ]; then
     echo "downloading DoltLite-linked gc release archive: $asset_url" >&2
-    download_file "$asset_url" "$archive_path"
+    download_file "$asset_url" "$archive_path" || return $?
   fi
   if [ ! -s "$checksum_path" ]; then
     echo "downloading DoltLite-linked gc release checksums: $checksum_url" >&2
-    download_file "$checksum_url" "$checksum_path"
+    download_file "$checksum_url" "$checksum_path" || return $?
   fi
-  verify_checksum_file "$checksum_path" "$archive_path"
-  extract_tar_binary "$archive_path" "$binary_name" "$bin_path"
+  verify_checksum_file "$checksum_path" "$archive_path" || return $?
+  extract_tar_binary "$archive_path" "$binary_name" "$bin_path" || return $?
   echo "$bin_path"
 }
 
