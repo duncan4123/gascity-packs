@@ -772,11 +772,41 @@ install_binary() {
   fi
 }
 
+install_doltlite_runtime_lib() {
+  local dest_dir="$1"
+  local version="${GC_DOLTLITE_VERSION:-0.11.23}"
+  local lib_dest="$dest_dir/bd.doltlite-lib-$version"
+  local tmp="$dest_dir/.bd.doltlite-lib.$$"
+
+  rm -rf "$tmp"
+  mkdir -p "$tmp"
+  if ! cp -P "$DOLTLITE_LIB"/libdoltlite* "$tmp"/; then
+    rm -rf "$tmp"
+    die "installing bd wrapper libdoltlite files failed from $DOLTLITE_LIB"
+  fi
+  if [ -r "$DOLTLITE_LIB/doltlite.h" ]; then
+    cp -f "$DOLTLITE_LIB/doltlite.h" "$tmp/" || {
+      rm -rf "$tmp"
+      die "installing bd wrapper doltlite.h failed from $DOLTLITE_LIB"
+    }
+  fi
+  if ! has_doltlite_lib "$tmp"; then
+    rm -rf "$tmp"
+    die "bd wrapper libdoltlite copy is missing libdoltlite files: $tmp"
+  fi
+  rm -rf "$lib_dest"
+  if ! mv -f "$tmp" "$lib_dest"; then
+    rm -rf "$tmp"
+    die "installing bd wrapper libdoltlite directory failed: $lib_dest"
+  fi
+  echo "$lib_dest"
+}
+
 install_bd_release_wrapper() {
   local source="$1"
   local dest="$2"
   local name="bd"
-  local requested_dest dest_dir real_dest wrapper_tmp resolved current
+  local requested_dest dest_dir real_dest wrapper_tmp resolved current lib_dest
 
   requested_dest="$dest"
   if [ -L "$dest" ]; then
@@ -791,13 +821,14 @@ install_bd_release_wrapper() {
   mkdir -p "$dest_dir"
   real_dest="$dest.doltlite-release-${GC_DOLTLITE_BD_RELEASE_VERSION:-v1.0.5-doltlite.1}"
   install_binary "$source" "$real_dest" "$name"
+  lib_dest="$(install_doltlite_runtime_lib "$dest_dir")"
 
   wrapper_tmp="$dest_dir/.${name}.wrapper.$$"
   rm -f "$wrapper_tmp"
   cat >"$wrapper_tmp" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-lib_dir='${DOLTLITE_LIB}'
+lib_dir='${lib_dest}'
 real_bd='${real_dest}'
 export LD_LIBRARY_PATH="\${lib_dir}\${LD_LIBRARY_PATH:+:\${LD_LIBRARY_PATH}}"
 exec "\${real_bd}" "\$@"

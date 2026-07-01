@@ -72,6 +72,26 @@ func TestDoltliteBuildScriptBuildsGCWithNativeReadTag(t *testing.T) {
 	}
 }
 
+func TestDoltliteBuildScriptInstallsStableBDWrapperLibDir(t *testing.T) {
+	script := filepath.Join(repoRootForTest(t), "commands", "build", "run.sh")
+	text := string(mustReadFile(t, script))
+
+	for _, required := range []string{
+		`install_doltlite_runtime_lib()`,
+		`local lib_dest="$dest_dir/bd.doltlite-lib-$version"`,
+		`cp -P "$DOLTLITE_LIB"/libdoltlite* "$tmp"/`,
+		`lib_dest="$(install_doltlite_runtime_lib "$dest_dir")"`,
+		`lib_dir='${lib_dest}'`,
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("build script missing stable bd wrapper libdir behavior %q", required)
+		}
+	}
+	if strings.Contains(text, "lib_dir='${DOLTLITE_LIB}'") {
+		t.Fatalf("bd wrapper still embeds install-time DOLTLITE_LIB path")
+	}
+}
+
 func TestDoltliteBuildHelpExplainsTargetSelection(t *testing.T) {
 	root := repoRootForTest(t)
 	script := string(mustReadFile(t, filepath.Join(root, "commands", "build", "run.sh")))
