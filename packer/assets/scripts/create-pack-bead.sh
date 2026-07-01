@@ -1,6 +1,12 @@
 #!/bin/sh
 set -eu
 
+if [ -n "${TMPDIR:-}" ]; then
+    if [ ! -d "$TMPDIR" ] || [ ! -w "$TMPDIR" ]; then
+        unset TMPDIR
+    fi
+fi
+
 usage() {
     cat >&2 <<'EOF'
 usage: create-pack-bead.sh --pack <pack> --title <title> [options]
@@ -18,6 +24,10 @@ Options:
   --acceptance <text>        Acceptance criteria
   --parent <bead-id>         Parent/router bead
   --target <agent>           Sling target (default: <rig>/packer.packsmith)
+  --finding-id <id>          Source pack-improvement finding id
+  --findings-path <path>     Source pack-improvement findings artifact path
+  --findings-schema <schema> Source findings artifact schema id
+  --packer-mode <mode>       Packer mode: off, self-review, handoff, self-review-handoff
   --dry-run                  Print commands without creating or slinging
 EOF
 }
@@ -32,7 +42,12 @@ DESCRIPTION_FILE=""
 ACCEPTANCE=""
 PARENT=""
 TARGET=""
+FINDING_ID=""
+FINDINGS_PATH=""
+FINDINGS_SCHEMA=""
+PACKER_MODE=""
 DRY_RUN=""
+PACKER_MODE_VALUES="off self-review handoff self-review-handoff"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -112,6 +127,38 @@ while [ "$#" -gt 0 ]; do
             TARGET="${1#--target=}"
             shift
             ;;
+        --finding-id)
+            FINDING_ID="${2:-}"
+            shift 2
+            ;;
+        --finding-id=*)
+            FINDING_ID="${1#--finding-id=}"
+            shift
+            ;;
+        --findings-path)
+            FINDINGS_PATH="${2:-}"
+            shift 2
+            ;;
+        --findings-path=*)
+            FINDINGS_PATH="${1#--findings-path=}"
+            shift
+            ;;
+        --findings-schema)
+            FINDINGS_SCHEMA="${2:-}"
+            shift 2
+            ;;
+        --findings-schema=*)
+            FINDINGS_SCHEMA="${1#--findings-schema=}"
+            shift
+            ;;
+        --packer-mode)
+            PACKER_MODE="${2:-}"
+            shift 2
+            ;;
+        --packer-mode=*)
+            PACKER_MODE="${1#--packer-mode=}"
+            shift
+            ;;
         --dry-run)
             DRY_RUN=1
             shift
@@ -153,8 +200,23 @@ if [ -n "$WORKSPACE" ] && [ -n "$TASK_WORKSPACE" ]; then
     echo "create-pack-bead: --workspace and --task-workspace are mutually exclusive" >&2
     exit 2
 fi
+if [ -n "$PACKER_MODE" ]; then
+    case " $PACKER_MODE_VALUES " in
+        *" $PACKER_MODE "*) ;;
+        *)
+        echo "create-pack-bead: invalid --packer-mode: $PACKER_MODE (expected one of: $PACKER_MODE_VALUES)" >&2
+        exit 2
+        ;;
+    esac
+fi
+if [ -z "$FINDINGS_SCHEMA" ] && { [ -n "$FINDING_ID" ] || [ -n "$FINDINGS_PATH" ]; }; then
+    FINDINGS_SCHEMA="gc.packer.pack-improvement-findings.v1"
+fi
 
 RIG_NAME="${GC_RIG:-}"
+if [ -z "$RIG_NAME" ] && [ -n "${GC_RIG_ROOT:-}" ]; then
+    RIG_NAME=$(basename "$GC_RIG_ROOT")
+fi
 if [ -z "$RIG_NAME" ]; then
     RIG_NAME=$(basename "$(pwd -P)")
 fi
@@ -164,11 +226,21 @@ fi
 
 metadata_file=$(mktemp)
 trap 'rm -f "$metadata_file"' EXIT HUP INT TERM
-python3 - "$metadata_file" "$PACK" "$PACK_ROOT" "$TARGET" "$WORKSPACE" <<'PY'
+python3 - "$metadata_file" "$PACK" "$PACK_ROOT" "$TARGET" "$WORKSPACE" "$FINDING_ID" "$FINDINGS_PATH" "$FINDINGS_SCHEMA" "$PACKER_MODE" <<'PY'
 import json
 import sys
 
-path, pack, pack_root, target, workspace = sys.argv[1:6]
+(
+    path,
+    pack,
+    pack_root,
+    target,
+    workspace,
+    finding_id,
+    findings_path,
+    findings_schema,
+    packer_mode,
+) = sys.argv[1:10]
 metadata = {
     "gc.pack": pack,
     "gc.pack_root": pack_root,
@@ -177,6 +249,14 @@ metadata = {
 }
 if workspace:
     metadata["gc.pack_workspace"] = workspace
+if finding_id:
+    metadata["gc.packer.finding_id"] = finding_id
+if findings_path:
+    metadata["gc.packer.findings_path"] = findings_path
+if findings_schema:
+    metadata["gc.packer.findings_schema"] = findings_schema
+if packer_mode:
+    metadata["gc.packer.mode"] = packer_mode
 with open(path, "w", encoding="utf-8") as f:
     json.dump(metadata, f, sort_keys=True)
 PY
@@ -201,7 +281,7 @@ if [ -n "$DRY_RUN" ]; then
     if [ -n "$TASK_WORKSPACE" ]; then
         printf 'bd update <child-bead-id> --set-metadata gc.pack_workspace=<child-bead-id>-<title-slug>\n'
     fi
-    printf 'gc sling %s <child-bead-id> --on mol-packer-work --nudge\n' "$TARGET"
+    printf 'gc sling %s <child-bead-id> --nudge\n' "$TARGET"
     printf 'metadata: '
     cat "$metadata_file"
     printf '\n'
@@ -246,7 +326,7 @@ PY
 )
     bd update "$child_id" --set-metadata "gc.pack_workspace=$task_workspace"
 fi
-gc sling "$TARGET" "$child_id" --on mol-packer-work --nudge
+gc sling "$TARGET" "$child_id" --nudge
 
 if [ -n "$PARENT" ]; then
     bd note "$PARENT" "Created pack-routed child $child_id for pack $PACK -> $TARGET using mol-packer-work."

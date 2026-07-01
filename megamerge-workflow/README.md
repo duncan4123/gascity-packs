@@ -1,6 +1,6 @@
 # megamerge-workflow Pack
 
-Workflow support for Gas City megamerge repairs.
+Workflow support for the Gas City megamerger agent's megamerge repairs.
 
 This pack teaches agents how to use Jujutsu's simultaneous-edits pattern for
 multi-line repair work:
@@ -27,6 +27,5 @@ that head included before repairing or validating.
 ## Checks
 
 ```bash
-gc formula show mol-megamerge-work
-gc prime megamerge --strict
+gc lint megamerge-workflow
 ```

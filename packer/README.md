@@ -13,8 +13,8 @@ one pack at a time.
   `gascity-packs`, the default value is the same as `gc.pack`.
 - `work_dir` is a neutral anchor for the shared pool template. GC rewrites the
   concrete session work dir from bead metadata before `pre_start` runs.
-- Triggered pool work defaults to the pack workspace itself. Set
-  `gc.pack_workspace` only when a bead needs a named workspace below that pack,
+- Triggered pool work defaults to the pack-named integration workspace. Set
+  `gc.pack_workspace` only when a bead needs a child workspace below that pack,
   such as a task-specific workspace.
 - `pre_start` reads the trigger bead metadata, delegates workspace creation to
   `jjw`, then sparse-checks out the target pack directory plus shared
@@ -36,21 +36,26 @@ Workflow diagrams:
 ### 1. Packsmith work
 
 Packsmiths run `mol-packer-work` from sparse jj workspaces. Each logical change
-passes through `mol-jj-change`. When the bead is complete, `mol-packer-complete`
-rebases onto local `main@`, moves the `main` bookmark, verifies, and leaves a
-clean working copy.
+passes through `mol-jj-change`. The pack-named workspace
+`.gc/workspaces/<rig>/packs/<pack>` is the integration lane for that pack.
+Child workspaces under it land back into the pack workspace. When the pack
+workspace is complete, `mol-packer-complete` integrates the pack work onto
+`default@` so it can be tested in a running Gas City.
+
+Rebase onto `default@` only when the bead, formula step, or situation requires
+it. Do not rebase after every trivial change by default.
 
 ### 2. Local integration test
 
-After packsmiths land work on `main`, move the rig-root `default@` workspace to
-the integrated head so the combined local state can be tested. `default@` is the
-local integration sandbox, not the release target.
+After packsmiths integrate work onto `default@`, run Gas City from the rig-root
+default workspace and have agents use the pack. `default@` is the local
+integration and testing head, not the release target.
 
 ### 3. Release to GitHub
 
-The release workflow runs from `default@` after local testing. It fetches,
-rebases local `main` onto `main@origin` if needed, merges the pack line, moves
-`main`, verifies, and pushes. `main@origin` is the live published state.
+The release workflow runs from `default@` after live testing. It fetches,
+rebases local `main` onto `main@origin` if needed, merges the tested `default@`
+state, moves `main`, verifies, and pushes.
 
 See [Workflow overview](docs/diagrams/workflow-overview.md) and
 [Release workflow](docs/diagrams/release-workflow.md) for diagrams.
@@ -64,7 +69,7 @@ each child bead to the shared packsmith pool.
 Typical route shape:
 
 ```bash
-gc sling <pack-agent-target> <child-bead-id> --on mol-packer-work
+gc sling <pack-agent-target> <child-bead-id>
 ```
 
 The child bead should name the target pack in its title and metadata. For the
@@ -81,7 +86,13 @@ GC derives the workspace path from the pack:
 .gc/workspaces/<rig>/packs/<pack>
 ```
 
-The jj bookmark for that workspace uses a flat pack namespace:
+The jj bookmark for the pack-named integration workspace is:
+
+```text
+gc/<pack>
+```
+
+Child workspace bookmarks use a flat pack namespace:
 
 ```text
 gc/<pack>.<workspace>
@@ -90,14 +101,15 @@ gc/<pack>.<workspace>
 Do not use `gc/<pack>/<workspace>`; it conflicts with existing Git refs such as
 `gc/packer`.
 
-For work that needs a named workspace below the pack, add:
+For work that needs a named child workspace below the pack, add:
 
 ```text
 gc.pack_workspace=existing-workspace
 ```
 
 `gc.pack_workspace` is a workspace key under the pack directory. It is not a
-path and must not contain slashes.
+path and must not contain slashes. The child workspace starts from the pack
+integration head when available and lands back into the pack-named workspace.
 
 ## Shared Packsmith Agent
 
@@ -139,7 +151,10 @@ packer/assets/scripts/create-pack-bead.sh \
 
 The helper reuses the pack workspace by default. It writes `gc.pack` /
 `gc.pack_root` metadata, then runs
-`gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work`.
+`gc sling <rig>/packer.packsmith <child-bead-id>`. Do not add
+`--on mol-packer-work`: `packer.packsmith` already declares that formula, and
+`--on` launches through a formula root that does not carry the child bead's pack
+metadata before `pre_start` needs it.
 
 To route work into an explicit named workspace, add:
 
@@ -156,3 +171,73 @@ workspace named from the child bead id and title, add:
 
 When the target does not match the current sparse workspace, stop and report the
 mismatch instead of editing from the wrong checkout.
+
+## Pack `packer_mode` Self-Review
+
+Imported packs can use the packer-provided self-review and handoff formulas
+instead of reimplementing pack routing:
+
+- `mol-packer-self-review` writes structured pack-improvement findings.
+- `mol-packer-improvement-handoff` turns concrete findings into normal
+  `mol-packer-work` beads routed to packsmith.
+
+The shared mode variable is `packer_mode`:
+
+| value | behavior |
+| --- | --- |
+| `off` | do not run packer self-review or handoff behavior |
+| `self-review` | inspect the pack and write findings only |
+| `handoff` | consume existing findings and create packsmith work beads |
+| `self-review-handoff` | write findings, then hand concrete findings to packsmith |
+
+These values are exact. `normal`, `dev`, `self_review`, and other spellings are
+not accepted aliases; use `off` when an imported workflow should behave
+normally without packer review or handoff work.
+
+The top-level `gc.packer.pack-improvement-findings.v1` artifact is the
+canonical handoff contract for imported packs. Individual findings inside the
+artifact use `gc.packer.pack-improvement-finding.v1` so handoff code can route
+claim-sized child beads without treating each finding as a standalone contract.
+
+Findings use this top-level JSON shape:
+
+```json
+{
+  "schema": "gc.packer.pack-improvement-findings.v1",
+  "packer_mode": "self-review",
+  "source": {
+    "pack": "target-pack",
+    "pack_root": "target-pack",
+    "workspace": "optional-source-workspace",
+    "change_id": "optional-source-change-id"
+  },
+  "findings": [
+    {
+      "schema": "gc.packer.pack-improvement-finding.v1",
+      "id": "PKR-001",
+      "severity": "P2",
+      "title": "target-pack: fix concrete pack issue",
+      "pack": "target-pack",
+      "pack_root": "target-pack",
+      "pack_workspace": "optional-child-workspace",
+      "description": "Specific work for packsmith to perform.",
+      "acceptance": "gc lint target-pack passes",
+      "evidence": [
+        {"path": "target-pack/file", "line": 12, "note": "Why this matters."}
+      ]
+    }
+  ]
+}
+```
+
+`pack_workspace` is optional. Omit it when the follow-up should use the
+pack-named integration workspace; set it only for a named child workspace.
+
+The handoff formula writes `gc.pack`, `gc.pack_root`, `gc.formula`,
+`gc.route_target`, and optional `gc.pack_workspace` only on generated child
+beads. Generated child beads may also carry `gc.packer.finding_id`,
+`gc.packer.findings_path`, `gc.packer.findings_schema`, and `gc.packer.mode`
+when they came from a findings artifact. Its own review and handoff steps use
+`gc.packer.*` metadata plus the `gc.docs.source_*` keys used by
+gascity-jj-base document workflows, so ordinary non-pack workflow steps do not
+inherit pack workdir routing.

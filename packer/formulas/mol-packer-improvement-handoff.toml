@@ -1,0 +1,102 @@
+description = """
+Turn structured pack-improvement findings into pack-routed packsmith beads.
+
+Use this formula after `mol-packer-self-review` or any imported pack workflow
+that emits `gc.packer.pack-improvement-findings.v1`. The handoff creates normal
+`mol-packer-work` child beads with pack metadata, preserving the same route
+contract as `mol-packer-route`.
+
+`packer_mode` controls handoff behavior:
+
+- `off`: do not create packsmith work.
+- `self-review`: report-only mode; do not hand off unless explicitly requested.
+- `handoff`: consume findings and create packsmith work beads.
+- `self-review-handoff`: consume findings produced earlier in the same workflow.
+
+These values are exact. `normal`, `dev`, `self_review`, and other spellings are
+not accepted aliases.
+
+The handoff formula's own steps do not carry `gc.pack`, `gc.pack_root`, or
+`gc.pack_workspace` metadata. Those keys are written only to generated child
+beads so ordinary non-pack workflow steps do not inherit pack workdir routing.
+"""
+formula = "mol-packer-improvement-handoff"
+version = 1
+contract = "graph.v2"
+mode = "handoff"
+
+[vars]
+
+[vars.packer_mode]
+description = "Packer mode. Exact values: off, self-review, handoff, self-review-handoff."
+default = "handoff"
+
+[vars.findings_path]
+description = "Path to the pack-improvement findings JSON artifact."
+default = ""
+
+[vars.parent_bead_id]
+description = "Optional parent bead that receives child handoff notes."
+default = ""
+
+[vars.route_target]
+description = "Packsmith target for generated child beads."
+default = "packer.packsmith"
+
+[[steps]]
+id = "validate-pack-improvement-findings"
+title = "Validate pack-improvement findings"
+metadata = { "gc.run_target" = "gc.run-operator", "gc.packer.mode_key" = "gc.packer.mode,gc.var.packer_mode", "gc.packer.findings_schema" = "gc.packer.pack-improvement-findings.v1", "gc.packer.finding_item_schema" = "gc.packer.pack-improvement-finding.v1", "gc.packer.findings_path_key" = "gc.packer.findings_path,gc.var.findings_path" }
+description = """
+Read the findings artifact and select only actionable pack-improvement
+findings. A handoff candidate must include `id`, `title`, `pack`, `pack_root`,
+`description`, and `acceptance`. `pack_workspace` is optional and must be a
+workspace key, not a filesystem path.
+
+If `packer_mode=off`, stop without creating beads. If `packer_mode=self-review`,
+keep the findings as a report unless the parent workflow explicitly requests a
+handoff. If findings are missing required fields, record the schema issue in
+the parent bead instead of routing ambiguous pack work.
+
+Exit criteria:
+
+- findings schema is confirmed
+- handoff candidates are concrete and claim-sized
+- non-actionable or malformed findings remain in the report
+"""
+
+[[steps]]
+id = "create-pack-work-beads"
+title = "Create packsmith work beads from findings"
+needs = ["validate-pack-improvement-findings"]
+metadata = { "gc.run_target" = "gc.run-operator", "gc.packer.handoff" = "pack-improvement", "gc.packer.handoff_child_formula" = "mol-packer-work", "gc.packer.child_metadata_keys" = "gc.pack,gc.pack_root,gc.formula,gc.route_target", "gc.packer.optional_child_metadata_keys" = "gc.pack_workspace,gc.packer.finding_id,gc.packer.findings_path,gc.packer.findings_schema,gc.packer.mode", "gc.packer.findings_schema" = "gc.packer.pack-improvement-findings.v1", "gc.packer.finding_item_schema" = "gc.packer.pack-improvement-finding.v1" }
+description = """
+For each actionable finding, create a normal pack-routed implementation bead
+with the packer helper:
+
+```bash
+packer/assets/scripts/create-pack-bead.sh \
+  --parent <parent-bead-id> \
+  --pack <finding.pack> \
+  --pack-root <finding.pack_root> \
+  --title "<finding.title>" \
+  --description "<finding.description>" \
+  --acceptance "<finding.acceptance>" \
+  --finding-id <finding.id> \
+  --findings-path <findings-path> \
+  --packer-mode handoff
+```
+
+Add `--workspace <finding.pack_workspace>` only when the finding requests a
+named child workspace. Omit it for the pack-named integration workspace. The
+helper writes `gc.pack`, `gc.pack_root`, `gc.formula=mol-packer-work`,
+`gc.route_target`, and optional `gc.pack_workspace` to the child bead before
+dispatching it to packsmith.
+
+Exit criteria:
+
+- every concrete finding has either a child bead id or an explicit reason it was
+  not routed
+- generated child beads use `mol-packer-work`
+- optional workspace routing is preserved only on child beads
+"""

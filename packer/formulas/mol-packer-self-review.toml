@@ -1,0 +1,129 @@
+description = """
+Review a pack with packer_mode enabled and emit structured pack-improvement findings.
+
+Imported packs can include this formula when they want a packer-provided
+self-review pass without copying pack routing logic. The formula records
+actionable issues as a stable findings artifact. A separate handoff formula can
+turn concrete findings into pack-routed `mol-packer-work` beads.
+
+`packer_mode` controls how an imported workflow uses packer:
+
+- `off`: do not run packer review or handoff behavior.
+- `self-review`: inspect the pack and write findings only.
+- `handoff`: consume existing findings only; no new review pass.
+- `self-review-handoff`: write findings, then hand them to packsmith work.
+
+These values are exact. `normal`, `dev`, `self_review`, and other spellings are
+not accepted aliases.
+
+This formula does not put `gc.pack`, `gc.pack_root`, or `gc.pack_workspace`
+metadata on ordinary review steps. Those keys belong on generated packsmith
+child beads, or on an already pack-routed source bead.
+"""
+formula = "mol-packer-self-review"
+version = 1
+contract = "graph.v2"
+mode = "report"
+
+[vars]
+
+[vars.packer_mode]
+description = "Packer mode. Exact values: off, self-review, handoff, self-review-handoff."
+default = "self-review"
+
+[vars.findings_path]
+description = "Path where the pack-improvement findings JSON is written."
+default = ""
+
+[vars.source_workspace]
+description = "Optional source workspace name, compatible with gascity-jj-base document workflows."
+default = ""
+
+[vars.source_workspace_path]
+description = "Optional source workspace path, compatible with gascity-jj-base document workflows."
+default = ""
+
+[vars.source_change_id]
+description = "Optional source change id under review."
+default = ""
+
+[[steps]]
+id = "load-pack-review-context"
+title = "Load pack self-review context"
+metadata = { "gc.run_target" = "gc.run-operator", "gc.packer.mode_key" = "gc.packer.mode,gc.var.packer_mode", "gc.packer.source_workspace_key" = "gc.docs.source_workspace,gc.var.source_workspace", "gc.packer.source_workspace_path_key" = "gc.docs.source_workspace_path,gc.var.source_workspace_path", "gc.packer.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
+description = """
+Resolve the pack or source change that is being reviewed. Prefer explicit
+source metadata from the calling workflow. When the caller is a pack-routed
+bead, read `gc.pack` and `gc.pack_root`; when it is a document workflow, use the
+`gc.docs.source_*` metadata that gascity-jj-base emits.
+
+If `packer_mode=off`, record that packer self-review is disabled and stop this
+formula without creating findings or child pack work. Do not add pack workspace
+metadata to non-pack workflow steps just to make this review run.
+
+Exit criteria:
+
+- `packer_mode` is one of `off`, `self-review`, `handoff`, or
+  `self-review-handoff`
+- the reviewed source workspace or pack is identified, or the omission is
+  reported as not actionable
+- no packsmith child bead has been created
+"""
+
+[[steps]]
+id = "write-pack-improvement-findings"
+title = "Write pack-improvement findings"
+needs = ["load-pack-review-context"]
+metadata = { "gc.run_target" = "gc.implementation-reviewer", "gc.build.artifact_schema" = "gc.packer.pack-improvement-findings.v1", "gc.build.artifact_path_keys" = "gc.packer.findings_path,gc.var.findings_path", "gc.packer.finding_item_schema" = "gc.packer.pack-improvement-finding.v1", "gc.packer.mode_key" = "gc.packer.mode,gc.var.packer_mode", "gc.packer.source_workspace_key" = "gc.docs.source_workspace,gc.var.source_workspace", "gc.packer.source_workspace_path_key" = "gc.docs.source_workspace_path,gc.var.source_workspace_path", "gc.packer.source_change_id_key" = "gc.docs.source_change_id,gc.var.source_change_id" }
+description = """
+Write a JSON artifact with schema `gc.packer.pack-improvement-findings.v1`.
+Each finding must be concrete enough to become a claim-sized packsmith bead, or
+must be marked non-actionable.
+
+Required top-level fields:
+
+```json
+{
+  "schema": "gc.packer.pack-improvement-findings.v1",
+  "packer_mode": "self-review",
+  "source": {
+    "pack": "target-pack",
+    "pack_root": "target-pack",
+    "workspace": "optional-source-workspace",
+    "change_id": "optional-source-change-id"
+  },
+  "findings": []
+}
+```
+
+Actionable finding shape:
+
+```json
+{
+  "schema": "gc.packer.pack-improvement-finding.v1",
+  "id": "PKR-001",
+  "severity": "P2",
+  "title": "target-pack: fix concrete pack issue",
+  "pack": "target-pack",
+  "pack_root": "target-pack",
+  "pack_workspace": "optional-child-workspace",
+  "description": "Specific work for packsmith to perform.",
+  "acceptance": "gc lint target-pack passes",
+  "evidence": [
+    {"path": "target-pack/file", "line": 12, "note": "Why this matters."}
+  ]
+}
+```
+
+Use `pack_workspace` only when the follow-up must run in a named child
+workspace. Omit it for the reusable pack-named integration workspace. Findings
+with no concrete pack target should stay in the report and should not be handed
+off to packsmith.
+
+Exit criteria:
+
+- findings artifact is written or the no-finding result is recorded
+- every actionable finding names `pack`, `pack_root`, title, description, and
+  acceptance
+- optional `pack_workspace` values are workspace keys, not paths
+"""

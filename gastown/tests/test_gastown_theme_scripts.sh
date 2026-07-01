@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 SCRIPTS="$ROOT/gastown/assets/scripts"
+export GC_BIN=gc
 
 fail() {
     echo "FAIL: $*" >&2
@@ -205,11 +206,50 @@ SH
         fail "tmux-theme did not quote and pass city path to status-line"
 }
 
+test_tmux_keybindings_mail_popup_uses_inbox_and_city() {
+    local tmp bin log city
+    tmp=$(mktemp -d)
+    bin="$tmp/bin"
+    log="$tmp/tmux.log"
+    city="$tmp/city with spaces"
+    mkdir -p "$bin" "$city"
+
+    cat >"$bin/tmux" <<'SH'
+#!/usr/bin/env sh
+if [ "$1" = "-L" ]; then
+    shift 2
+fi
+case "$1" in
+    list-keys)
+        exit 0
+        ;;
+    bind-key)
+        printf '%s\n' "$*" >>"$TMUX_LOG"
+        ;;
+esac
+SH
+    chmod +x "$bin/tmux"
+
+    GC_CITY="$city" TMUX_LOG="$log" PATH="$bin:$PATH" "$SCRIPTS/tmux-keybindings.sh" "$ROOT/gastown"
+
+    grep -F -- "MouseDown1StatusRight" "$log" >/dev/null ||
+        fail "tmux-keybindings did not bind status-right mail popup"
+    grep -F -- "mail inbox" "$log" >/dev/null ||
+        fail "mail popup did not use mail inbox"
+    grep -F -- "mail peek" "$log" >/dev/null &&
+        fail "mail popup still uses peek without a message id"
+    grep -F -- "--city" "$log" >/dev/null ||
+        fail "mail popup did not pin the city"
+    grep -F -- "$city" "$log" >/dev/null ||
+        fail "mail popup did not include quoted city path"
+}
+
 test_status_line_counts_with_bounded_gc_commands_and_cache
 test_status_line_cache_is_city_scoped
 test_status_line_falls_back_to_agent_only_on_query_failure
 test_status_line_counts_ready_work_not_queued_nudges
 test_status_line_uses_unread_mail_check_semantics
 test_tmux_theme_passes_city_path_to_status_helper
+test_tmux_keybindings_mail_popup_uses_inbox_and_city
 
 echo "gastown theme script tests passed"

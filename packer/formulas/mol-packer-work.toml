@@ -4,7 +4,7 @@ Maintain one gascity-packs pack from a pack-routed sparse jj workspace.
 Use this formula for beads that name a target pack explicitly. The session is
 expected to start from the shared packsmith pool. The triggering bead must carry
 `gc.pack` and `gc.pack_root` metadata. GC uses that metadata to place the
-session under the target pack directory before pre_start runs. The pre-start
+session under the target pack directory before pre_start runs. The pre_start
 script then creates a jj workspace and sparse-checks out that pack folder plus
 shared registry, tests, and documentation surfaces, rather than the whole pack
 set.
@@ -13,7 +13,11 @@ Broad or ambiguous requests should go to `mol-packer-route` first. This formula
 is for already-routed implementation work.
 
 This formula extends `mol-jj-change`: every logical change the agent produces
-must pass through the change-perfecting steps before the bead moves on.
+must pass through the change-perfecting steps before the bead moves on. The
+pack-named workspace `.gc/workspaces/<rig>/packs/<pack>` is the integration
+workspace for that pack. Child workspaces under it land back into that pack
+workspace first; the pack workspace later lands to the default workspace
+working copy (`default@`) for full rig testing.
 """
 formula = "mol-packer-work"
 version = 1
@@ -78,17 +82,22 @@ run the imported `mol-jj-change` steps against it:
 - inspect the current change
 - ensure it is atomic
 - write a clear `<pack>: <description>` message
-- rebase onto `main@`
 - verify with `gc lint <pack>` and relevant tests
 - leave a clean successor with `jj new`
 
 Do not batch multiple unrelated changes into one commit just because they belong
 to the same bead. A bead may contain several logical changes; perfect each one.
 
+Rebase onto the current integration base only when the bead instructions say so,
+when that base has moved forward, or when you are about to run
+`mol-packer-complete`. Use `gc/<pack>` as the base in child workspaces and
+`default@` in the pack-named integration workspace. Do not rebase after every
+trivial change by default.
+
 Exit criteria:
 
 - changes are limited to the pack task
-- each logical change is described, verified, and rebased onto `main@`
+- each logical change is described and verified
 - any sparse widening is justified by the bead
 """
 
@@ -110,20 +119,28 @@ Exit criteria:
 """
 
 [[steps]]
-id = "prepare-for-landing"
-title = "Prepare the pack line for landing"
+id = "prepare-for-integration"
+title = "Prepare the pack line for integration"
 needs = ["verify-pack"]
 description = """
 When the bead's changes are complete and each one is a perfect change, run
-`mol-packer-complete` to rebase the whole line onto `main@`, advance the `main`
-bookmark, verify the landed state, and leave a clean working copy.
+`mol-packer-complete` to rebase onto the current integration base, move the
+right integration workspace to the landed tip, verify the integrated state, and
+leave a clean working copy.
+
+From a child workspace, `mol-packer-complete` integrates into the pack-named
+workspace so that pack's integration packsmith can keep receiving work and
+absorbing sibling workspaces. From the pack-named workspace, it integrates into
+`default@` for testing in a running Gas City. Do not release to `main` from a
+pack workspace; that is the packrouter release workflow.
 
 If the bead instructions say not to land yet (e.g. because sibling beads must
-land together), leave the workspace in a clean state on `main@` instead and note
-in the bead why landing was deferred.
+land together), leave the workspace in a clean state and note in the bead why
+integration was deferred.
 
 Exit criteria:
 
-- either `mol-packer-complete` ran and `main` was advanced
-- or the workspace is clean on `main@` with a clear note explaining the deferral
+- either `mol-packer-complete` ran and the current integration target was moved
+  to the landed tip
+- or the workspace is clean with a clear note explaining the deferral
 """

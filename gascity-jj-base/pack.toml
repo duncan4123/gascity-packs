@@ -1,0 +1,25 @@
+[pack]
+name = "gascity-jj-base"
+version = "0.1.1"
+schema = 2
+description = "JJ-oriented extension of the Gas City base pack for rig-repo workflow documents."
+
+[global]
+session_live = [
+    "{{.ConfigDir}}/assets/scripts/tmux-theme.sh {{.Session}} {{.Agent}} {{.ConfigDir}}",
+    "{{.ConfigDir}}/assets/scripts/tmux-keybindings.sh {{.ConfigDir}} {{.Agent}}",
+]
+
+[[named_session]]
+template = "mayor"
+scope = "city"
+mode = "always"
+
+[imports.gc]
+source = "../gascity"
+
+[imports.jjw]
+source = "../jjw"
+
+[imports.packer]
+source = "../packer"

@@ -77,6 +77,25 @@ Use these locations consistently:
 Never work in another agent's worktree. Use the configured rig repo root with
 `git -C <rig-root> ...` for reads, edits, and history inspection.
 
+### DoltLite Build/Install Rule
+
+In a DoltLite-backed Gas City, do not use `make install` or `go install` to
+refresh the runtime `gc` binary after Gas City source changes. Those commands
+install a normal `gc` and can drop the DoltLite native-read/linkage tags.
+
+Use the beads-doltlite pack-managed build instead:
+
+```bash
+{{ cmd }} beads-doltlite build gc --install --no-restart
+```
+
+Use `{{ cmd }} beads-doltlite build bd --install --no-restart` after
+beads-doltlite/`bd` source changes, and `{{ cmd }} beads-doltlite build all
+--install --no-restart` only for bootstrap or coordinated `gc` + `bd` +
+diagnostic-client rebuilds. The pack build links `libdoltlite`, verifies build
+tags/linkage, resolves install symlinks, and writes build details under
+`.gc/runtime/packs/beads-doltlite/`.
+
 ## Two-Level Beads Architecture
 
 | Level | Location | Prefix | Purpose |

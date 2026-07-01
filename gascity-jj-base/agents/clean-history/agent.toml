@@ -1,0 +1,11 @@
+description = "JJ clean-history specialist"
+scope = "rig"
+provider = "codex"
+wake_mode = "fresh"
+formula = "jj-clean-history"
+prompt_template = "prompt.template.md"
+work_dir = "{{.RigRoot}}"
+fallback = true
+idle_timeout = "2h"
+min_active_sessions = 0
+max_active_sessions = 3
