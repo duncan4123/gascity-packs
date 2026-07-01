@@ -38,6 +38,7 @@ func TestDoltliteBuildScriptBuildsGCWithNativeReadTag(t *testing.T) {
 		`binary_has_go_build_tag "$output" "gascity_doltlite_lib"`,
 		`built gc binary does not report -tags including gascity_doltlite_lib`,
 		`built gc binary is missing native DoltLite read-store symbols`,
+		`no symbol section|no symbols`,
 		`running_supervisor_gc_path`,
 		`pgrep -f '(^|/)gc supervisor run($| )'`,
 		`readlink "/proc/$pid/exe"`,

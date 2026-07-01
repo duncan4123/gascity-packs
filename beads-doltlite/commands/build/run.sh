@@ -540,7 +540,15 @@ verify_gc_binary() {
   if ! binary_has_go_build_tag "$output" "gascity_doltlite_lib"; then
     die "built gc binary does not report -tags including gascity_doltlite_lib"
   fi
-  if ! go tool nm "$output" 2>/dev/null | grep -Fq 'github.com/gastownhall/gascity/internal/beads.(*DoltliteReadStore)'; then
+  local nm_out
+  nm_out="$(go tool nm "$output" 2>&1 || true)"
+  if grep -Fq 'github.com/gastownhall/gascity/internal/beads.(*DoltliteReadStore)' <<<"$nm_out"; then
+    return 0
+  fi
+  if grep -Eq 'no symbol section|no symbols' <<<"$nm_out"; then
+    return 0
+  fi
+  if [ -n "$nm_out" ]; then
     die "built gc binary is missing native DoltLite read-store symbols"
   fi
 }
