@@ -27,16 +27,17 @@ Prefer that contract over assumptions from Dolt-server commands.
   `.gc/runtime/packs/dolt/dolt-state.json`.
 - For fresh init and normal Gas City install paths, install only `gc` with
   `gc beads-doltlite build gc --install --no-restart`; it defaults to the
-  released DoltLite-linked Gas City archive. Pass `--build-gc-from-source` only
-  for local Gas City source, native read fastpath, or build-tag changes.
+  latest released DoltLite-linked Gas City archive unless
+  `GC_DOLTLITE_GC_RELEASE_VERSION` pins one. Pass `--build-gc-from-source`
+  only for local Gas City source, native read fastpath, or build-tag changes.
 - Fresh DoltLite init builds the required binaries with
   `gc beads-doltlite build bd --install --no-restart` and
   `gc beads-doltlite build gc --install --no-restart`. It should not require
   `doltlite-client`, sqlitebrowser, or a local DoltLite source build.
 - Use `gc beads-doltlite build all --install --no-restart` only for coordinated
   rebuilds that include the optional diagnostic client. The build command may
-  download pinned DoltLite and Gas City release artifacts into pack runtime
-  state; pass `--lib` or `--build-gc-from-source` only for an explicit
+  download pinned DoltLite and latest Gas City release artifacts into pack
+  runtime state; pass `--lib` or `--build-gc-from-source` only for an explicit
   development build.
 - Use `doltlite-client` for direct test reads and writes. It supports `info`,
   `query`, `exec`, `show`, `set-metadata`, and `close`.

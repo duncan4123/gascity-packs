@@ -80,6 +80,7 @@ Environment overrides:
   GC_DOLTLITE_VERSION
   GC_DOLTLITE_DOWNLOAD_BASE
   GC_DOLTLITE_GC_RELEASE_VERSION, GC_DOLTLITE_GC_RELEASE_BASE
+  GC_DOLTLITE_GC_RELEASE_API
   GC_DOLTLITE_BD_RELEASE_VERSION, GC_DOLTLITE_BD_RELEASE_BASE
   GC_DOLTLITE_BUILD_GC_FROM_SOURCE
   GC_DOLTLITE_BUILD_BD_FROM_SOURCE
@@ -197,6 +198,40 @@ PY
     return $?
   fi
   die "python3 is required to download DoltLite release artifacts"
+}
+
+latest_gc_release_version() {
+  local api_url
+  api_url="${GC_DOLTLITE_GC_RELEASE_API:-https://api.github.com/repos/duncan4123/gascity/releases}"
+  python3 - "$api_url" <<'PY'
+import json
+import re
+import sys
+import urllib.request
+
+api_url = sys.argv[1]
+pattern = re.compile(r"^v\d+\.\d+\.\d+-doltlite\.workflow\.\d+$")
+with urllib.request.urlopen(api_url, timeout=120) as response:
+    releases = json.load(response)
+
+candidates = [
+    release for release in releases
+    if not release.get("draft") and pattern.match(release.get("tag_name", ""))
+]
+if not candidates:
+    raise SystemExit(f"no DoltLite workflow gc releases found at {api_url}")
+
+candidates.sort(key=lambda release: release.get("published_at") or release.get("created_at") or "", reverse=True)
+print(candidates[0]["tag_name"])
+PY
+}
+
+default_gc_release_version() {
+  if [ -n "${GC_DOLTLITE_GC_RELEASE_VERSION:-}" ]; then
+    echo "$GC_DOLTLITE_GC_RELEASE_VERSION"
+    return 0
+  fi
+  latest_gc_release_version
 }
 
 verify_checksum_file() {
@@ -340,7 +375,7 @@ ensure_bd_release_binary() {
 
 ensure_gc_release_binary() {
   local version platform state_dir asset checksum_name base archive_path checksum_path bin_path asset_url checksum_url binary_name
-  version="${GC_DOLTLITE_GC_RELEASE_VERSION:-v0.0.0-doltlite.workflow.3}"
+  version="$(default_gc_release_version)" || return $?
   platform="$(gc_release_platform)"
   state_dir="$(pack_state_dir)"
   checksum_name="gascity_${version#v}_checksums.txt"
@@ -1113,7 +1148,7 @@ build_gc() {
   if [ "$BUILD_GC_FROM_SOURCE" != "1" ] && [ -z "$GASCITY_SRC" ]; then
     local release_bin installed_to date version commit source_label
     if release_bin="$(ensure_gc_release_binary)"; then
-      version="${GC_DOLTLITE_GC_RELEASE_VERSION:-v0.0.0-doltlite.workflow.3}"
+      version="$(basename "$(dirname "$(dirname "$release_bin")")")"
       commit="${GC_COMMIT:-unknown}"
       date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       source_label="release:$version"

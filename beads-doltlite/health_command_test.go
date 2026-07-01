@@ -29,9 +29,14 @@ func TestDoltliteBuildScriptBuildsGCWithNativeReadTag(t *testing.T) {
 	for _, required := range []string{
 		`common_env_prefix "gascity_doltlite_lib,libsqlite3"`,
 		`ensure_gc_release_binary`,
+		`default_gc_release_version`,
+		`latest_gc_release_version`,
+		`https://api.github.com/repos/duncan4123/gascity/releases`,
+		`^v\d+\.\d+\.\d+-doltlite\.workflow\.\d+$`,
+		`version="$(default_gc_release_version)" || return $?`,
+		`version="$(basename "$(dirname "$(dirname "$release_bin")")")"`,
 		`gascity-doltlite_${version#v}_${platform}.tar.gz`,
 		`gascity_doltlite_edge_linux_amd64.tar.gz`,
-		`v0.0.0-doltlite.workflow.3`,
 		`https://github.com/duncan4123/gascity/releases/download/${version}`,
 		`DoltLite-linked gc release unavailable; falling back to source build`,
 		`download_file "$asset_url" "$archive_path" || return $?`,
@@ -40,6 +45,7 @@ func TestDoltliteBuildScriptBuildsGCWithNativeReadTag(t *testing.T) {
 		`--build-gc-from-source`,
 		`GC_DOLTLITE_BUILD_GC_FROM_SOURCE`,
 		`GC_DOLTLITE_GC_RELEASE_VERSION, GC_DOLTLITE_GC_RELEASE_BASE`,
+		`GC_DOLTLITE_GC_RELEASE_API`,
 		`binary_has_go_build_tag "$output" "gascity_doltlite_lib"`,
 		`built gc binary does not report -tags including gascity_doltlite_lib`,
 		`built gc binary is missing native DoltLite read-store symbols`,
@@ -88,7 +94,7 @@ func TestDoltliteBuildHelpExplainsTargetSelection(t *testing.T) {
 	for _, required := range []string{
 		`The default target is ` + "`gc`",
 		`normal Gas City`,
-		`released DoltLite-linked ` + "`gc`" + ` archive`,
+		`latest released DoltLite-linked ` + "`gc`" + ` archive`,
 		`--build-gc-from-source`,
 		`all` + "` builds `" + `bd` + "`, `" + `doltlite-client` + "`, then `" + `gc`,
 		`does not skip unchanged`,
@@ -107,8 +113,8 @@ func TestDoltliteBuildHelpExplainsTargetSelection(t *testing.T) {
 		`install only ` + "`gc`",
 		`gc beads-doltlite build gc --install --no-restart`,
 		`only for coordinated`,
-		`released DoltLite-linked Gas City archive`,
-		`download pinned DoltLite and Gas City release artifacts`,
+		`latest released DoltLite-linked Gas City archive`,
+		`download pinned DoltLite and latest Gas City release artifacts`,
 	} {
 		if !strings.Contains(skill, required) {
 			t.Fatalf("doltlite skill missing %q", required)

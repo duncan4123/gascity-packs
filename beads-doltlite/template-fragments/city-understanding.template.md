@@ -38,7 +38,7 @@ doltlite release lib          bd release binary              gascity release arc
 
 1. Use the pinned DoltLite release library, or pass `--lib` for an explicit development build
 2. Install the released `bd-doltlite` binary with `gc beads-doltlite build bd`
-3. Install the released DoltLite-linked Gas City archive with `gc beads-doltlite build gc`; pass `--build-gc-from-source` only for local source changes
+3. Install the latest released DoltLite-linked Gas City archive with `gc beads-doltlite build gc`; pass `--build-gc-from-source` only for local source changes
 4. `bd` binary provides beads CLI; Gas Town's `gc bd` commands shell out to it
 5. Gas Town's `gc` binary embeds pack definitions (including the bd pack with `gc-beads-bd.sh` wrapper)
 

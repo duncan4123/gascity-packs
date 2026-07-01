@@ -3,8 +3,9 @@ Build or install DoltLite-linked binaries for Gas City and beads-doltlite.
 The default target is `gc`.
 
 Use `gc beads-doltlite build gc --install --no-restart` for normal Gas City
-iteration or fresh DoltLite init. By default this installs the pinned released
-DoltLite-linked `gc` archive for the current platform. Pass
+iteration or fresh DoltLite init. By default this installs the latest released
+DoltLite-linked Gas City archive for the current platform. The `gc` target uses
+the latest released DoltLite-linked `gc` archive unless a release is pinned. Pass
 `--build-gc-from-source` only after Gas City source, native read fastpath, or
 build-tag changes.
 
@@ -33,11 +34,11 @@ current platform and verifies it against the release `checksums.txt`. Pass
 `--build-bd-from-source`, `--bd-source`, or set `GC_DOLTLITE_BUILD_BD_FROM_SOURCE=1`
 when you need a source build.
 
-The `gc` target defaults to the pinned released DoltLite-linked `gc` archive for
-the current platform and verifies it against the Gas City release checksum file.
-The default release is
-`https://github.com/duncan4123/gascity/releases/tag/v0.0.0-doltlite.workflow.1`.
-Pass `--build-gc-from-source`, `--gc-source`, or set
+The `gc` target defaults to the latest non-draft DoltLite workflow release from
+`https://github.com/duncan4123/gascity/releases` and verifies the current
+platform archive against the Gas City release checksum file. Set
+`GC_DOLTLITE_GC_RELEASE_VERSION` to pin a specific release. Pass
+`--build-gc-from-source`, `--gc-source`, or set
 `GC_DOLTLITE_BUILD_GC_FROM_SOURCE=1` when you need a source build.
 
 Pass `--skip-local-source`, or set `GC_DOLTLITE_SKIP_LOCAL_SOURCE=1`, to skip
