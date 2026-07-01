@@ -340,7 +340,7 @@ ensure_bd_release_binary() {
 
 ensure_gc_release_binary() {
   local version platform state_dir asset checksum_name base archive_path checksum_path bin_path asset_url checksum_url binary_name
-  version="${GC_DOLTLITE_GC_RELEASE_VERSION:-edge}"
+  version="${GC_DOLTLITE_GC_RELEASE_VERSION:-v0.0.0-doltlite.workflow.1}"
   platform="$(gc_release_platform)"
   state_dir="$(pack_state_dir)"
   checksum_name="gascity_${version#v}_checksums.txt"
@@ -353,7 +353,7 @@ ensure_gc_release_binary() {
     base="${GC_DOLTLITE_GC_RELEASE_BASE:-https://github.com/gastownhall/gascity/releases/download/edge}"
   else
     asset="gascity-doltlite_${version#v}_${platform}.tar.gz"
-    base="${GC_DOLTLITE_GC_RELEASE_BASE:-https://github.com/gastownhall/gascity/releases/download/${version}}"
+    base="${GC_DOLTLITE_GC_RELEASE_BASE:-https://github.com/duncan4123/gascity/releases/download/${version}}"
   fi
 
   archive_path="$state_dir/gc-release/$version/$asset"
@@ -1113,7 +1113,7 @@ build_gc() {
   if [ "$BUILD_GC_FROM_SOURCE" != "1" ] && [ -z "$GASCITY_SRC" ]; then
     local release_bin installed_to date version commit source_label
     if release_bin="$(ensure_gc_release_binary)"; then
-      version="${GC_DOLTLITE_GC_RELEASE_VERSION:-edge}"
+      version="${GC_DOLTLITE_GC_RELEASE_VERSION:-v0.0.0-doltlite.workflow.1}"
       commit="${GC_COMMIT:-unknown}"
       date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       source_label="release:$version"

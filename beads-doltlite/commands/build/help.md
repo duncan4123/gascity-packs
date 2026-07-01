@@ -35,6 +35,8 @@ when you need a source build.
 
 The `gc` target defaults to the pinned released DoltLite-linked `gc` archive for
 the current platform and verifies it against the Gas City release checksum file.
+The default release is
+`https://github.com/duncan4123/gascity/releases/tag/v0.0.0-doltlite.workflow.1`.
 Pass `--build-gc-from-source`, `--gc-source`, or set
 `GC_DOLTLITE_BUILD_GC_FROM_SOURCE=1` when you need a source build.
 
