@@ -1,10 +1,21 @@
 #!/bin/sh
 # tmux-keybindings.sh — Gas Town navigation keybindings (n/p/g/a + mail click)
-# Usage: tmux-keybindings.sh <config-dir>
+# Usage: tmux-keybindings.sh <config-dir> [session]
 CONFIGDIR="$1"
+SESSION="${2:-}"
 
 # Socket-aware tmux command (uses GC_TMUX_SOCKET when set).
 gcmux() { tmux ${GC_TMUX_SOCKET:+-L "$GC_TMUX_SOCKET"} "$@"; }
+
+# Keep scrollback behavior self-contained in the keybinding hook. The theme
+# hook also enables mouse mode for normal Gas Town sessions, but generic agents
+# may reuse this script without the theme hook.
+gcmux set-option -g mouse on
+gcmux set-option -g history-limit 50000
+if [ -n "$SESSION" ]; then
+    gcmux set-option -t "$SESSION" mouse on
+    gcmux set-option -t "$SESSION" history-limit 50000
+fi
 
 # ── Navigation bindings (prefix table) ────────────────────────────────
 "$CONFIGDIR"/assets/scripts/bind-key.sh n "run-shell '$CONFIGDIR/assets/scripts/cycle.sh next #{session_name} #{client_tty}'"
@@ -23,8 +34,8 @@ fi
 
 # ── Mouse-wheel scrollback (root table) ───────────────────────────────
 # Make the wheel drive tmux copy-mode scrollback instead of leaking to the
-# focused app. Without this, "mouse on" (set in tmux-theme.sh) hands the wheel
-# to mouse-reporting TUIs — Claude Code scrolls its own history, a pager/shell
+# focused app. Without this, mouse mode hands the wheel to mouse-reporting
+# TUIs — Claude Code scrolls its own history, a pager/shell
 # gets Up-arrows — and only a bare prompt reaches copy-mode. Force copy-mode
 # even over mouse-reporting apps (no mouse_any_flag check) so scrollback wins;
 # once in copy-mode the wheel passes through (-M) for normal scrolling, and -e
