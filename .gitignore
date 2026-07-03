@@ -18,6 +18,7 @@
 # Python test/runtime artifacts
 __pycache__/
 *.py[cod]
+.cache/
 
 # bt (beadstui) local config and caches
 .bt/

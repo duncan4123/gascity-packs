@@ -436,25 +436,82 @@ metadata_is_doltlite() {
     [ "$(read_metadata_string_field "$meta_file" backend)" = "doltlite" ] || [ "$(read_metadata_string_field "$meta_file" database)" = "doltlite" ]
 }
 
+json_escape_value() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
 write_doltlite_metadata() {
-    local dir="$1" database="$2" metadata_path tmp project_id
+    local dir="$1" database="$2" metadata_path tmp project_id plugin_command plugin_trace
+    local database_json project_id_json plugin_command_json plugin_trace_json
     metadata_path="$dir/.beads/metadata.json"
     mkdir -p "$dir/.beads"
     project_id=$(read_metadata_string_field "$metadata_path" project_id)
     if [ -z "$project_id" ]; then
         project_id="$(basename "$dir")"
     fi
+    plugin_command="$(ensure_doltlite_backend_plugin_command)"
+    plugin_trace="${GC_DOLTLITE_BACKEND_PLUGIN_TRACE:-$GC_CITY_PATH/.gc/backend-plugin-trace.jsonl}"
+    database_json=$(json_escape_value "$database")
+    project_id_json=$(json_escape_value "$project_id")
+    plugin_command_json=$(json_escape_value "$plugin_command")
+    plugin_trace_json=$(json_escape_value "$plugin_trace")
     tmp="$metadata_path.tmp.$$"
-    cat > "$tmp" <<EOF
-{
-  "backend": "doltlite",
-  "database": "doltlite",
-  "dolt_database": "$database",
-  "project_id": "$project_id"
-}
-EOF
+    {
+        printf '{\n'
+        printf '  "backend": "doltlite",\n'
+        printf '  "database": "doltlite",\n'
+        printf '  "dolt_database": "%s",\n' "$database_json"
+        printf '  "project_id": "%s"' "$project_id_json"
+        if [ -n "$plugin_command" ]; then
+            printf ',\n'
+            printf '  "backend_plugin_command": "%s",\n' "$plugin_command_json"
+            printf '  "backend_plugin_args": ["--trace", "%s", "serve"]\n' "$plugin_trace_json"
+        else
+            printf '\n'
+        fi
+        printf '}\n'
+    } >"$tmp"
     chmod 600 "$tmp"
     mv "$tmp" "$metadata_path"
+}
+
+doltlite_backend_plugin_enabled() {
+    case "${GC_DOLTLITE_BACKEND_PLUGIN:-1}" in
+        0|false|False|FALSE|no|No|NO|off|Off|OFF) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+ensure_doltlite_backend_plugin_command() {
+    local candidate dest
+    if ! doltlite_backend_plugin_enabled; then
+        return 0
+    fi
+    if [ -n "${GC_DOLTLITE_BACKEND_PLUGIN_COMMAND:-}" ]; then
+        [ -x "$GC_DOLTLITE_BACKEND_PLUGIN_COMMAND" ] || die "configured DoltLite backend plugin is not executable: $GC_DOLTLITE_BACKEND_PLUGIN_COMMAND"
+        printf '%s\n' "$GC_DOLTLITE_BACKEND_PLUGIN_COMMAND"
+        return 0
+    fi
+
+    dest="$PACK_STATE_DIR/bin/bd-backend-doltlite"
+    if [ -x "$dest" ]; then
+        printf '%s\n' "$dest"
+        return 0
+    fi
+
+    for candidate in \
+        "$GC_CITY_PATH/rigs/beads-backend-doltlite-plugin/bin/bd-backend-doltlite" \
+        "$GC_CITY_PATH/beads-backend-doltlite-plugin/bin/bd-backend-doltlite" \
+        "$GC_CITY_PATH/../beads-backend-doltlite-plugin/bin/bd-backend-doltlite"; do
+        if [ -x "$candidate" ]; then
+            mkdir -p "$(dirname "$dest")"
+            install -m 0755 "$candidate" "$dest" || die "failed to install DoltLite backend plugin to $dest"
+            printf '%s\n' "$dest"
+            return 0
+        fi
+    done
+
+    die "DoltLite backend plugin binary not found; run: gc beads-doltlite build plugin --install --no-restart or set GC_DOLTLITE_BACKEND_PLUGIN=off"
 }
 
 ensure_doltlite_schema() {
@@ -533,6 +590,9 @@ identity_toml_present() {
 
 ensure_project_identity() {
     local dir="$1" meta_file gc_bin dolt_database host
+    if is_doltlite_backend; then
+        return 0
+    fi
     meta_file="$dir/.beads/metadata.json"
     gc_bin=$(resolve_gc_helper_bin)
     if [ -z "$gc_bin" ]; then

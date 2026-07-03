@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: gc beads-doltlite build [gc|bd|client|all] [options]
+usage: gc beads-doltlite build [gc|bd|plugin|client|all] [options]
 
 Builds or installs DoltLite-linked binaries for Gas City and beads-doltlite.
 The default target is gc.
@@ -14,8 +14,11 @@ Targets:
           default; rebuild only after Gas City source or build-tag changes.
   bd      Installs the released bd-doltlite binary by default; rebuild only
           after beads-doltlite source or bd link inputs change.
+  plugin  Build/install the external bd-backend-doltlite process used by
+          plugin-backed Beads metadata.
   client  Rebuild the DoltLite diagnostic client only when that tool changes.
-  all     Coordinated rebuild. Builds bd, doltlite-client, then gc.
+  all     Coordinated rebuild. Builds bd, bd-backend-doltlite,
+          doltlite-client, then gc.
           Use after changing optional diagnostic client/link inputs. It does
           not skip unchanged targets.
 
@@ -29,6 +32,8 @@ Options:
                      script checkout, or pack runtime source cache.
   --bd-source DIR    beads-doltlite source checkout. Default: ./beads-doltlite,
                      adjacent checkout, or pack runtime source cache.
+  --plugin-source DIR
+                     beads-backend-doltlite-plugin source checkout.
   --skip-local-source
                      Skip automatic local source checkout discovery and fetch
                      the default remote source unless explicit source paths are
@@ -51,6 +56,9 @@ Options:
   --client-output FILE
                      Build output path for doltlite-client.
                      Default: <build-details-dir>/bin/doltlite-client.
+  --plugin-output FILE
+                     Build output path for bd-backend-doltlite.
+                     Default: <plugin-source>/bin/bd-backend-doltlite.
   --install          Install built binaries after link verification.
   --install-dir DIR  Install directory for both binaries.
                      Default for gc: install to the running supervisor path,
@@ -60,6 +68,9 @@ Options:
                      otherwise $HOME/.local/bin.
   --gc-install FILE  Install path for gc.
   --bd-install FILE  Install path for bd.
+  --plugin-install FILE
+                     Install path for bd-backend-doltlite.
+                     Default: <build-details-dir>/bin/bd-backend-doltlite.
   --build-details-dir DIR
                      Directory for last-build-*.json.
                      Default: runtime pack state dir.
@@ -71,10 +82,13 @@ Options:
 Environment overrides:
   GASCITY_SRC, GC_GASCITY_SRC
   BD_SRC, BEADS_DOLTLITE_SRC, GC_BEADS_DOLTLITE_SRC
+  BEADS_DOLTLITE_PLUGIN_SRC, GC_BEADS_DOLTLITE_PLUGIN_SRC
   DOLTLITE_LIB, GC_DOLTLITE_LIB
   OUTPUT, GC_DOLTLITE_GC_OUTPUT, BD_OUTPUT, GC_DOLTLITE_BD_OUTPUT
+  GC_DOLTLITE_PLUGIN_OUTPUT
   GC_DOLTLITE_INSTALL, GC_DOLTLITE_INSTALL_DIR
   GC_DOLTLITE_GC_INSTALL, GC_DOLTLITE_BD_INSTALL
+  GC_DOLTLITE_PLUGIN_INSTALL
   GC_DOLTLITE_CLIENT_OUTPUT
   GC_DOLTLITE_BUILD_DETAILS_DIR
   GC_DOLTLITE_VERSION
@@ -121,6 +135,10 @@ has_gascity_source() {
 
 has_bd_source() {
   [ -f "$1/go.mod" ] && [ -d "$1/cmd/bd" ]
+}
+
+has_plugin_source() {
+  [ -f "$1/go.mod" ] && [ -d "$1/cmd/bd-backend-doltlite" ]
 }
 
 has_doltlite_lib() {
@@ -439,6 +457,21 @@ fetch_bd_source() {
     "${GC_DOLTLITE_BD_REPO:-https://github.com/duncan4123/beads-doltlite.git}" \
     "${GC_DOLTLITE_BD_REF:-beads-doltlite}" \
     "$(pack_state_dir)/src/beads-doltlite"
+}
+
+find_plugin_source() {
+  for candidate in \
+    "$CITY_ROOT/rigs/beads-backend-doltlite-plugin" \
+    "$CITY_ROOT/beads-backend-doltlite-plugin" \
+    "$CITY_ROOT/../beads-backend-doltlite-plugin" \
+    "$SCRIPT_CHECKOUT/../rigs/beads-backend-doltlite-plugin" \
+    "$(pwd)"; do
+    if has_plugin_source "$candidate"; then
+      abs_dir "$candidate"
+      return 0
+    fi
+  done
+  return 1
 }
 
 find_doltlite_lib() {
@@ -1287,6 +1320,59 @@ build_bd() {
   write_build_details "bd" "$BD_SRC" "$BD_OUTPUT" "$installed_to" "$commit" "$BD_BUILD_VALUE" "$branch" "libsqlite3" "$date"
 }
 
+build_plugin() {
+  if [ -z "$PLUGIN_SRC" ] && [ "$SKIP_LOCAL_SOURCE" != "1" ]; then
+    PLUGIN_SRC="$(find_plugin_source || true)"
+  fi
+  if [ -z "$PLUGIN_SRC" ] || ! has_plugin_source "$PLUGIN_SRC"; then
+    die "could not find beads-backend-doltlite-plugin source; set BEADS_DOLTLITE_PLUGIN_SRC=/path/to/plugin or pass --plugin-source"
+  fi
+  PLUGIN_SRC="$(abs_dir "$PLUGIN_SRC")"
+
+  if [ -z "$PLUGIN_OUTPUT" ]; then
+    PLUGIN_OUTPUT="$PLUGIN_SRC/bin/bd-backend-doltlite"
+  fi
+
+  local commit="${PLUGIN_COMMIT:-}"
+  if [ -z "$commit" ]; then
+    commit="$(revision_for "$PLUGIN_SRC")"
+  fi
+  commit="${commit:-unknown}"
+  local branch="${PLUGIN_BRANCH:-}"
+  if [ -z "$branch" ]; then
+    branch="$(branch_for "$PLUGIN_SRC")"
+  fi
+  local date
+  date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  mkdir -p "$(dirname "$PLUGIN_OUTPUT")"
+  common_env_prefix "libsqlite3,gms_pure_go"
+
+  echo "building bd-backend-doltlite from $PLUGIN_SRC"
+  echo "linking libdoltlite from $DOLTLITE_LIB"
+  echo "writing $PLUGIN_OUTPUT"
+
+  (
+    cd "$PLUGIN_SRC"
+    go build \
+      -o "$PLUGIN_OUTPUT" \
+      ./cmd/bd-backend-doltlite
+  )
+
+  verify_linked_binary "$PLUGIN_OUTPUT" "bd-backend-doltlite"
+  echo "built libdoltlite-linked bd-backend-doltlite: $PLUGIN_OUTPUT"
+
+  local installed_to=""
+  if [ "$INSTALL_BUILT" = "1" ]; then
+    if [ -z "$PLUGIN_INSTALL" ]; then
+      PLUGIN_INSTALL="$BUILD_DETAILS_DIR/bin/bd-backend-doltlite"
+    fi
+    install_binary "$PLUGIN_OUTPUT" "$PLUGIN_INSTALL" "bd-backend-doltlite"
+    installed_to="$LAST_INSTALLED_PATH"
+  fi
+  write_build_details "bd-backend-doltlite" "$PLUGIN_SRC" "$PLUGIN_OUTPUT" "$installed_to" "$commit" "dev" "$branch" "libsqlite3,gms_pure_go" "$date"
+}
+
 build_client() {
   if [ -z "$GASCITY_SRC" ] && [ "$SKIP_LOCAL_SOURCE" != "1" ]; then
     GASCITY_SRC="$(find_gascity_source || true)"
@@ -1347,6 +1433,7 @@ COMMON_SOURCE=""
 COMMON_OUTPUT="${OUTPUT:-}"
 GASCITY_SRC="${GASCITY_SRC:-${GC_GASCITY_SRC:-}}"
 BD_SRC="${BD_SRC:-${BEADS_DOLTLITE_SRC:-${GC_BEADS_DOLTLITE_SRC:-}}}"
+PLUGIN_SRC="${BEADS_DOLTLITE_PLUGIN_SRC:-${GC_BEADS_DOLTLITE_PLUGIN_SRC:-}}"
 DOLTLITE_LIB="${DOLTLITE_LIB:-${GC_DOLTLITE_LIB:-}}"
 DOLTLITE_LIB_EXPLICIT=0
 if [ -n "${DOLTLITE_LIB:-}" ]; then
@@ -1354,11 +1441,13 @@ if [ -n "${DOLTLITE_LIB:-}" ]; then
 fi
 GC_OUTPUT="${GC_DOLTLITE_GC_OUTPUT:-}"
 BD_OUTPUT="${BD_OUTPUT:-${GC_DOLTLITE_BD_OUTPUT:-}}"
+PLUGIN_OUTPUT="${GC_DOLTLITE_PLUGIN_OUTPUT:-}"
 CLIENT_OUTPUT="${GC_DOLTLITE_CLIENT_OUTPUT:-}"
 INSTALL_BUILT="${GC_DOLTLITE_INSTALL:-0}"
 INSTALL_DIR="${GC_DOLTLITE_INSTALL_DIR:-}"
 GC_INSTALL="${GC_DOLTLITE_GC_INSTALL:-}"
 BD_INSTALL="${GC_DOLTLITE_BD_INSTALL:-}"
+PLUGIN_INSTALL="${GC_DOLTLITE_PLUGIN_INSTALL:-}"
 GC_INSTALL_EXPLICIT=0
 if [ -n "${GC_DOLTLITE_GC_INSTALL:-}" ]; then
   GC_INSTALL_EXPLICIT=1
@@ -1378,7 +1467,7 @@ BD_BUILD_VALUE="${BD_BUILD:-dev}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    gc|bd|client|all)
+    gc|bd|plugin|client|all)
       TARGET="$1"
       shift
       ;;
@@ -1416,6 +1505,15 @@ while [ "$#" -gt 0 ]; do
       ;;
     --bd-source=*)
       BD_SRC="${1#*=}"
+      shift
+      ;;
+    --plugin-source)
+      require_value "$1" "${2:-}"
+      PLUGIN_SRC="$2"
+      shift 2
+      ;;
+    --plugin-source=*)
+      PLUGIN_SRC="${1#*=}"
       shift
       ;;
     --skip-local-source|--no-local-source)
@@ -1480,6 +1578,15 @@ while [ "$#" -gt 0 ]; do
       BD_OUTPUT="${1#*=}"
       shift
       ;;
+    --plugin-output)
+      require_value "$1" "${2:-}"
+      PLUGIN_OUTPUT="$2"
+      shift 2
+      ;;
+    --plugin-output=*)
+      PLUGIN_OUTPUT="${1#*=}"
+      shift
+      ;;
     --client-output)
       require_value "$1" "${2:-}"
       CLIENT_OUTPUT="$2"
@@ -1525,6 +1632,17 @@ while [ "$#" -gt 0 ]; do
       ;;
     --bd-install=*)
       BD_INSTALL="${1#*=}"
+      INSTALL_BUILT=1
+      shift
+      ;;
+    --plugin-install)
+      require_value "$1" "${2:-}"
+      PLUGIN_INSTALL="$2"
+      INSTALL_BUILT=1
+      shift 2
+      ;;
+    --plugin-install=*)
+      PLUGIN_INSTALL="${1#*=}"
       INSTALL_BUILT=1
       shift
       ;;
@@ -1574,7 +1692,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$TARGET" in
-  gc|bd|client|all) ;;
+  gc|bd|plugin|client|all) ;;
   *) usage_error "unknown target: $TARGET" ;;
 esac
 
@@ -1582,8 +1700,9 @@ if [ -n "$COMMON_SOURCE" ]; then
   case "$TARGET" in
     gc) GASCITY_SRC="$COMMON_SOURCE" ;;
     bd) BD_SRC="$COMMON_SOURCE" ;;
+    plugin) PLUGIN_SRC="$COMMON_SOURCE" ;;
     client) GASCITY_SRC="$COMMON_SOURCE" ;;
-    all) usage_error "--source is ambiguous with target all; use --gc-source and --bd-source" ;;
+    all) usage_error "--source is ambiguous with target all; use --gc-source, --bd-source, and --plugin-source" ;;
   esac
 fi
 
@@ -1591,8 +1710,9 @@ if [ -n "$COMMON_OUTPUT" ]; then
   case "$TARGET" in
     gc) GC_OUTPUT="$COMMON_OUTPUT" ;;
     bd) BD_OUTPUT="$COMMON_OUTPUT" ;;
+    plugin) PLUGIN_OUTPUT="$COMMON_OUTPUT" ;;
     client) CLIENT_OUTPUT="$COMMON_OUTPUT" ;;
-    all) usage_error "--output is ambiguous with target all; use --gc-output, --bd-output, and --client-output" ;;
+    all) usage_error "--output is ambiguous with target all; use --gc-output, --bd-output, --plugin-output, and --client-output" ;;
   esac
 fi
 
@@ -1676,11 +1796,15 @@ case "$TARGET" in
   bd)
     build_bd
     ;;
+  plugin)
+    build_plugin
+    ;;
   client)
     build_client
     ;;
   all)
     build_bd
+    build_plugin
     build_client
     build_gc
     ;;
