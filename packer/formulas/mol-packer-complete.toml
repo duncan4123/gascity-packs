@@ -1,17 +1,22 @@
 description = """
-Finish packer pack work and move it onto main@.
+Finish packer pack work and move it onto the right integration workspace.
 
 Use this formula from inside a pack workspace when the pack-maintenance task is
 complete. It helps the agent decide how to integrate the local commits into the
-shared `main` bookmark and ensure the live file system reflects the result.
+next integration target:
+
+- child workspace under a pack: land into the pack-named workspace
+  `.gc/workspaces/<rig>/packs/<pack>`
+- pack-named workspace: land into the rig-root default workspace (`default@`)
+  so the result can be tested in a running Gas City
 
 Because jj workspaces share one commit graph, the work is already in the
-repository; this formula guides rebasing it onto main@, resolving any
-conflicts, advancing the `main` bookmark, and verifying the landed state.
+repository; this formula guides rebasing it onto the current integration base,
+resolving any conflicts, moving the target workspace to the landed tip, and
+verifying the landed state.
 
-Note: new pack workspaces are created from `default@` (the working copy of the
-rig-root default workspace), which should be kept at or near `main@`. The
-landing target for pack work is the `main` bookmark, not `default@`.
+Only after the integrated state has been tested in a running Gas City should a
+packrouter run the release workflow to land it on `main`.
 """
 formula = "mol-packer-complete"
 version = 1
@@ -30,45 +35,53 @@ land. Look for:
 
 ```bash
 jj status
-jj log -r 'main@..@' --no-graph
+jj log -r '<integration-base>..@' --no-graph
 jj diff --git
-jj diff --from main@ --to @ --stat
+jj diff --from <integration-base> --to @ --stat
 ```
 
 Exit criteria:
 
 - the working copy has no unintended changes
-- every commit between main@ and @ has a clear description
+- every commit between the current integration base and @ has a clear description
 - commits are atomic (one logical change each)
 - any empty or placeholder commits are abandoned or described
 """
 
 [[steps]]
 id = "decide-integration-strategy"
-title = "Choose how to integrate onto main@"
+title = "Choose the integration target"
 needs = ["review-working-copy"]
 description = """
-Look at the relationship between the local pack line and main@, then pick
-the safest path:
+Identify whether this workspace is the pack-named integration workspace or a
+child workspace under a pack. The path tells you the target:
+
+| current workspace | integration base | target to move |
+| --- | --- |
+| `.gc/workspaces/<rig>/packs/<pack>` | `default@` | rig-root default workspace |
+| `.gc/workspaces/<rig>/packs/<pack>/<workspace>` | `gc/<pack>` | pack-named workspace |
+
+Then look at the relationship between the local pack line and the integration
+base:
 
 | situation | action |
 | --- | --- |
-| local commits are direct descendants of main@ | rebase onto main@ and move the bookmark |
-| main@ has moved forward since work started | rebase local commits onto the new main@ |
-| another pack line also needs to land together | merge both heads onto main@ in one commit |
+| local commits are direct descendants of the integration base | move the target workspace to the tip |
+| integration base has moved forward since work started | rebase local commits onto the new base |
+| sibling child workspace also needs to land together | merge both heads onto the pack integration base in one commit |
 | commits are messy or non-atomic | squash or split first, then rebase |
 
 ```bash
-jj log -r 'main@ | @' --no-graph
-jj log -r 'main@..@' --no-graph
-jj log -r '@..main@' --no-graph
+jj log -r '<integration-base> | @' --no-graph
+jj log -r '<integration-base>..@' --no-graph
+jj log -r '@..<integration-base>' --no-graph
 ```
 
 Exit criteria:
 
 - the integration strategy is written down
 - any commits needing cleanup are identified
-- the target main@ commit is known
+- the target workspace and integration base are known
 """
 
 [[steps]]
@@ -100,66 +113,88 @@ Exit criteria:
 """
 
 [[steps]]
-id = "rebase-onto-main"
-title = "Rebase pack work onto main@"
+id = "rebase-onto-integration-base"
+title = "Rebase pack work onto the integration base"
 needs = ["clean-commits"]
 description = """
-Rebase the cleaned pack commits onto the current main@. If multiple pack
-lines must land together, rebase them all onto main@ first, then merge them
-in the next step.
+Rebase the cleaned pack commits onto the current integration base only when the
+base has moved forward or the bead requires it. If the local commits are already
+descendants of the integration base, this step is a no-op.
+
+If multiple child lines for the same pack must land together, rebase them all
+onto `gc/<pack>` first, then merge them in the next step.
 
 ```bash
-# Single pack line
-jj rebase -s <first-pack-change> -d main@
+# Single pack line, only if needed
+jj rebase -s <first-pack-change> -d <integration-base>
 
-# Multiple pack lines landing together
-jj rebase -s <pack-a-first-change> -d main@
-jj rebase -s <pack-b-first-change> -d main@
+# Multiple child lines for one pack landing together
+jj rebase -s <workspace-a-first-change> -d gc/<pack>
+jj rebase -s <workspace-b-first-change> -d gc/<pack>
 ```
 
 Exit criteria:
 
-- all pack commits are descendants of main@
+- all pack commits are descendants of the integration base
 - no unresolved conflicts remain
-- `jj log -r 'main@..@'` shows the expected commit chain
+- `jj log -r '<integration-base>..@'` shows the expected commit chain
 """
 
 [[steps]]
-id = "advance-main"
-title = "Move main to the landed work"
-needs = ["rebase-onto-main"]
+id = "move-integration-target"
+title = "Move the integration workspace to the landed work"
+needs = ["rebase-onto-integration-base"]
 description = """
-Advance the `main` bookmark to the tip of the landed pack work. If multiple
-pack lines landed together, first create a single merge commit on top of
-main@ with all heads as parents, then move `main` to that merge.
+Move the correct target workspace working copy to the tip of the landed pack
+work.
+
+From a child workspace, move the pack-named workspace. This makes the pack
+workspace the integration branch for that pack, so its packsmith can continue to
+receive work and absorb sibling workspaces:
 
 ```bash
-# Single line: move main directly to the tip
-jj bookmark move main --to <tip-change-id>
+jj -R <pack-integration-workspace-dir> edit <tip-change-id>
+```
 
-# Multiple lines: merge then move main
-jj new main@ <pack-a-tip> <pack-b-tip> -m "Land <pack-a> and <pack-b> packs"
-jj bookmark move main --to @
+From the pack-named workspace, move the rig-root default workspace. This makes
+the integrated state visible to agents running Gas City from the default
+workspace:
+
+```bash
+jj -R <rig-root> edit <tip-change-id>
+```
+
+If multiple child workspaces for one pack landed together, first create a single
+merge commit on top of `gc/<pack>` with all heads as parents, then move the
+pack-named workspace to that merge.
+
+```bash
+jj new gc/<pack> <workspace-a-tip> <workspace-b-tip> -m "<pack>: integrate child workspaces"
+jj -R <pack-integration-workspace-dir> edit @
 ```
 
 Exit criteria:
 
-- `main` points to the landed commit
-- the working copy is a clean descendant of main@
+- the target integration workspace points to the landed commit
+- the target workspace shows the combined state
 """
 
 [[steps]]
 id = "verify-landed-state"
-title = "Verify from main@"
-needs = ["advance-main"]
+title = "Verify from the integration target"
+needs = ["move-integration-target"]
 description = """
-Run pack-level checks from the main@ state. Use a fresh workspace or widen
-the current sparse checkout to include the pack files.
+Run pack-level checks from the integration target. Use the pack-named workspace
+after child workspace integration, or the rig-root default workspace after pack
+workspace integration.
 
 ```bash
+# From the target workspace
+gc lint <pack-name>
+
+# From a sparse workspace, widen first when needed
 jj sparse set --add <pack-name>/ --add README.md --add registry.toml --add validate_registry.py --add go.mod --add .gitignore --add tests/
 gc lint <pack-name>
-python3 -m pytest <relevant-tests> -q
 ```
 
 Exit criteria:
@@ -175,15 +210,38 @@ id = "clean-up-working-copy"
 title = "Leave a clean working copy"
 needs = ["verify-landed-state"]
 description = """
-Create a new empty commit on top of main@ so the workspace is ready for the
-next bead. Do not leave the working copy sitting on a content commit.
+Create a new empty commit on top of the integration base in the current
+workspace so it is ready for the next bead. Do not leave the working copy
+sitting on a content commit.
 
 ```bash
-jj new main@
+jj new <integration-base>
 ```
 
 Exit criteria:
 
-- working copy is empty and its parent is main@
-- `main` remains at the landed tip
+- current workspace working copy is empty and its parent is the integration base
+- the target integration workspace remains at the landed tip
+"""
+
+[[steps]]
+id = "record-ready-for-testing"
+title = "Record that the pack is ready for live testing"
+needs = ["clean-up-working-copy"]
+description = """
+Write in the bead notes where the pack work landed. Child workspace work should
+record that it landed into the pack-named workspace. Pack workspace work should
+record that it landed onto `default@` and is ready for testing in a running Gas
+City. Do not claim the work is released; release to main is a separate
+packrouter step.
+
+```text
+Integrated into <target-workspace-or-default@> at <change-id>.
+Next step: test in running Gas City, then release via mol-packer-land.
+```
+
+Exit criteria:
+
+- bead notes record the integration target and commit
+- release is explicitly deferred until after live testing
 """

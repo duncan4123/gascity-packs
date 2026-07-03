@@ -1,7 +1,8 @@
 description = """
-Repair related jj lines with the Gas City megamerge workflow.
+Guide the Gas City megamerger through related jj-line repairs with the
+megamerge workflow.
 """
-formula = "mol-megamerge-work"
+formula = "mol-megamerger-work"
 version = 1
 
 [[steps]]

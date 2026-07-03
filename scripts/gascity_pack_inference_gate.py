@@ -1958,20 +1958,10 @@ def bead_route_targets(bead: Mapping[str, Any]) -> list[str]:
 
 def route_metadata_key(key: str) -> bool:
     return (
-        key in {
-            "gc.run_target",
-            "gc.routed_to",
-            "gc.target",
-            "gc.assignee",
-            "run_target",
-            "routed_to",
-            "target",
-            "assignee",
-        }
-        or key.endswith(".run_target")
-        or key.endswith(".routed_to")
-        or key.endswith("_run_target")
-        or key.endswith("_routed_to")
+        named_session_metadata_key(key)
+        or run_target_metadata_key(key)
+        or pool_demand_metadata_key(key)
+        or key in {"gc.target", "target"}
     )
 
 
@@ -2016,11 +2006,20 @@ def route_matches(actual: str, expected: str) -> bool:
 
 
 def named_session_metadata_key(key: str) -> bool:
-    return key in {"gc.assignee", "assignee"} or key.endswith(".assignee") or key.endswith("_assignee")
+    return any(
+        key in {route_key, f"gc.{route_key}"}
+        or key.endswith(f".{route_key}")
+        or key.endswith(f"_{route_key}")
+        for route_key in NAMED_SESSION_ROUTE_KEYS
+    )
 
 
 def run_target_metadata_key(key: str) -> bool:
-    return key in {"gc.run_target", "run_target"} or key.endswith(".run_target") or key.endswith("_run_target")
+    return (
+        key in {"gc.run_target", "run_target"}
+        or key.endswith(".run_target")
+        or key.endswith("_run_target")
+    )
 
 
 def pool_demand_metadata_key(key: str) -> bool:
@@ -2056,6 +2055,16 @@ def bead_named_session_targets(bead: Mapping[str, Any]) -> list[str]:
 
 def bead_pool_demand_targets(bead: Mapping[str, Any]) -> list[str]:
     targets: list[str] = []
+    for key, value in bead.items():
+        if key == "metadata":
+            continue
+        if pool_demand_metadata_key(str(key)):
+            for target in string_values(value):
+                targets.append(target)
+        elif run_target_metadata_key(str(key)):
+            for target in string_values(value):
+                if is_pool_template_target(target):
+                    targets.append(target)
     metadata = bead.get("metadata")
     if isinstance(metadata, dict):
         for key, value in metadata.items():
@@ -2069,6 +2078,14 @@ def bead_pool_demand_targets(bead: Mapping[str, Any]) -> list[str]:
     return dedupe_strings(targets)
 
 
+def route_separation_targets(table: Mapping[str, Any]) -> tuple[list[str], list[str]]:
+    normalized: dict[str, Any] = dict(table)
+    metadata = normalized.get("metadata")
+    if isinstance(metadata, Mapping):
+        normalized["metadata"] = flatten_mapping(metadata)
+    return bead_named_session_targets(normalized), bead_pool_demand_targets(normalized)
+
+
 def validate_route_separation(
     beads: Sequence[Mapping[str, Any]],
     *,
@@ -2076,8 +2093,7 @@ def validate_route_separation(
 ) -> None:
     offenders: list[str] = []
     for bead in beads:
-        named = bead_named_session_targets(bead)
-        pooled = bead_pool_demand_targets(bead)
+        named, pooled = route_separation_targets(bead)
         if named and pooled:
             bead_id = bead.get("id") or bead.get("title") or "<unknown>"
             offenders.append(
@@ -2100,26 +2116,47 @@ def validate_formula_route_separation(path: Path, *, context: str) -> None:
     offenders: list[str] = []
     source = path.name
 
-    top_metadata = document.get("metadata")
-    if isinstance(top_metadata, Mapping):
-        named = bead_named_session_targets({"metadata": flatten_mapping(top_metadata)})
-        pooled = bead_pool_demand_targets({"metadata": flatten_mapping(top_metadata)})
+    for label, table in formula_route_tables(document):
+        named, pooled = route_separation_targets(table)
         if named and pooled:
-            offenders.append(f"{source}: top-level metadata mixes {named!r} with {pooled!r}")
-
-    for step_id, step in steps_by_id(document).items():
-        step_metadata = step.get("metadata")
-        if isinstance(step_metadata, Mapping):
-            named = bead_named_session_targets({"metadata": flatten_mapping(step_metadata)})
-            pooled = bead_pool_demand_targets({"metadata": flatten_mapping(step_metadata)})
-            if named and pooled:
-                offenders.append(f"{source}:{step_id}: step metadata mixes {named!r} with {pooled!r}")
+            offenders.append(
+                f"{source}:{label}: route data mixes named-session assignment {named!r} "
+                f"with pool-demand routing {pooled!r}"
+            )
 
     if offenders:
         raise GateError(
             f"{context} formula route separation violated:\n"
             + "\n".join(f"- {item}" for item in offenders)
         )
+
+
+def formula_route_tables(document: Mapping[str, Any]) -> list[tuple[str, Mapping[str, Any]]]:
+    tables: list[tuple[str, Mapping[str, Any]]] = [("top-level", document)]
+    for step_id, step in steps_by_id(document).items():
+        tables.append((f"step {step_id}", step))
+    for index, template in enumerate(list_dicts(document.get("template")), start=1):
+        template_id = template.get("id")
+        label = (
+            f"template {template_id}"
+            if isinstance(template_id, str) and template_id
+            else f"template {index}"
+        )
+        tables.extend(formula_template_route_tables(label, template))
+    return tables
+
+
+def formula_template_route_tables(label: str, table: Mapping[str, Any]) -> list[tuple[str, Mapping[str, Any]]]:
+    tables: list[tuple[str, Mapping[str, Any]]] = [(label, table)]
+    for index, child in enumerate(list_dicts(table.get("children")), start=1):
+        child_id = child.get("id")
+        child_label = (
+            f"{label}/child {child_id}"
+            if isinstance(child_id, str) and child_id
+            else f"{label}/child {index}"
+        )
+        tables.extend(formula_template_route_tables(child_label, child))
+    return tables
 
 
 def validate_methodology_route_separation(context: str) -> None:
@@ -2130,6 +2167,12 @@ def validate_methodology_route_separation(context: str) -> None:
             for step_id, expectations in build_steps.items():
                 if not isinstance(expectations, Mapping):
                     continue
+                named, pooled = route_separation_targets(expectations)
+                if named and pooled:
+                    offenders.append(
+                        f"{pack_name}:{step_id}: named-session assignment {named!r} "
+                        f"conflicts with pool-demand routing {pooled!r}"
+                    )
                 run_target = expectations.get("run_target")
                 if isinstance(run_target, str) and is_pool_template_target(run_target):
                     offenders.append(

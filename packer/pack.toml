@@ -7,20 +7,6 @@ description = "Pack-routed jj workspace workflow for maintaining one pack at a t
 [imports.jjw]
 source = "../jjw"
 
-[providers.omp-packsmith]
-display_name = "Oh My Pi Packsmith"
-command = "/home/ubuntu/.bun/bin/omp"
-prompt_mode = "arg"
-ready_delay_ms = 1000
-path_check = "/home/ubuntu/.bun/bin/omp"
-
-[providers.omp-packrouter]
-display_name = "Oh My Pi Pack Router"
-command = "/home/ubuntu/.bun/bin/omp"
-prompt_mode = "arg"
-ready_delay_ms = 1000
-path_check = "/home/ubuntu/.bun/bin/omp"
-
 [[named_session]]
 template = "packrouter"
 scope = "rig"

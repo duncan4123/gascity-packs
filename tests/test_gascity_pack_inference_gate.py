@@ -728,6 +728,8 @@ def test_validate_required_routes_accepts_metadata_and_prefixed_assignees() -> N
     beads = [
         {"metadata": {"gc.run_target": "superpowers.brainstorming"}},
         {"assignee": "fixture/superpowers.implementer"},
+        {"metadata": {"gc.owner": "fixture/superpowers.owner"}},
+        {"metadata": {"custom.session": "fixture/gstack.session"}},
         {"metadata": {"custom.run_target": ["gstack.qa-lead"]}},
         {"metadata": {"gc.execution_routed_to": "fixture/gc.implementation-reviewer"}},
     ]
@@ -738,6 +740,8 @@ def test_validate_required_routes_accepts_metadata_and_prefixed_assignees() -> N
         [
             "superpowers.brainstorming",
             "superpowers.implementer",
+            "superpowers.owner",
+            "gstack.session",
             "gstack.qa-lead",
             "gc.implementation-reviewer",
         ],
@@ -758,6 +762,9 @@ def test_validate_route_separation_accepts_named_session_only() -> None:
         {"id": "b1", "assignee": "gastown.refinery"},
         {"id": "b2", "agent_id": "gastown.witness"},
         {"id": "b3", "metadata": {"gc.assignee": "gastown.mayor"}},
+        {"id": "b4", "metadata": {"gc.owner": "gastown.deacon"}},
+        {"id": "b5", "metadata": {"custom.agent": "gastown.boot"}},
+        {"id": "b6", "metadata": {"custom.session": "gastown.mayor"}},
     ]
 
     gascity_pack_inference_gate.validate_route_separation(beads, context="route test")
@@ -798,6 +805,19 @@ def test_validate_route_separation_rejects_metadata_assignee_with_routed_to() ->
     ]
 
     with pytest.raises(gascity_pack_inference_gate.GateError, match="meta-mixed"):
+        gascity_pack_inference_gate.validate_route_separation(beads, context="route test")
+
+
+def test_validate_route_separation_rejects_named_session_with_pool_template_run_target() -> None:
+    beads = [
+        {
+            "id": "pool-run-target-mixed",
+            "assignee": "gastown.refinery",
+            "metadata": {"gc.run_target": "gastown.polecat"},
+        },
+    ]
+
+    with pytest.raises(gascity_pack_inference_gate.GateError, match="pool-run-target-mixed"):
         gascity_pack_inference_gate.validate_route_separation(beads, context="route test")
 
 
@@ -883,7 +903,28 @@ def test_validate_formula_route_separation_rejects_mixed_top_level_metadata(tmp_
         encoding="utf-8",
     )
 
-    with pytest.raises(gascity_pack_inference_gate.GateError, match="top-level metadata"):
+    with pytest.raises(gascity_pack_inference_gate.GateError, match="top-level"):
+        gascity_pack_inference_gate.validate_formula_route_separation(path, context="route test")
+
+
+def test_validate_formula_route_separation_rejects_top_level_assignment_with_pool_metadata(tmp_path) -> None:
+    path = tmp_path / "formula.toml"
+    path.write_text(
+        textwrap.dedent(
+            """\
+            description = "Mixed formula"
+            formula = "mixed-formula"
+            version = 1
+            assignee = "gastown.refinery"
+
+            [metadata]
+            gc.routed_to = "gastown.dog"
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(gascity_pack_inference_gate.GateError, match="top-level"):
         gascity_pack_inference_gate.validate_formula_route_separation(path, context="route test")
 
 
@@ -911,8 +952,69 @@ def test_validate_formula_route_separation_rejects_mixed_step_metadata(tmp_path)
         gascity_pack_inference_gate.validate_formula_route_separation(path, context="route test")
 
 
+def test_validate_formula_route_separation_rejects_step_assignment_with_pool_run_target(tmp_path) -> None:
+    path = tmp_path / "formula.toml"
+    path.write_text(
+        textwrap.dedent(
+            """\
+            description = "Mixed step formula"
+            formula = "mixed-step-formula"
+            version = 1
+
+            [[steps]]
+            id = "step-1"
+            title = "Step 1"
+            owner = "gastown.boot"
+            [steps.metadata]
+            gc.run_target = "gastown.polecat"
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(gascity_pack_inference_gate.GateError, match="step step-1"):
+        gascity_pack_inference_gate.validate_formula_route_separation(path, context="route test")
+
+
+def test_validate_formula_route_separation_rejects_template_assignment_with_pool_route(tmp_path) -> None:
+    path = tmp_path / "formula.toml"
+    path.write_text(
+        textwrap.dedent(
+            """\
+            description = "Mixed template formula"
+            formula = "mixed-template-formula"
+            version = 1
+            type = "expansion"
+
+            [[template]]
+            id = "loop"
+            session = "gastown.mayor"
+            [template.metadata]
+            gc.routed_to = "gastown.dog"
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(gascity_pack_inference_gate.GateError, match="template loop"):
+        gascity_pack_inference_gate.validate_formula_route_separation(path, context="route test")
+
+
 def test_validate_methodology_route_separation_accepts_current_contracts() -> None:
     gascity_pack_inference_gate.validate_methodology_route_separation(context="methodology test")
+
+
+def test_validate_methodology_route_separation_rejects_mixed_build_step_contract() -> None:
+    step = gascity_pack_inference_gate.METHODOLOGY_FLOW_CONTRACTS["superpowers"]["build_steps"]["implement"]
+    original = dict(step)
+    step["assignee"] = "superpowers.implementer"
+    step["run_target"] = "gastown.polecat"
+    try:
+        with pytest.raises(gascity_pack_inference_gate.GateError, match="named-session assignment"):
+            gascity_pack_inference_gate.validate_methodology_route_separation(context="methodology test")
+    finally:
+        step.clear()
+        step.update(original)
 
 
 def test_validate_methodology_route_separation_rejects_pool_template_run_target() -> None:

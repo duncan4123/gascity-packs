@@ -1,10 +1,9 @@
-# Minimal DoltLite init support pack.
+# Bundled with the gc binary and served from the user-global pack cache
+# via the pinned bundled import.
 #
-# This pack is intentionally small. In the DoltLite-enabled gc fork it is also
-# bundled with the gc binary; publishing it here gives local cities a
-# dereferenceable fork URL while the upstream PR is pending. It marks a city as
-# having first-class DoltLite backend init support while the operational
-# DoltLite tools live in the external gascity-packs/beads-doltlite pack.
+# This pack is intentionally small. It marks a city as having first-class
+# DoltLite backend init support while the operational DoltLite tools live in
+# the external gascity-packs/beads-doltlite pack.
 [pack]
 name = "beads-doltlite-init"
 version = "0.1.0"

@@ -13,8 +13,8 @@ one pack at a time.
   `gascity-packs`, the default value is the same as `gc.pack`.
 - `work_dir` is a neutral anchor for the shared pool template. GC rewrites the
   concrete session work dir from bead metadata before `pre_start` runs.
-- Triggered pool work defaults to the pack workspace itself. Set
-  `gc.pack_workspace` only when a bead needs a named workspace below that pack,
+- Triggered pool work defaults to the pack-named integration workspace. Set
+  `gc.pack_workspace` only when a bead needs a child workspace below that pack,
   such as a task-specific workspace.
 - `pre_start` reads the trigger bead metadata, delegates workspace creation to
   `jjw`, then sparse-checks out the target pack directory plus shared
@@ -36,21 +36,26 @@ Workflow diagrams:
 ### 1. Packsmith work
 
 Packsmiths run `mol-packer-work` from sparse jj workspaces. Each logical change
-passes through `mol-jj-change`. When the bead is complete, `mol-packer-complete`
-rebases onto local `main@`, moves the `main` bookmark, verifies, and leaves a
-clean working copy.
+passes through `mol-jj-change`. The pack-named workspace
+`.gc/workspaces/<rig>/packs/<pack>` is the integration lane for that pack.
+Child workspaces under it land back into the pack workspace. When the pack
+workspace is complete, `mol-packer-complete` integrates the pack work onto
+`default@` so it can be tested in a running Gas City.
+
+Rebase onto `default@` only when the bead, formula step, or situation requires
+it. Do not rebase after every trivial change by default.
 
 ### 2. Local integration test
 
-After packsmiths land work on `main`, move the rig-root `default@` workspace to
-the integrated head so the combined local state can be tested. `default@` is the
-local integration sandbox, not the release target.
+After packsmiths integrate work onto `default@`, run Gas City from the rig-root
+default workspace and have agents use the pack. `default@` is the local
+integration and testing head, not the release target.
 
 ### 3. Release to GitHub
 
-The release workflow runs from `default@` after local testing. It fetches,
-rebases local `main` onto `main@origin` if needed, merges the pack line, moves
-`main`, verifies, and pushes. `main@origin` is the live published state.
+The release workflow runs from `default@` after live testing. It fetches,
+rebases local `main` onto `main@origin` if needed, merges the tested `default@`
+state, moves `main`, verifies, and pushes.
 
 See [Workflow overview](docs/diagrams/workflow-overview.md) and
 [Release workflow](docs/diagrams/release-workflow.md) for diagrams.
@@ -81,7 +86,13 @@ GC derives the workspace path from the pack:
 .gc/workspaces/<rig>/packs/<pack>
 ```
 
-The jj bookmark for that workspace uses a flat pack namespace:
+The jj bookmark for the pack-named integration workspace is:
+
+```text
+gc/<pack>
+```
+
+Child workspace bookmarks use a flat pack namespace:
 
 ```text
 gc/<pack>.<workspace>
@@ -90,14 +101,15 @@ gc/<pack>.<workspace>
 Do not use `gc/<pack>/<workspace>`; it conflicts with existing Git refs such as
 `gc/packer`.
 
-For work that needs a named workspace below the pack, add:
+For work that needs a named child workspace below the pack, add:
 
 ```text
 gc.pack_workspace=existing-workspace
 ```
 
 `gc.pack_workspace` is a workspace key under the pack directory. It is not a
-path and must not contain slashes.
+path and must not contain slashes. The child workspace starts from the pack
+integration head when available and lands back into the pack-named workspace.
 
 ## Shared Packsmith Agent
 

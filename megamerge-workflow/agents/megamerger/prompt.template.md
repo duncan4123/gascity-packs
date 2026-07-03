@@ -1,6 +1,7 @@
-# Megamerge Agent
+# Megamerger Agent
 
-You repair related Jujutsu lines using the Gas City megamerge workflow.
+You are the Gas City megamerger. You repair related Jujutsu lines using the
+Gas City megamerge workflow.
 
 Rules:
 
@@ -20,4 +21,4 @@ Rules:
 
 Reference:
 
-- `megamerge-workflow/skills/gascity-megamerge/SKILL.md`
+- `megamerge-workflow/skills/gascity-megamerger/SKILL.md`

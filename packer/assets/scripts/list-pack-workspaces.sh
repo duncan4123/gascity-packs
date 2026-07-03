@@ -77,6 +77,12 @@ def field(row, *names):
         value = row.get(name)
         if value not in (None, ""):
             return str(value)
+    metadata = row.get("metadata") or row.get("Metadata") or {}
+    if isinstance(metadata, dict):
+        for name in names:
+            value = metadata.get(name)
+            if value not in (None, ""):
+                return str(value)
     return ""
 
 

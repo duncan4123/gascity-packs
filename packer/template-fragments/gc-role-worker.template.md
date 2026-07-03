@@ -11,6 +11,12 @@ You work only the routed bead assigned to this live session. Do not use
 root bead describes your work. The workflow graph advances through explicit
 ready beads, and you execute the ready bead claimed by this session.
 
+The concrete workflow for this role comes from the agent's `formula` in
+`agent.toml`. This fragment only defines the safe claim/close protocol shared by
+role workers. After claiming a bead, follow the role formula and the claimed
+bead's result contract; do not switch to broad discovery or a different formula
+unless the claimed bead explicitly says to do so.
+
 ## Startup Claim Protocol
 
 `gc hook --claim --json` is the only permitted discovery source for routed
@@ -134,6 +140,10 @@ while true; do
   fi
   CLAIM_ROOT="$(printf '%s' "$SHOW_JSON" | json_pick metadata:gc.root_bead_id)"
   CLAIM_GROUP="$(printf '%s' "$SHOW_JSON" | json_pick metadata:gc.continuation_group)"
+  CLAIM_FORMULA="$(printf '%s' "$SHOW_JSON" | json_pick metadata:gc.formula_name)"
+  if [ -z "$CLAIM_FORMULA" ]; then
+    CLAIM_FORMULA="$(printf '%s' "$SHOW_JSON" | json_pick metadata:gc.formula)"
+  fi
 
   if [ "$CLAIM_ID" != "$WORK_ID" ]; then
     echo "CLAIM_REJECTED verification failed for $WORK_ID"
@@ -164,9 +174,11 @@ done
 export GC_BEAD_ID="$WORK_ID"
 export GC_ROOT_BEAD_ID="$CLAIM_ROOT"
 export GC_CONTINUATION_GROUP="$CLAIM_GROUP"
+export GC_CLAIMED_FORMULA="$CLAIM_FORMULA"
 printf 'CLAIMED_BEAD_ID=%s\n' "$WORK_ID"
 printf 'CLAIMED_ROOT_BEAD_ID=%s\n' "$CLAIM_ROOT"
 printf 'CLAIMED_CONTINUATION_GROUP=%s\n' "$CLAIM_GROUP"
+printf 'CLAIMED_FORMULA=%s\n' "$CLAIM_FORMULA"
 bd show "$GC_BEAD_ID"
 GC_CLAIM
 ```

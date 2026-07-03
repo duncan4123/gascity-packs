@@ -1,6 +1,12 @@
 #!/bin/sh
 set -eu
 
+if [ -n "${TMPDIR:-}" ]; then
+    if [ ! -d "$TMPDIR" ] || [ ! -w "$TMPDIR" ]; then
+        unset TMPDIR
+    fi
+fi
+
 usage() {
     cat >&2 <<'EOF'
 usage: create-pack-bead.sh --pack <pack> --title <title> [options]
@@ -155,6 +161,9 @@ if [ -n "$WORKSPACE" ] && [ -n "$TASK_WORKSPACE" ]; then
 fi
 
 RIG_NAME="${GC_RIG:-}"
+if [ -z "$RIG_NAME" ] && [ -n "${GC_RIG_ROOT:-}" ]; then
+    RIG_NAME=$(basename "$GC_RIG_ROOT")
+fi
 if [ -z "$RIG_NAME" ]; then
     RIG_NAME=$(basename "$(pwd -P)")
 fi

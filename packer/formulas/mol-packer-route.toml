@@ -1,8 +1,10 @@
 description = """
 Route broad pack-maintenance work into pack-scoped jj workspaces.
 
-Use this formula from a rig-root router session. The router inspects the request
-with the full packs repository visible, identifies target packs, creates one
+Use this formula from a rig-root router session. Packrouter is a persistent
+named coordinator: it starts by inspecting the current pack/workspace state,
+summarizes what is in play, and waits for user routing direction. When a user
+request or routed bead exists, the router identifies target packs, creates one
 child bead per target pack, and dispatches those beads to the shared packsmith
 pool. Each packsmith session uses bead metadata to create a sparse jj workspace
 for the requested pack.
@@ -11,27 +13,63 @@ The router is also responsible for aligning the new work with in-flight convoys
 and existing packsmith sessions. Reuse or chain existing beads and workspaces
 when the work is a continuation; create isolated task workspaces only when
 concurrent pack work must not share a working copy.
+
+An empty routed queue is not a shutdown condition for packrouter. Do not
+drain-ack just because there is no queued bead; stay available for user
+direction.
 """
 formula = "mol-packer-route"
 version = 1
 
 [[steps]]
-id = "load-request"
-title = "Load request from rig root"
+id = "startup-scan"
+title = "Scan pack workspace state from the rig root"
 description = """
-Run `gc hook`, read the assigned bead, and inspect the pack repository from the
-rig root.
+Run a read-only startup scan from the rig root before deciding what to route.
+This scan is useful even when no routed bead is queued, because the router's job
+is to understand the pack workspace graph and wait for user direction.
 
 ```bash
-gc hook
 pwd
 jj status
+jj workspace list
+jj log -r 'present(@) | ancestors(immutable_heads().., 2) | present(trunk()) | bookmarks("gc/*")' --no-graph
+packer/assets/scripts/list-pack-workspaces.sh
+find . -maxdepth 2 -name pack.toml -print | sort
+gc session list --state all
 ```
 
 Exit criteria:
 
-- the request is understood
-- the target pack or packs are explicit
+- current workspace state is known
+- pack workspaces and sessions in play are listed
+- `gc/<pack>` bookmarks and nearby workspace heads are summarized
+- active or likely relevant packs are identified
+- the router is waiting for user direction when there is no specific request
+"""
+
+[[steps]]
+id = "load-request"
+title = "Load request or queued routed work"
+needs = ["startup-scan"]
+description = """
+When the user gives a request, use that request as the routing input. When the
+user asks you to process queued routed work, claim exactly one queued bead and
+route that request.
+
+```bash
+gc hook --claim --json
+bd show <claimed-bead-id>
+```
+
+If the hook reports no routed work, do not drain. Say that the packrouter queue
+is empty, keep the startup scan summary available, and wait for the user.
+
+Exit criteria:
+
+- a user request or claimed bead is understood, or no queued work is reported
+  without draining
+- the target pack or packs are explicit before creating child beads
 - shared registry/test/doc surfaces are identified
 """
 
@@ -89,10 +127,10 @@ Choose the workspace model based on the convoy state:
 
 | situation | workspace choice |
 | --- | --- |
-| no existing session and work fits one bead | default reusable pack workspace |
-| continuation of an active session | same workspace as the existing session |
-| concurrent work that must not share `@` | named workspace under the pack |
-| isolated one-off task | task workspace derived from child bead id/title |
+| no existing session and work fits one bead | pack-named integration workspace |
+| pack integration or follow-up work | same pack-named integration workspace |
+| concurrent work that must not share `@` | child workspace under the pack |
+| isolated one-off task | child workspace derived from child bead id/title |
 
 Before deciding, inspect existing packsmith sessions:
 
@@ -105,6 +143,11 @@ packsmith sessions with their target, `work_dir`, workspace key, and title.
 Reuse the existing workspace metadata when follow-up work belongs with a worker
 already sitting in that workspace.
 
+The pack-named workspace `.gc/workspaces/<rig>/packs/<pack>` is the integration
+workspace for that pack. Child workspaces under it start from the pack
+integration head and land back into that pack workspace; they do not land
+directly to `default@`.
+
 If multiple target packs must land together, record the dependency so their
 landing can be coordinated.
 
@@ -114,6 +157,8 @@ Exit criteria:
 - route target is the shared packsmith pool
 - existing packsmith workspaces were checked for each implementation target
 - continuation beads point at the same workspace as their predecessor
+- child workspaces have a clear path back to the pack-named integration
+  workspace
 - any ambiguous pack target is reported clearly
 """
 
@@ -146,14 +191,15 @@ GC will derive the concrete workspace from the pack:
 .gc/workspaces/<rig>/packs/<pack>
 ```
 
-For work that must use a named workspace below the pack, also set:
+For work that must use a named child workspace below the pack, also set:
 
 ```text
 gc.pack_workspace=<workspace-name>
 ```
 
 `gc.pack_workspace` is a workspace key under the pack directory. It is not a
-path and must not contain slashes.
+path and must not contain slashes. That child workspace integrates back into the
+pack-named workspace for the same pack.
 
 When continuing a convoy, set or preserve convoy metadata:
 
@@ -198,7 +244,7 @@ Exit criteria:
 - child beads are claim-sized
 - target pack is visible in each bead
 - default pack-workspace beads omit `gc.pack_workspace`
-- named/task workspace beads set `gc.pack_workspace`
+- child workspace beads set `gc.pack_workspace`
 - continuation beads preserve convoy metadata
 - dependencies encode only real ordering constraints
 """
@@ -219,8 +265,8 @@ gc sling <rig>/packer.packsmith <child-bead-id> --on mol-packer-work
 The child bead must carry `gc.pack` and `gc.pack_root` metadata so packsmith's
 pre-start hook can sparse-checkout the correct pack before the bead is claimed.
 If `gc.pack_workspace` is set, packsmith uses that named workspace under the
-pack; otherwise GC reuses the pack workspace itself. Do not dispatch a bead
-whose target pack is ambiguous.
+pack; otherwise GC reuses the pack-named integration workspace itself. Do not
+dispatch a bead whose target pack is ambiguous.
 
 After dispatch, update the parent bead notes with the child bead IDs, their
 target packs, their workspace keys, and any convoy grouping. This visibility
