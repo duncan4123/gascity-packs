@@ -1,0 +1,14 @@
+# BD GC DL — plugin-backed DoltLite build pack.
+#
+# This pack builds the split DoltLite shape:
+#   - normal bd and gc binaries that speak to backend plugins
+#   - bd-backend-doltlite for Beads storage
+#   - gc-doltlite-fastpath for Gas City storage
+#   - optional gc-doltlite helper and doltlite-client diagnostics
+#
+# It intentionally keeps direct libdoltlite linkage in the backend plugin
+# binaries instead of in the main bd/gc CLIs.
+
+[pack]
+name = "bd-gc-dl"
+schema = 2

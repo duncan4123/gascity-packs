@@ -1,0 +1,8 @@
+description = "Specialist for plugin-backed DoltLite bd/gc failures across managed repos"
+scope = "city"
+wake_mode = "fresh"
+work_dir = ".gc/agents/bd-gc-dl-fixer/{{.AgentBase}}"
+nudge = "Check your hook for bd-gc-dl repair work."
+idle_timeout = "2h"
+min_active_sessions = 0
+max_active_sessions = 2

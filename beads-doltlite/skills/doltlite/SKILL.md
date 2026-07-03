@@ -23,6 +23,11 @@ Prefer that contract over assumptions from Dolt-server commands.
 
 - DoltLite cities use `[beads] backend = "doltlite"` and bead scopes under
   `.beads/doltlite/*.db`.
+- Plugin-backed DoltLite scopes must also have `.beads/metadata.json` fields
+  for both Beads and Gas City plugin entry points:
+  `backend_plugin_command`, `backend_plugin_args`,
+  `gascity_backend_command`, and `gascity_backend_args`. Keep the local ops
+  attachment as `attached_databases: [{alias:"ops", path:"<scope>/.gc/ops.sqlite"}]`.
 - Do not require a Dolt SQL server, runtime port, or
   `.gc/runtime/packs/dolt/dolt-state.json`.
 - For fresh init and normal Gas City install paths, install only `gc` with
@@ -57,6 +62,65 @@ Prefer that contract over assumptions from Dolt-server commands.
 - Before debugging lock issues, check for active `bd`, `doltlite-client`,
   `gc session list`, and `gc-beads-bd` processes. Kill only probes you started
   or processes the user has approved.
+
+## Backend Plugin Layout
+
+The DoltLite plugin work spans four repositories/workspaces. Check all of them
+before declaring the city healthy:
+
+- Beads core plugin branch:
+  `/data/projects/doltlite-gascity/workspaces/beads-plugin-architecture`.
+  This owns the Beads backend plugin client, protocol, `bd backend` command,
+  `bd sql` raw-SQL forwarding, schema v54 lease compatibility, and Beads
+  database discovery for `.beads/doltlite/`.
+- DoltLite backend plugin repo:
+  `/data/projects/doltlite-gascity/rigs/beads-backend-doltlite-plugin`.
+  This owns `bd-backend-doltlite` and `gc-doltlite-fastpath` server binaries.
+- Gas City repo:
+  `/data/projects/doltlite-gascity/gascity`.
+  This owns Gas City metadata preservation and the Gas City backend abstraction
+  that launches `gc-doltlite-fastpath`.
+- Gas City packs repo:
+  `/data/projects/doltlite-gascity/gascity-packs`.
+  The full pack is `beads-doltlite`; the bootstrap pack is
+  `beads-doltlite-init`. Both must write plugin metadata during init, and the
+  full pack should repair existing DoltLite scope metadata during
+  `ensure-ready`.
+
+The runtime binaries normally live under the city root:
+
+```bash
+.gc/runtime/packs/bd-gc-dl/bin/bd-backend-doltlite
+.gc/runtime/packs/bd-gc-dl/bin/gc-doltlite-fastpath
+.gc/runtime/packs/beads-doltlite/bin/bd-backend-doltlite
+.gc/runtime/packs/dolt/bin/gc-doltlite-fastpath
+```
+
+Use these trace files to prove calls are going through the plugin:
+
+```bash
+.gc/backend-plugin-trace.jsonl
+.gc/gascity-backend-plugin-trace.jsonl
+```
+
+If logs show `embeddeddolt: init schema` or
+`cannot resolve default branch head ... main`, the current `bd` process is not
+opening through the backend plugin. First inspect the scope's
+`.beads/metadata.json`; missing `backend_plugin_command` is the usual cause.
+If a pure DoltLite scope says `no beads database found`, confirm the installed
+Beads build recognizes `.beads/doltlite/` as a valid database root.
+
+Fast sanity checks from a rig root:
+
+```bash
+BEADS_DIR="$PWD/.beads" bd list --json --limit 1
+BEADS_DIR="$PWD/.beads" bd sql 'select version from schema_migrations order by version desc limit 1' --json
+tail -20 "$GC_CITY_PATH/.gc/backend-plugin-trace.jsonl"
+```
+
+Expected current schema for the plugin work is v54. Identity mismatches mean
+`metadata.json project_id` does not match the database `_project_id`; reconcile
+that before debugging backend behavior.
 
 ## Pack Troubleshooting
 

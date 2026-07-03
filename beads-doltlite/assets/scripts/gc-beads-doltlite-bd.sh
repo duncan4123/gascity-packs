@@ -436,25 +436,128 @@ metadata_is_doltlite() {
     [ "$(read_metadata_string_field "$meta_file" backend)" = "doltlite" ] || [ "$(read_metadata_string_field "$meta_file" database)" = "doltlite" ]
 }
 
+json_escape_value() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+find_backend_plugin_command() {
+    if [ "${GC_DOLTLITE_BACKEND_PLUGIN:-1}" = "0" ] || [ "${GC_DOLTLITE_BACKEND_PLUGIN:-1}" = "false" ] || [ "${GC_DOLTLITE_BACKEND_PLUGIN:-1}" = "off" ]; then
+        return 0
+    fi
+    if [ -n "${GC_DOLTLITE_BACKEND_PLUGIN_COMMAND:-}" ]; then
+        if [ ! -x "$GC_DOLTLITE_BACKEND_PLUGIN_COMMAND" ]; then
+            die "configured DoltLite backend plugin is not executable: $GC_DOLTLITE_BACKEND_PLUGIN_COMMAND"
+        fi
+        printf '%s\n' "$GC_DOLTLITE_BACKEND_PLUGIN_COMMAND"
+        return 0
+    fi
+
+    local city_path="${GC_CITY_PATH:-}"
+    [ -n "$city_path" ] || return 0
+    for candidate in \
+        "$city_path/.gc/runtime/packs/bd-gc-dl/bin/bd-backend-doltlite" \
+        "$city_path/.gc/runtime/packs/beads-doltlite/bin/bd-backend-doltlite" \
+        "$city_path/.gc/runtime/packs/dolt/bin/bd-backend-doltlite" \
+        "$city_path/rigs/beads-backend-doltlite-plugin/bin/bd-backend-doltlite" \
+        "$city_path/beads-backend-doltlite-plugin/bin/bd-backend-doltlite" \
+        "$city_path/../beads-backend-doltlite-plugin/bin/bd-backend-doltlite"; do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+}
+
+find_gascity_backend_plugin_command() {
+    if [ "${GC_DOLTLITE_BACKEND_PLUGIN:-1}" = "0" ] || [ "${GC_DOLTLITE_BACKEND_PLUGIN:-1}" = "false" ] || [ "${GC_DOLTLITE_BACKEND_PLUGIN:-1}" = "off" ]; then
+        return 0
+    fi
+    if [ -n "${GC_DOLTLITE_GASCITY_BACKEND_PLUGIN_COMMAND:-}" ]; then
+        if [ ! -x "$GC_DOLTLITE_GASCITY_BACKEND_PLUGIN_COMMAND" ]; then
+            die "configured Gas City DoltLite backend plugin is not executable: $GC_DOLTLITE_GASCITY_BACKEND_PLUGIN_COMMAND"
+        fi
+        printf '%s\n' "$GC_DOLTLITE_GASCITY_BACKEND_PLUGIN_COMMAND"
+        return 0
+    fi
+
+    local bd_plugin
+    bd_plugin="$(find_backend_plugin_command)"
+    if [ -n "$bd_plugin" ]; then
+        local sibling
+        sibling="$(dirname "$bd_plugin")/gc-doltlite-fastpath"
+        if [ -x "$sibling" ]; then
+            printf '%s\n' "$sibling"
+            return 0
+        fi
+    fi
+
+    local city_path="${GC_CITY_PATH:-}"
+    [ -n "$city_path" ] || return 0
+    for candidate in \
+        "$city_path/.gc/runtime/packs/bd-gc-dl/bin/gc-doltlite-fastpath" \
+        "$city_path/.gc/runtime/packs/beads-doltlite/bin/gc-doltlite-fastpath" \
+        "$city_path/.gc/runtime/packs/dolt/bin/gc-doltlite-fastpath" \
+        "$city_path/rigs/beads-backend-doltlite-plugin/bin/gc-doltlite-fastpath" \
+        "$city_path/beads-backend-doltlite-plugin/bin/gc-doltlite-fastpath" \
+        "$city_path/../beads-backend-doltlite-plugin/bin/gc-doltlite-fastpath"; do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+}
+
 write_doltlite_metadata() {
-    local dir="$1" database="$2" metadata_path tmp project_id
+    local dir="$1" database="$2" metadata_path tmp project_id plugin_command gascity_plugin_command plugin_trace gascity_plugin_trace ops_path
     metadata_path="$dir/.beads/metadata.json"
     mkdir -p "$dir/.beads"
     project_id=$(read_metadata_string_field "$metadata_path" project_id)
     if [ -z "$project_id" ]; then
         project_id="$(basename "$dir")"
     fi
+    plugin_command="$(find_backend_plugin_command)"
+    gascity_plugin_command="$(find_gascity_backend_plugin_command)"
+    plugin_trace="${GC_DOLTLITE_BACKEND_PLUGIN_TRACE:-${GC_CITY_PATH:-$dir}/.gc/backend-plugin-trace.jsonl}"
+    gascity_plugin_trace="${GC_DOLTLITE_GASCITY_BACKEND_PLUGIN_TRACE:-${GC_CITY_PATH:-$dir}/.gc/gascity-backend-plugin-trace.jsonl}"
+    ops_path="$dir/.gc/ops.sqlite"
     tmp="$metadata_path.tmp.$$"
-    cat > "$tmp" <<EOF
-{
-  "backend": "doltlite",
-  "database": "doltlite",
-  "dolt_database": "$database",
-  "project_id": "$project_id"
-}
-EOF
+    {
+        printf '{\n'
+        printf '  "attached_databases": [\n'
+        printf '    {\n'
+        printf '      "alias": "ops",\n'
+        printf '      "path": "%s"\n' "$(json_escape_value "$ops_path")"
+        printf '    }\n'
+        printf '  ],\n'
+        printf '  "backend": "doltlite",\n'
+        printf '  "database": "doltlite",\n'
+        printf '  "dolt_database": "%s",\n' "$(json_escape_value "$database")"
+        printf '  "project_id": "%s"' "$(json_escape_value "$project_id")"
+        if [ -n "$plugin_command" ]; then
+            printf ',\n'
+            printf '  "backend_plugin_command": "%s",\n' "$(json_escape_value "$plugin_command")"
+            printf '  "backend_plugin_args": ["--trace", "%s", "serve"]' "$(json_escape_value "$plugin_trace")"
+        fi
+        if [ -n "$gascity_plugin_command" ]; then
+            printf ',\n'
+            printf '  "gascity_backend_command": "%s",\n' "$(json_escape_value "$gascity_plugin_command")"
+            printf '  "gascity_backend_args": ["--trace", "%s", "serve"]' "$(json_escape_value "$gascity_plugin_trace")"
+        fi
+        printf '\n}\n'
+    } > "$tmp"
     chmod 600 "$tmp"
     mv "$tmp" "$metadata_path"
+}
+
+repair_doltlite_metadata_for_current_scope() {
+    local dir metadata_path database
+    dir="${GC_BEADS_SCOPE_ROOT:-${GC_CITY_PATH:-}}"
+    [ -n "$dir" ] || return 0
+    metadata_path="$dir/.beads/metadata.json"
+    [ -f "$metadata_path" ] || return 0
+    database=$(read_existing_dolt_database "$metadata_path")
+    [ -n "$database" ] || return 0
+    write_doltlite_metadata "$dir" "$database"
 }
 
 ensure_doltlite_schema() {
@@ -613,21 +716,31 @@ ensure_doltlite_runtime_config_value() {
     local dir="$1"
     local key="$2"
     local value="$3"
-    local key_sql value_sql
+    local got
     [ -n "$dir" ] || return 0
     [ -n "$value" ] || return 0
     validate_bd_runtime_config_value "$key" "$value"
 
-    key_sql=$(printf '%s' "$key" | sed "s/'/''/g")
-    value_sql=$(printf '%s' "$value" | sed "s/'/''/g")
-    run_bd_doltlite "$dir" sql "REPLACE INTO config (\"key\", value) VALUES ('$key_sql', '$value_sql')" >/dev/null ||
+    run_bd_doltlite "$dir" config set "$key" "$value" >/dev/null ||
         die "failed to set doltlite runtime $key for $dir"
+    got=$(run_bd_doltlite "$dir" config get "$key" 2>/dev/null | sed 's/[[:space:]]*$//' || true)
+    [ "$got" = "$value" ] || die "failed to verify doltlite runtime $key for $dir"
 }
 
 ensure_doltlite_runtime_issue_prefix() {
     local dir="$1"
     local prefix="$2"
-    ensure_doltlite_runtime_config_value "$dir" "issue_prefix" "$prefix"
+    local got
+    [ -n "$dir" ] || return 0
+    [ -n "$prefix" ] || return 0
+    got=$(run_bd_doltlite "$dir" config get issue_prefix 2>/dev/null | sed 's/[[:space:]]*$//' || true)
+    if [ -n "$got" ]; then
+        if [ "$got" != "$prefix" ]; then
+            echo "warning: preserving existing doltlite issue_prefix '$got' for $dir (wanted '$prefix'); use bd rename-prefix explicitly to migrate IDs" >&2
+        fi
+        return 0
+    fi
+    die "failed to verify doltlite runtime issue_prefix for $dir"
 }
 
 ensure_doltlite_runtime_custom_types() {
@@ -3206,7 +3319,11 @@ DOLT_PORT=$(allocate_port)
 
 if is_doltlite_backend; then
     case "$op" in
-        start|ensure-ready|health|recover|stop|shutdown)
+        ensure-ready)
+            repair_doltlite_metadata_for_current_scope
+            exit 0
+            ;;
+        start|health|recover|stop|shutdown)
             exit 0
             ;;
     esac
