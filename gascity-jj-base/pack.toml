@@ -15,6 +15,3 @@ source = "../gascity"
 
 [imports.jjw]
 source = "../jjw"
-
-[imports.gastown]
-source = "../gastown"
