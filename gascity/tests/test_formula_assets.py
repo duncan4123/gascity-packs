@@ -730,6 +730,23 @@ class FormulaAssetTests(unittest.TestCase):
             with self.subTest(agent=agent_name):
                 self.assertEqual(prompt.read_text(encoding="utf-8").strip(), expected)
 
+    def test_role_agents_ship_bd_gc_dl_handoff_fragment(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1]
+        shared = root / "roles" / "template-fragments" / "bd-gc-dl-handoff.template.md"
+        expected = shared.read_text(encoding="utf-8")
+
+        for agent_name in ROLE_AGENTS:
+            fragment = (
+                root
+                / "roles"
+                / "agents"
+                / agent_name
+                / "template-fragments"
+                / "bd-gc-dl-handoff.template.md"
+            )
+            with self.subTest(agent=agent_name):
+                self.assertEqual(fragment.read_text(encoding="utf-8"), expected)
+
     def test_role_worker_protocol_fragment_matches_shared_prompt(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
         shared = root / "roles" / "prompts" / "shared" / "gc-role-worker.md.tmpl"

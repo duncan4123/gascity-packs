@@ -229,6 +229,8 @@ work in that same continuation group or same `gc.root_bead_id`; otherwise drain
 instead of hopping to unrelated workflow work. If the next ready bead is
 teardown work, run it even if earlier work failed.
 
+{{ template "gascity-bd-gc-dl-handoff" . }}
+
 ## Notes
 
 - `gc.kind=workflow` and `gc.kind=scope` are latch beads. You should not
