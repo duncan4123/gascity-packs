@@ -6,7 +6,7 @@ immediately.
 ```bash
 gc bd-gc-dl file-fix-task --summary "bd list fails in rig beads" \
   --command "bd list --json --limit 1" \
-  --scope "beads-doltlite rig" \
+  --scope "plugin-backed beads rig" \
   --evidence ".gc/diagnostics/bd-gc-dl/bd-list-failure.md"
 ```
 

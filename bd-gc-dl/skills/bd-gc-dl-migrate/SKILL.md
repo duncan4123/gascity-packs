@@ -56,8 +56,9 @@ gc import add bd-gc-dl /data/projects/doltlite-gascity/gascity-packs/bd-gc-dl
 gc import install
 ```
 
-Keep `beads-doltlite-init` and `beads-doltlite`; `bd-gc-dl` is the build pack,
-not the provider pack.
+Remove `beads-doltlite-init` and `beads-doltlite` imports for plugin-backed
+cities. `bd-gc-dl` owns both the build layout and the provider bridge for this
+architecture.
 
 ## Build Plugin Binaries
 
@@ -78,30 +79,38 @@ TMPDIR=<city>/.cache/go/tmp
 
 Do not pass `/tmp` output or build-detail paths.
 
-## Repair Metadata
+## Repair Plugin Trust
 
 Run the DoltLite provider readiness path so existing scopes are rewritten with
-the new plugin command paths:
+descriptive metadata and local plugin trust:
 
 ```bash
-gc beads-doltlite health
+gc import check
 gc doctor
 ```
 
-If a scope still lacks plugin metadata, repair it explicitly by running the
-provider ensure-ready path through normal Gas City startup/reload, or rewrite
-the scope metadata only after preserving its existing `project_id` and
-`dolt_database`.
+If a scope still lacks plugin trust, repair it explicitly by running the
+provider ensure-ready path through normal Gas City startup/reload. Committed
+`.beads/metadata.json` should identify the backend; `.beads/config.local.yaml`
+authorizes the executable and is gitignored.
 
-Expected metadata fields:
+Expected committed metadata:
 
 ```json
 {
-  "backend_plugin_command": "<city>/.gc/runtime/packs/bd-gc-dl/bin/bd-backend-doltlite",
-  "backend_plugin_args": ["--trace", "<city>/.gc/backend-plugin-trace.jsonl", "serve"],
-  "gascity_backend_command": "<city>/.gc/runtime/packs/bd-gc-dl/bin/gc-doltlite-fastpath",
-  "gascity_backend_args": ["--trace", "<city>/.gc/gascity-backend-plugin-trace.jsonl", "serve"]
+  "backend": "doltlite",
+  "database": "doltlite",
+  "dolt_database": "<scope database>"
 }
+```
+
+Expected local trust:
+
+```yaml
+backend_plugins:
+  doltlite:
+    command: <city>/.gc/runtime/packs/bd-gc-dl/bin/bd-backend-doltlite
+    args: ["--trace", "<city>/.gc/backend-plugin-trace.jsonl", "serve"]
 ```
 
 ## Verify
@@ -116,15 +125,14 @@ tail -20 .gc/gascity-backend-plugin-trace.jsonl
 ```
 
 The trace files should show plugin calls after the migration. If traces stay
-empty, inspect `.beads/metadata.json` and confirm the installed `bd` build
-supports backend plugin metadata.
+empty, inspect `.beads/config.local.yaml` and confirm the installed `bd` build
+uses local backend plugin trust.
 
 ## Rollback
 
 Rollback is config-based:
 
 - Remove or stop using the `bd-gc-dl` import.
-- Restore prior plugin command paths in `.beads/metadata.json`, or set
-  `GC_DOLTLITE_BACKEND_PLUGIN_COMMAND` and
-  `GC_DOLTLITE_GASCITY_BACKEND_PLUGIN_COMMAND` to known-good binaries.
+- Remove `.beads/config.local.yaml`, or set `GC_DOLTLITE_BACKEND_PLUGIN_COMMAND`
+  and `GC_DOLTLITE_GASCITY_BACKEND_PLUGIN_COMMAND` to known-good binaries.
 - Do not delete `.beads/doltlite` data during rollback.

@@ -21,3 +21,14 @@ __pycache__/
 
 # bt (beadstui) local config and caches
 .bt/
+
+# Gas City
+.mcp.json
+.gemini/settings.json
+.codex/config.toml
+.cursor/mcp.json
+opencode.json
+mimocode.json
+
+# Beads / Dolt files (added by bd init)
+.beads/proxieddb/

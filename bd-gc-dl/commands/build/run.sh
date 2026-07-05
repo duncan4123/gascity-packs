@@ -23,6 +23,8 @@ Options:
   --bd-source DIR       Beads source checkout containing cmd/bd.
   --gc-source DIR       Gas City source checkout containing cmd/gc.
   --plugin-source DIR   Backend plugin source checkout.
+  --client-source DIR   Source checkout containing tools/doltlite-client.
+                        Default: this bd-gc-dl pack.
   --lib DIR             Directory containing libdoltlite.
   --skip-local-source   Skip automatic local source discovery and install
                         released artifacts unless explicit sources are passed.
@@ -45,6 +47,7 @@ Environment overrides:
   BD_SRC, BEADS_DOLTLITE_SRC, GC_BEADS_DOLTLITE_SRC
   GASCITY_SRC, GC_GASCITY_SRC
   BACKEND_PLUGIN_SRC, GC_DOLTLITE_BACKEND_PLUGIN_SRC
+  CLIENT_SRC, BD_GC_DL_CLIENT_SOURCE
   DOLTLITE_LIB, GC_DOLTLITE_LIB
   BD_GC_DL_OUTPUT_DIR, BD_GC_DL_BUILD_DETAILS_DIR
   BD_GC_DL_INSTALL, BD_GC_DL_INSTALL_DIR
@@ -92,6 +95,22 @@ has_gc_source() {
 
 has_plugin_source() {
   [ -f "$1/go.mod" ] && [ -d "$1/cmd/bd-backend-doltlite" ] && [ -d "$1/cmd/gc-doltlite-fastpath" ]
+}
+
+has_client_source() {
+  [ -f "$1/go.mod" ] && { [ -f "$1/bd-gc-dl/tools/doltlite-client/main.go" ] || [ -f "$1/tools/doltlite-client/main.go" ]; }
+}
+
+client_package_for() {
+  if [ -f "$1/bd-gc-dl/tools/doltlite-client/main.go" ]; then
+    echo "./bd-gc-dl/tools/doltlite-client"
+    return 0
+  fi
+  if [ -f "$1/tools/doltlite-client/main.go" ]; then
+    echo "./tools/doltlite-client"
+    return 0
+  fi
+  return 1
 }
 
 has_doltlite_lib() {
@@ -284,10 +303,7 @@ ensure_plugin_release_binary() {
 
 find_bd_source() {
   for candidate in \
-    "$CITY_ROOT/beads-doltlite" \
     "$CITY_ROOT/workspaces/beads-plugin-architecture" \
-    "$CITY_ROOT/../beads-doltlite" \
-    "$SCRIPT_CHECKOUT/../beads-doltlite" \
     "$SCRIPT_CHECKOUT"; do
     if [ -d "$candidate" ] && has_bd_source "$candidate"; then
       abs_dir "$candidate"
@@ -326,12 +342,27 @@ find_plugin_source() {
   return 1
 }
 
+find_client_source() {
+  for candidate in \
+    "$PACK_DIR" \
+    "$SCRIPT_CHECKOUT" \
+    "$CITY_ROOT/gascity" \
+    "$CITY_ROOT/gascity-plugin-provider" \
+    "$CITY_ROOT/../gascity" \
+    "$SCRIPT_CHECKOUT/../gascity"; do
+    if [ -d "$candidate" ] && has_client_source "$candidate"; then
+      abs_dir "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 find_doltlite_lib() {
   for candidate in \
     "$CITY_ROOT/doltlite-work/build" \
     "$CITY_ROOT/doltlite/build" \
     "$CITY_ROOT/doltlite" \
-    "$CITY_ROOT/.gc/runtime/packs/beads-doltlite/doltlite/0.11.23/linux-x64" \
     "$CITY_ROOT/../doltlite-work/build" \
     "$CITY_ROOT/../doltlite/build"; do
     if [ -d "$candidate" ] && has_doltlite_lib "$candidate"; then
@@ -344,8 +375,8 @@ find_doltlite_lib() {
 
 revision_for() {
   local dir="$1"
-  if command -v jj >/dev/null 2>&1 && [ -d "$dir/.jj" ]; then
-    jj -R "$dir" log -r @ --no-graph -T 'commit_id.short()' 2>/dev/null || true
+  if command -v jj >/dev/null 2>&1 && (cd "$dir" && jj root --ignore-working-copy >/dev/null 2>&1); then
+    (cd "$dir" && jj log -r @ --no-graph -T 'commit_id.short()') 2>/dev/null || true
     return 0
   fi
   git -C "$dir" rev-parse --short=12 HEAD 2>/dev/null || true
@@ -353,8 +384,8 @@ revision_for() {
 
 branch_for() {
   local dir="$1"
-  if command -v jj >/dev/null 2>&1 && [ -d "$dir/.jj" ]; then
-    jj -R "$dir" log -r @ --no-graph -T 'bookmarks.join(",")' 2>/dev/null | tr -d '*' || true
+  if command -v jj >/dev/null 2>&1 && (cd "$dir" && jj root --ignore-working-copy >/dev/null 2>&1); then
+    (cd "$dir" && jj log -r @ --no-graph -T 'bookmarks.join(",")') 2>/dev/null | tr -d '*' || true
     return 0
   fi
   git -C "$dir" branch --show-current 2>/dev/null || true
@@ -594,7 +625,7 @@ build_gc_helper() {
 }
 
 build_client() {
-  if [ "$BUILD_CLIENT_FROM_SOURCE" != "1" ] && [ -z "$GC_SRC" ]; then
+  if [ "$BUILD_CLIENT_FROM_SOURCE" != "1" ] && [ -z "$CLIENT_SRC" ] && ! has_client_source "$PACK_DIR"; then
     local release_bin version
     if release_bin="$(ensure_release_binary doltlite-client)"; then
       version="$(basename "$(dirname "$(dirname "$release_bin")")")"
@@ -609,19 +640,19 @@ build_client() {
     fi
     echo "doltlite-client release unavailable; falling back to source build" >&2
   fi
-  [ -n "$GC_SRC" ] || GC_SRC="$(find_gc_source || true)"
-  [ -n "$GC_SRC" ] && has_gc_source "$GC_SRC" || die "could not find Gas City source; pass --gc-source"
-  GC_SRC="$(abs_dir "$GC_SRC")"
-  [ -f "$GC_SRC/tools/doltlite-client/main.go" ] || die "could not find doltlite-client under $GC_SRC/tools/doltlite-client"
-  local output commit tags
+  [ -n "$CLIENT_SRC" ] || CLIENT_SRC="$(find_client_source || true)"
+  [ -n "$CLIENT_SRC" ] && has_client_source "$CLIENT_SRC" || die "could not find doltlite-client source; pass --client-source"
+  CLIENT_SRC="$(abs_dir "$CLIENT_SRC")"
+  local output commit tags package
   output="$OUTPUT_DIR/doltlite-client"
-  commit="$(revision_for "$GC_SRC")"
+  commit="$(revision_for "$CLIENT_SRC")"
+  package="$(client_package_for "$CLIENT_SRC")" || die "could not find doltlite-client package under $CLIENT_SRC"
   tags="${CLIENT_GO_TAGS:-gascity_doltlite_lib,libsqlite3}"
   prepare_plugin_go_env
   export GOFLAGS="${GOFLAGS:-"-tags=${tags}"}"
-  echo "building doltlite-client from $GC_SRC"
-  (cd "$GC_SRC" && go build -o "$output" ./tools/doltlite-client)
-  write_build_details "doltlite-client" "$GC_SRC" "$output" "$output" "${commit:-unknown}" "dev" "$tags" "$DOLTLITE_LIB"
+  echo "building doltlite-client from $CLIENT_SRC"
+  (cd "$CLIENT_SRC" && go build -o "$output" "$package")
+  write_build_details "doltlite-client" "$CLIENT_SRC" "$output" "$output" "${commit:-unknown}" "dev" "$tags" "$DOLTLITE_LIB"
 }
 
 CITY_ROOT="${GC_CITY_PATH:-${GC_CITY:-$(pwd)}}"
@@ -634,6 +665,7 @@ TARGET="all"
 BD_SRC="${BD_SRC:-${BEADS_DOLTLITE_SRC:-${GC_BEADS_DOLTLITE_SRC:-}}}"
 GC_SRC="${GASCITY_SRC:-${GC_GASCITY_SRC:-}}"
 PLUGIN_SRC="${BACKEND_PLUGIN_SRC:-${GC_DOLTLITE_BACKEND_PLUGIN_SRC:-}}"
+CLIENT_SRC="${CLIENT_SRC:-${BD_GC_DL_CLIENT_SOURCE:-}}"
 DOLTLITE_LIB="${DOLTLITE_LIB:-${GC_DOLTLITE_LIB:-}}"
 OUTPUT_DIR="${BD_GC_DL_OUTPUT_DIR:-$PACK_INSTALL_BIN}"
 BUILD_DETAILS_DIR="${BD_GC_DL_BUILD_DETAILS_DIR:-$PACK_STATE_DIR}"
@@ -671,6 +703,11 @@ while [ $# -gt 0 ]; do
     --plugin-source)
       require_value "$1" "${2:-}"
       PLUGIN_SRC="$2"
+      shift 2
+      ;;
+    --client-source)
+      require_value "$1" "${2:-}"
+      CLIENT_SRC="$2"
       shift 2
       ;;
     --skip-local-source|--no-local-source)
@@ -767,7 +804,7 @@ case "${SKIP_LOCAL_SOURCE,,}" in
     [ -z "$BD_SRC" ] && BUILD_BD_FROM_SOURCE=0
     [ -z "$GC_SRC" ] && BUILD_GC_FROM_SOURCE=0
     [ -z "$PLUGIN_SRC" ] && BUILD_PLUGIN_FROM_SOURCE=0
-    [ -z "$GC_SRC" ] && BUILD_CLIENT_FROM_SOURCE=0
+    [ -z "$CLIENT_SRC" ] && ! has_client_source "$PACK_DIR" && BUILD_CLIENT_FROM_SOURCE=0
     ;;
   ""|0|false|no|off) SKIP_LOCAL_SOURCE=0 ;;
   *) usage_error "BD_GC_DL_SKIP_LOCAL_SOURCE must be true or false" ;;

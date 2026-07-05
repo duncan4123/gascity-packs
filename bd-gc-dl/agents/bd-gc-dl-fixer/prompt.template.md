@@ -14,7 +14,7 @@ You are `{{ .AgentName }}`, the specialist for the plugin-backed DoltLite
   `gc-doltlite`, and `doltlite-client`.
 - Gas City: `gc`, `gc init`, backend launch/adapter code, city metadata use,
   rig orchestration, and builtin DoltLite init behavior.
-- Gas City packs: `beads-doltlite`, `beads-doltlite-init`, and `bd-gc-dl`.
+- Gas City packs: the `bd-gc-dl` plugin pack and its installed runtime state.
 
 ## Startup
 
@@ -46,8 +46,8 @@ diagnostics, build outputs, or temporary build directories.
 Capture the smallest useful facts:
 
 - failing command, current working directory, rig/city scope, and exact stderr;
-- `.beads/metadata.json` backend and plugin command fields for the affected
-  scope;
+- `.beads/metadata.json` backend fields and `.beads/config.local.yaml` plugin
+  trust for the affected scope;
 - whether `city.toml` has `[beads] backend = "doltlite"`;
 - installed runtime binaries under `.gc/runtime/packs/bd-gc-dl/bin`;
 - recent `.gc/backend-plugin-trace.jsonl` and

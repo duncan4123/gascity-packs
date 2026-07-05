@@ -41,7 +41,7 @@ There are four source surfaces:
   runtime orchestration.
 - Gas City packs:
   `/data/projects/doltlite-gascity/gascity-packs`.
-  Owns `beads-doltlite`, `beads-doltlite-init`, and `bd-gc-dl`.
+  Owns the `bd-gc-dl` pack for plugin-backed DoltLite cities.
 
 The intended runtime shape is split-process:
 
@@ -107,7 +107,7 @@ Use explicit sources when doing coordinated local work:
 
 ```bash
 gc bd-gc-dl build all --install \
-  --bd-source /data/projects/doltlite-gascity/beads-doltlite \
+  --bd-source /data/projects/doltlite-gascity/workspaces/beads-plugin-architecture \
   --gc-source /data/projects/doltlite-gascity/gascity \
   --plugin-source /data/projects/doltlite-gascity/rigs/beads-backend-doltlite-plugin \
   --lib /data/projects/doltlite-gascity/doltlite-work/build
@@ -157,13 +157,13 @@ For a real release across all repos, release from the leaves inward:
    - run storage and pluginprocess tests;
    - release or pin the `bd` build that understands the plugin metadata.
 3. Gas City:
-   - update builtin `beads-doltlite-init` if plugin paths or metadata shape
+   - update the `bd-gc-dl` provider bridge if plugin paths or metadata shape
      changed;
    - update `gc init` imports when pack sources/versions change;
    - run init, backend, and city runtime tests;
    - release or pin `gc`.
 4. Gas City packs:
-   - update `beads-doltlite`, `beads-doltlite-init`, and `bd-gc-dl`;
+   - update `bd-gc-dl`;
    - update migration/build skills;
    - run `go test ./...`;
    - publish/tag the pack repo.
@@ -260,15 +260,20 @@ an alternate release source.
 
 ## Cross-Repo Compatibility Rule
 
-Compatibility is determined by the metadata contract, not by repo names:
+Compatibility is determined by the metadata/local-trust contract, not by repo names:
 
 ```json
 {
-  "backend_plugin_command": ".../bd-backend-doltlite",
-  "backend_plugin_args": ["--trace", ".../backend-plugin-trace.jsonl", "serve"],
-  "gascity_backend_command": ".../gc-doltlite-fastpath",
-  "gascity_backend_args": ["--trace", ".../gascity-backend-plugin-trace.jsonl", "serve"]
+  "backend": "doltlite",
+  "database": "doltlite"
 }
+```
+
+```yaml
+backend_plugins:
+  doltlite:
+    command: ".../bd-backend-doltlite"
+    args: ["--trace", ".../backend-plugin-trace.jsonl", "serve"]
 ```
 
 Any release that changes these fields, protocol methods, schema expectations,
