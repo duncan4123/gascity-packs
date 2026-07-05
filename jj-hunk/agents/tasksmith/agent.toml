@@ -1,5 +1,5 @@
 scope = "rig"
-provider = "omp-tasksmith"
+provider = "codex"
 wake_mode = "fresh"
 formula = "mol-jj-hunk-subagent-task"
 work_dir = "{{.RigRoot}}"

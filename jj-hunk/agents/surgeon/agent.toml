@@ -1,5 +1,5 @@
 scope = "rig"
-provider = "omp-surgeon"
+provider = "codex"
 wake_mode = "fresh"
 formula = "mol-jj-hunk-work"
 work_dir = ".gc/workspaces/{{.Rig}}/jedi/{{.AgentBase}}"
