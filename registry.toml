@@ -222,6 +222,25 @@ schema = 1
     description = "Initial jj-hunk workflow pack release."
 
 [[pack]]
+  name = "bd-gc-dl"
+  description = "Plugin-backed DoltLite backend pack for Gas City and Beads."
+  source = "https://github.com/duncan4123/gascity-packs/tree/bd-gc-dl-plugin-interface/bd-gc-dl"
+  source_kind = "git"
+
+  [[pack.plugin]]
+    kind = "beads-backend"
+    backend = "doltlite"
+    display_name = "DoltLite"
+    capabilities = ["setup", "provider", "metadata", "fastpath", "store-health"]
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "bd-gc-dl-plugin-interface"
+    commit = "1e0920f82d65f68f99f3a2623139ecc6c53a029a"
+    hash = "sha256:a3e326d72fa1d0ce8593f15ad4aa41d8bea0813d1f2df737d12911e1a32a1bae"
+    description = "Initial plugin-backed DoltLite backend pack."
+
+[[pack]]
   name = "beads-doltlite"
   description = "DoltLite backend operations pack for Gas City beads storage."
   source = "https://github.com/duncan4123/gascity-packs/tree/main/beads-doltlite"
