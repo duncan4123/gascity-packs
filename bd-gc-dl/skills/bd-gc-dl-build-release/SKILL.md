@@ -96,6 +96,13 @@ Build only plugin servers:
 gc bd-gc-dl build backend --install
 ```
 
+Install plugin servers from a known plugin release:
+
+```bash
+BD_GC_DL_PLUGIN_RELEASE_VERSION=plugin-v20260705.1 \
+  gc bd-gc-dl build backend --install --skip-local-source
+```
+
 Use explicit sources when doing coordinated local work:
 
 ```bash
@@ -138,8 +145,13 @@ For a real release across all repos, release from the leaves inward:
 
 1. Backend plugin repo:
    - run tests;
-   - build `bd-backend-doltlite`, `gc-doltlite-fastpath`, `gc-doltlite`;
-   - tag/release plugin binaries or record the commit consumed by packs.
+   - build release assets with `scripts/build-release-assets.sh`;
+   - publish a `plugin-vYYYYMMDD.N` prerelease in
+     `duncan4123/beads-backend-doltlite`;
+   - verify the published assets by downloading them and running
+     `sha256sum -c checksums.txt`;
+   - ensure the pack can install them with
+     `BD_GC_DL_PLUGIN_RELEASE_VERSION=<tag> gc bd-gc-dl build backend --install --skip-local-source`.
 2. Beads core / `bd`:
    - ensure backend-plugin protocol compatibility;
    - run storage and pluginprocess tests;
@@ -179,6 +191,72 @@ notes explicit about:
 - required `gc` version;
 - backend plugin binary commit/version;
 - pack version or commit.
+
+## Backend Plugin Release
+
+The backend plugin repo release is the authoritative release surface for:
+
+- `bd-backend-doltlite_linux_amd64`;
+- `gc-doltlite-fastpath_linux_amd64`;
+- `gc-doltlite_linux_amd64`;
+- `checksums.txt`.
+
+The release repo is:
+
+```text
+https://github.com/duncan4123/beads-backend-doltlite
+```
+
+Use a prerelease tag shaped like:
+
+```text
+plugin-vYYYYMMDD.N
+```
+
+Build and verify locally:
+
+```bash
+cd /data/projects/doltlite-gascity/rigs/beads-backend-doltlite-plugin
+go test ./...
+scripts/build-release-assets.sh
+(cd dist && sha256sum -c checksums.txt)
+```
+
+Publish with the workflow on tag push, or create the release explicitly when
+you already have locally verified assets:
+
+```bash
+gh release create plugin-vYYYYMMDD.N dist/* \
+  --repo duncan4123/beads-backend-doltlite \
+  --target <full-commit-sha> \
+  --prerelease \
+  --title plugin-vYYYYMMDD.N \
+  --notes "<compatibility notes>"
+```
+
+Verify the published release:
+
+```bash
+verify_dir=".cache/release-verify/plugin-vYYYYMMDD.N"
+rm -rf "$verify_dir"
+mkdir -p "$verify_dir"
+gh release download plugin-vYYYYMMDD.N \
+  --repo duncan4123/beads-backend-doltlite \
+  --dir "$verify_dir"
+(cd "$verify_dir" && sha256sum -c checksums.txt)
+```
+
+Then verify the pack consumes it:
+
+```bash
+BD_GC_DL_PLUGIN_RELEASE_VERSION=plugin-vYYYYMMDD.N \
+  gc bd-gc-dl build backend --install --skip-local-source
+```
+
+The pack resolves plugin releases from
+`duncan4123/beads-backend-doltlite` by default. Override with
+`BD_GC_DL_PLUGIN_RELEASE_BASE` or `BD_GC_DL_PLUGIN_RELEASE_API` only when testing
+an alternate release source.
 
 ## Cross-Repo Compatibility Rule
 
