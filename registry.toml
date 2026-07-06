@@ -243,7 +243,7 @@ schema = 1
   [[pack.release]]
     version = "0.1.1"
     ref = "bd-gc-dl-plugin-interface"
-    commit = "025a4d229e7ff480d4b36a9e577bc33196756a78"
+    commit = "e183a7dae4a8f551f8f09e0983dacb493badc5b7"
     hash = "sha256:6522c57b0e440b783fa74e9af79c8180be0ec8760c3bc0856a6a67cc6787dddc"
     description = "Document plugin-v20260706.1 backend plugin release for fresh init installs."
 
