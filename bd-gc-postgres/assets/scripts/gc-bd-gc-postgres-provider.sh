@@ -271,6 +271,14 @@ op_init() {
     if [ -n "$postgres_password" ] && [ -z "${BEADS_PG_PASSWORD:-}" ]; then
         export BEADS_PG_PASSWORD="$postgres_password"
     fi
+
+    mkdir -p "$dir/.beads" "$dir/.gc"
+    chmod 700 "$dir/.beads" 2>/dev/null || true
+
+    plugin_command="$(resolve_plugin_command)"
+    prepare_plugin_command_if_missing "$plugin_command"
+    [ -x "$plugin_command" ] || die "bd-gc-postgres backend plugin is not executable: $plugin_command"
+
     if [ "$postgres_url_source" = "metadata" ] && [ -z "$postgres_password" ] && ! postgres_dsn_has_password "$postgres_url"; then
         postgres_url=""
     fi
@@ -280,12 +288,6 @@ op_init() {
         postgres_password="${BEADS_PG_PASSWORD:-$postgres_password}"
     fi
     postgres_url="$(postgres_url_with_password "$postgres_url" "$postgres_password")"
-
-    plugin_command="$(resolve_plugin_command)"
-    [ -x "$plugin_command" ] || die "bd-gc-postgres backend plugin is not executable: $plugin_command"
-
-    mkdir -p "$dir/.beads" "$dir/.gc"
-    chmod 700 "$dir/.beads" 2>/dev/null || true
 
     city_root="$(resolve_city_root)"
     trace="${BEADS_BACKEND_POSTGRES_TRACE:-$city_root/.gc/backend-postgres-plugin-trace.jsonl}"
@@ -314,6 +316,25 @@ resolve_plugin_command() {
     fi
     city_root="$(resolve_city_root)"
     printf '%s\n' "$city_root/.gc/runtime/packs/bd-gc-postgres/bin/bd-backend-postgres"
+}
+
+prepare_plugin_command_if_missing() {
+    command_path="$1"
+    [ -x "$command_path" ] && return 0
+
+    script_path="$0"
+    case "$script_path" in
+        */*) ;;
+        *) return 0 ;;
+    esac
+    script_dir="$(CDPATH= cd "$(dirname "$script_path")" 2>/dev/null && pwd -P)" || return 0
+    pack_root="$(CDPATH= cd "$script_dir/../.." 2>/dev/null && pwd -P)" || return 0
+    build_script="$pack_root/commands/build/run.sh"
+    [ -x "$build_script" ] || return 0
+
+    city_root="$(resolve_city_root)"
+    echo "bd-gc-postgres: backend plugin missing; running pack prepare command" >&2
+    GC_CITY_PATH="$city_root" "$build_script" backend --install
 }
 
 plugin_init() {

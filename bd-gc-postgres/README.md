@@ -18,6 +18,10 @@ launches a trusted local plugin process over the `beads.backend.v1alpha1`
 newline-delimited JSON protocol. The plugin owns direct Postgres access and
 Beads core talks to it through the plugin adapter.
 
+If the runtime plugin binary is missing during `gc init`, the setup hook runs
+the pack build command itself before provisioning Postgres. This keeps init
+working even when the caller has not run the pack prepare step yet.
+
 ## Configuration
 
 By default, `gc init --beads-backend postgres` provisions a local Postgres
