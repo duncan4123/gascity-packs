@@ -37,6 +37,204 @@ print(name[:63])
 PY
 }
 
+city_metadata_value() {
+    key="$1"
+    city_root="$(resolve_city_root)"
+    metadata="$city_root/.beads/metadata.json"
+    [ -f "$metadata" ] || return 1
+    python3 - "$metadata" "$key" <<'PY'
+import json
+import sys
+
+path, key = sys.argv[1:3]
+with open(path, "r", encoding="utf-8") as f:
+    value = json.load(f).get(key) or ""
+if value:
+    print(value)
+PY
+}
+
+postgres_url_with_password() {
+    dsn="$1"
+    password="$2"
+    [ -n "$password" ] || {
+        printf '%s\n' "$dsn"
+        return 0
+    }
+    python3 - "$dsn" "$password" <<'PY'
+import sys
+from urllib.parse import quote, urlparse, urlunparse
+
+dsn, password = sys.argv[1:3]
+if not dsn.startswith(("postgres://", "postgresql://")):
+    print(dsn)
+    raise SystemExit(0)
+u = urlparse(dsn)
+if u.password:
+    print(dsn)
+    raise SystemExit(0)
+host = u.hostname or ""
+if ":" in host and not host.startswith("["):
+    host = f"[{host}]"
+if u.port:
+    host = f"{host}:{u.port}"
+if u.username:
+    netloc = f"{quote(u.username)}:{quote(password)}@{host}"
+else:
+    netloc = host
+print(urlunparse((u.scheme, netloc, u.path, u.params, u.query, u.fragment)))
+PY
+}
+
+postgres_dsn_has_password() {
+    dsn="$1"
+    python3 - "$dsn" <<'PY'
+import re
+import sys
+from urllib.parse import parse_qs, urlparse
+
+dsn = sys.argv[1]
+has_password = False
+if dsn.startswith(("postgres://", "postgresql://")):
+    u = urlparse(dsn)
+    has_password = bool(u.password)
+    if not has_password:
+        has_password = bool(parse_qs(u.query).get("password"))
+else:
+    has_password = bool(re.search(r"(^|\\s)password=('[^']*'|\\S+)", dsn, re.I))
+raise SystemExit(0 if has_password else 1)
+PY
+}
+
+generate_postgres_password() {
+    python3 - <<'PY'
+import secrets
+
+print(secrets.token_urlsafe(32))
+PY
+}
+
+provision_local_postgres() {
+    schema="$1"
+    app_database="$(first_nonempty GC_POSTGRES_DATABASE BEADS_POSTGRES_DATABASE || true)"
+    if [ -z "$app_database" ]; then
+        app_database="$(city_metadata_value postgres_database || true)"
+    fi
+    if [ -z "$app_database" ]; then
+        app_database="gc_$(sanitize_database "$(basename "$(resolve_city_root)")")"
+    else
+        app_database="$(sanitize_database "$app_database")"
+    fi
+
+    app_user="$(first_nonempty GC_POSTGRES_USER BEADS_POSTGRES_USER || true)"
+    if [ -z "$app_user" ]; then
+        app_user="$(city_metadata_value postgres_user || true)"
+    fi
+    if [ -z "$app_user" ]; then
+        app_user="$app_database"
+    else
+        app_user="$(sanitize_database "$app_user")"
+    fi
+
+    app_host="$(first_nonempty GC_POSTGRES_HOST BEADS_POSTGRES_HOST || true)"
+    if [ -z "$app_host" ]; then
+        app_host="$(city_metadata_value postgres_host || true)"
+    fi
+    [ -n "$app_host" ] || app_host="127.0.0.1"
+    app_port="$(first_nonempty GC_POSTGRES_PORT BEADS_POSTGRES_PORT || true)"
+    if [ -z "$app_port" ]; then
+        app_port="$(city_metadata_value postgres_port || true)"
+    fi
+    [ -n "$app_port" ] || app_port="5432"
+
+    postgres_password="$(first_nonempty GC_POSTGRES_PASSWORD BEADS_PG_PASSWORD || true)"
+    [ -n "$postgres_password" ] || postgres_password="$(generate_postgres_password)"
+    export BEADS_PG_PASSWORD="$postgres_password"
+
+    command -v psql >/dev/null 2>&1 || die "postgres backend local provisioning requires psql"
+    python3 - "$app_database" "$app_user" "$postgres_password" "$schema" "$app_host" "$app_port" <<'PY'
+import os
+import re
+import subprocess
+import sys
+from urllib.parse import urlparse, urlunparse
+
+database, user, password, schema, host, port = sys.argv[1:7]
+admin_url = os.environ.get("GC_POSTGRES_ADMIN_URL") or os.environ.get("BEADS_POSTGRES_ADMIN_URL")
+name_re = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+
+for kind, value in (("database", database), ("user", user), ("schema", schema)):
+    if not name_re.match(value):
+        raise SystemExit(f"invalid postgres {kind} name after sanitization: {value!r}")
+
+def ident(value):
+    return '"' + value.replace('"', '""') + '"'
+
+def lit(value):
+    return "'" + value.replace("'", "''") + "'"
+
+def admin_dsn(dbname):
+    if not admin_url:
+        return None
+    parsed = urlparse(admin_url)
+    if not parsed.scheme:
+        return admin_url
+    return urlunparse((parsed.scheme, parsed.netloc, "/" + dbname, parsed.params, parsed.query, parsed.fragment))
+
+def psql_cmd(dbname, quiet=True, tuples_only=False):
+    cmd = ["psql", "-X", "-v", "ON_ERROR_STOP=1"]
+    if quiet:
+        cmd.append("-q")
+    if tuples_only:
+        cmd.append("-At")
+    dsn = admin_dsn(dbname)
+    if dsn:
+        cmd.append(dsn)
+    else:
+        cmd.extend(["-d", dbname])
+    return cmd
+
+def run(dbname, sql):
+    subprocess.run(psql_cmd(dbname), input=sql, text=True, check=True)
+
+def scalar(dbname, sql):
+    out = subprocess.check_output(psql_cmd(dbname, tuples_only=True), input=sql, text=True)
+    return out.strip()
+
+if scalar("postgres", f"SELECT 1 FROM pg_roles WHERE rolname = {lit(user)}") == "1":
+    run("postgres", f"ALTER ROLE {ident(user)} WITH LOGIN PASSWORD {lit(password)};\n")
+else:
+    run("postgres", f"CREATE ROLE {ident(user)} LOGIN PASSWORD {lit(password)};\n")
+
+if scalar("postgres", f"SELECT 1 FROM pg_database WHERE datname = {lit(database)}") != "1":
+    run("postgres", f"CREATE DATABASE {ident(database)} OWNER {ident(user)} TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C';\n")
+else:
+    run("postgres", f"ALTER DATABASE {ident(database)} OWNER TO {ident(user)};\n")
+
+run(database, "\n".join([
+    f"CREATE SCHEMA IF NOT EXISTS {ident(schema)} AUTHORIZATION {ident(user)};",
+    f"ALTER SCHEMA {ident(schema)} OWNER TO {ident(user)};",
+    f"GRANT ALL PRIVILEGES ON DATABASE {ident(database)} TO {ident(user)};",
+    f"GRANT USAGE, CREATE ON SCHEMA {ident(schema)} TO {ident(user)};",
+    "",
+]))
+PY
+    echo "bd-gc-postgres: provisioned local Postgres database \"$app_database\" role \"$app_user\" schema \"$schema\"" >&2
+    provisioned_postgres_url="postgres://$app_user@$app_host:$app_port/$app_database?sslmode=disable"
+}
+
+load_city_password_env() {
+    city_root="$(resolve_city_root)"
+    env_file="$city_root/.beads/.env"
+    [ -f "$env_file" ] || return 0
+    # The provider writes this file itself with a single shell-quoted password.
+    # shellcheck disable=SC1090
+    . "$env_file"
+    if [ -n "${BEADS_PG_PASSWORD:-}" ]; then
+        export BEADS_PG_PASSWORD
+    fi
+}
+
 op_init() {
     dir="${1:-}"
     prefix="${2:-}"
@@ -44,10 +242,12 @@ op_init() {
     [ -n "$dir" ] && [ -n "$prefix" ] || die "usage: gc-bd-gc-postgres-provider init <dir> <prefix> [database]"
     command -v python3 >/dev/null 2>&1 || die "python3 is required for bd-gc-postgres provider init"
 
-    postgres_url="$(first_nonempty GC_POSTGRES_URL BEADS_POSTGRES_URL || true)"
-    [ -n "$postgres_url" ] || die "postgres backend requires GC_POSTGRES_URL or BEADS_POSTGRES_URL"
+    load_city_password_env
 
     postgres_schema="$(first_nonempty GC_POSTGRES_SCHEMA BEADS_POSTGRES_SCHEMA || true)"
+    if [ -z "$postgres_schema" ]; then
+        postgres_schema="$(city_metadata_value postgres_schema || true)"
+    fi
     if [ -z "$postgres_schema" ] && [ -n "$database" ]; then
         postgres_schema="$(sanitize_database "$database")"
     fi
@@ -55,10 +255,31 @@ op_init() {
         postgres_schema="$(sanitize_database "$prefix")"
     fi
 
+    postgres_url_source=""
+    postgres_url="$(first_nonempty GC_POSTGRES_URL BEADS_POSTGRES_URL || true)"
+    if [ -n "$postgres_url" ]; then
+        postgres_url_source="env"
+    fi
+    if [ -z "$postgres_url" ]; then
+        postgres_url="$(city_metadata_value postgres_dsn || true)"
+        if [ -n "$postgres_url" ]; then
+            postgres_url_source="metadata"
+        fi
+    fi
+
     postgres_password="$(first_nonempty GC_POSTGRES_PASSWORD BEADS_PG_PASSWORD || true)"
     if [ -n "$postgres_password" ] && [ -z "${BEADS_PG_PASSWORD:-}" ]; then
         export BEADS_PG_PASSWORD="$postgres_password"
     fi
+    if [ "$postgres_url_source" = "metadata" ] && [ -z "$postgres_password" ] && ! postgres_dsn_has_password "$postgres_url"; then
+        postgres_url=""
+    fi
+    if [ -z "$postgres_url" ]; then
+        provision_local_postgres "$postgres_schema"
+        postgres_url="$provisioned_postgres_url"
+        postgres_password="${BEADS_PG_PASSWORD:-$postgres_password}"
+    fi
+    postgres_url="$(postgres_url_with_password "$postgres_url" "$postgres_password")"
 
     plugin_command="$(resolve_plugin_command)"
     [ -x "$plugin_command" ] || die "bd-gc-postgres backend plugin is not executable: $plugin_command"
@@ -182,6 +403,7 @@ import os
 import re
 import sys
 from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import quote, urlunparse
 
 dir_path, dsn, schema, command, trace, password = sys.argv[1:7]
 metadata_path = os.path.join(dir_path, ".beads", "metadata.json")
@@ -218,13 +440,37 @@ def parse_postgres_dsn(raw):
         out["port"] = "5432"
     return out
 
+def metadata_postgres_dsn(raw):
+    raw = (raw or "").strip()
+    if raw.startswith(("postgres://", "postgresql://")):
+        u = urlparse(raw)
+        host = u.hostname or ""
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        if u.port:
+            host = f"{host}:{u.port}"
+        netloc = host
+        if u.username:
+            netloc = f"{quote(unquote(u.username))}@{host}"
+        return urlunparse((u.scheme, netloc, u.path, u.params, u.query, u.fragment))
+    if not raw:
+        return raw
+    parts = []
+    for key, value in re.findall(r"([A-Za-z_][A-Za-z0-9_]*)=('[^']*'|\\S+)", raw):
+        if key.lower() == "password":
+            continue
+        parts.append(f"{key}={value}")
+    return " ".join(parts) if parts else raw
+
 parsed = parse_postgres_dsn(dsn)
 with open(metadata_path, "r", encoding="utf-8") as f:
     metadata = json.load(f)
 
 metadata.update({
-    "database": metadata.get("database") or schema,
+    "database": schema,
     "backend": "postgres",
+    "postgres_dsn": metadata_postgres_dsn(dsn),
+    "postgres_schema": schema,
     "postgres_host": parsed["host"],
     "postgres_port": parsed["port"],
     "postgres_user": parsed["user"],

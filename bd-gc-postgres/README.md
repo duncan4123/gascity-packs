@@ -20,7 +20,30 @@ Beads core talks to it through the plugin adapter.
 
 ## Configuration
 
-Set these values before running `gc init --beads-backend postgres`:
+By default, `gc init --beads-backend postgres` provisions a local Postgres
+database, login role, generated password, and city schema. The provider stores
+the password in `.beads/.env`, writes redacted connection metadata to
+`.beads/metadata.json`, and runs plugin init against that database.
+
+Local provisioning uses `psql` through the current OS user's local Postgres
+admin access. To use a specific admin connection, set:
+
+```sh
+export GC_POSTGRES_ADMIN_URL='postgres://postgres:admin-secret@127.0.0.1:5432/postgres?sslmode=disable'
+```
+
+Optional local provisioning overrides:
+
+```sh
+export GC_POSTGRES_DATABASE=my_city_beads
+export GC_POSTGRES_USER=my_city_beads
+export GC_POSTGRES_SCHEMA=my_city
+export GC_POSTGRES_HOST=127.0.0.1
+export GC_POSTGRES_PORT=5432
+export GC_POSTGRES_PASSWORD=...
+```
+
+To use an already-provisioned Postgres database instead, set:
 
 ```sh
 export GC_POSTGRES_URL='postgres://beads:secret@127.0.0.1:5432/beads?sslmode=disable'
@@ -48,7 +71,8 @@ export BEADS_PG_PASSWORD=...
 ```
 
 The provider exports `GC_POSTGRES_PASSWORD` as `BEADS_PG_PASSWORD` while running
-plugin init, but it does not persist secrets.
+plugin init. For local provisioning, it persists the generated password in
+`.beads/.env` so trusted Beads and GC commands can reconnect through the plugin.
 
 ## Build
 
