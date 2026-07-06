@@ -2,6 +2,11 @@
 name = "bd-gc-postgres"
 schema = 2
 
+[global]
+session_live = [
+    "{{.ConfigDir}}/assets/scripts/tmux-keybindings.sh {{.ConfigDir}} {{.Agent}}",
+]
+
 [[backend_plugins]]
 backend = "postgres"
 setup_hook = "assets/scripts/gc-bd-gc-postgres-provider.sh"
