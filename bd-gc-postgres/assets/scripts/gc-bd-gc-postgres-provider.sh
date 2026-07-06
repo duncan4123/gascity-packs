@@ -276,8 +276,11 @@ op_init() {
     chmod 700 "$dir/.beads" 2>/dev/null || true
 
     plugin_command="$(resolve_plugin_command)"
+    gascity_plugin_command="$(resolve_gascity_plugin_command)"
     prepare_plugin_command_if_missing "$plugin_command"
+    prepare_plugin_command_if_missing "$gascity_plugin_command"
     [ -x "$plugin_command" ] || die "bd-gc-postgres backend plugin is not executable: $plugin_command"
+    [ -x "$gascity_plugin_command" ] || die "bd-gc-postgres gascity backend plugin is not executable: $gascity_plugin_command"
 
     if [ "$postgres_url_source" = "metadata" ] && [ -z "$postgres_password" ] && ! postgres_dsn_has_password "$postgres_url"; then
         postgres_url=""
@@ -291,9 +294,10 @@ op_init() {
 
     city_root="$(resolve_city_root)"
     trace="${BEADS_BACKEND_POSTGRES_TRACE:-$city_root/.gc/backend-postgres-plugin-trace.jsonl}"
+    gascity_trace="${GASCITY_BACKEND_POSTGRES_TRACE:-$city_root/.gc/backend-postgres-gascity-trace.jsonl}"
     custom_types="${GC_BEADS_CUSTOM_TYPES:-${BEADS_CUSTOM_TYPES:-$custom_types_default}}"
     plugin_init "$dir" "$prefix" "$postgres_schema" "$custom_types" "$plugin_command" "$trace"
-    normalize_metadata "$dir" "$postgres_url" "$postgres_schema" "$plugin_command" "$trace"
+    normalize_metadata "$dir" "$postgres_url" "$postgres_schema" "$plugin_command" "$trace" "$gascity_plugin_command" "$gascity_trace"
     write_local_trust "$dir" "$plugin_command" "$trace"
 }
 
@@ -316,6 +320,19 @@ resolve_plugin_command() {
     fi
     city_root="$(resolve_city_root)"
     printf '%s\n' "$city_root/.gc/runtime/packs/bd-gc-postgres/bin/bd-backend-postgres"
+}
+
+resolve_gascity_plugin_command() {
+    if [ -n "${GC_GASCITY_BACKEND_PLUGIN_COMMAND:-}" ]; then
+        printf '%s\n' "$GC_GASCITY_BACKEND_PLUGIN_COMMAND"
+        return 0
+    fi
+    if [ -n "${GC_POSTGRES_GASCITY_PLUGIN_COMMAND:-}" ]; then
+        printf '%s\n' "$GC_POSTGRES_GASCITY_PLUGIN_COMMAND"
+        return 0
+    fi
+    city_root="$(resolve_city_root)"
+    printf '%s\n' "$city_root/.gc/runtime/packs/bd-gc-postgres/bin/gc-backend-postgres"
 }
 
 prepare_plugin_command_if_missing() {
@@ -417,8 +434,10 @@ normalize_metadata() {
     schema="$3"
     command="$4"
     trace="$5"
+    gascity_command="$6"
+    gascity_trace="$7"
 
-    python3 - "$dir" "$dsn" "$schema" "$command" "$trace" "$postgres_password" <<'PY'
+    python3 - "$dir" "$dsn" "$schema" "$command" "$trace" "$gascity_command" "$gascity_trace" "$postgres_password" <<'PY'
 import json
 import os
 import re
@@ -426,9 +445,10 @@ import sys
 from urllib.parse import parse_qs, unquote, urlparse
 from urllib.parse import quote, urlunparse
 
-dir_path, dsn, schema, command, trace, password = sys.argv[1:7]
+dir_path, dsn, schema, command, trace, gascity_command, gascity_trace, password = sys.argv[1:9]
 metadata_path = os.path.join(dir_path, ".beads", "metadata.json")
 args = ["--trace", trace, "serve"]
+gascity_args = ["--trace", gascity_trace, "serve"]
 
 def parse_postgres_dsn(raw):
     raw = (raw or "").strip()
@@ -498,6 +518,8 @@ metadata.update({
     "postgres_database": parsed["database"] or schema,
     "backend_plugin_command": command,
     "backend_plugin_args": args,
+    "gascity_backend_command": gascity_command,
+    "gascity_backend_args": gascity_args,
 })
 
 with open(metadata_path, "w", encoding="utf-8") as f:

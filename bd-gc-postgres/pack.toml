@@ -8,9 +8,14 @@ setup_hook = "assets/scripts/gc-bd-gc-postgres-provider.sh"
 provider_command = "assets/scripts/gc-bd-gc-postgres-provider.sh"
 prepare_command = ["build", "backend", "--install"]
 bd_compatibility = "beads-backend-plugin-pr4561"
-capabilities = ["setup", "provider", "metadata", "backend-plugin", "postgres-auth", "sql-backend", "no-version-control"]
+capabilities = ["setup", "provider", "metadata", "backend-plugin", "postgres-auth", "sql-backend", "fastpath", "gascity-fastpath", "native-read-store", "no-version-control"]
 
 [backend_plugins.beads_endpoint]
 command = ".gc/runtime/packs/bd-gc-postgres/bin/bd-backend-postgres"
 args = ["serve"]
 protocol = "beads.backend.v1alpha1"
+
+[backend_plugins.gascity_endpoint]
+command = ".gc/runtime/packs/bd-gc-postgres/bin/gc-backend-postgres"
+args = ["serve"]
+protocol = "gascity.backend.v1alpha1"

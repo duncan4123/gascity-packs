@@ -5,13 +5,13 @@ usage() {
   cat <<'EOF'
 usage: gc bd-gc-postgres build [backend] [--install] [--plugin-source DIR] [--output DIR]
 
-Build the plugin-backed Postgres beads backend process.
+Build the plugin-backed Postgres beads and Gas City backend processes.
 
 Targets:
-  backend   Build bd-backend-postgres (default)
+  backend   Build bd-backend-postgres and gc-backend-postgres (default)
 
 Options:
-  --plugin-source DIR   Standalone plugin source containing cmd/bd-backend-postgres.
+  --plugin-source DIR   Standalone plugin source containing backend commands.
                         Default: $BD_GC_POSTGRES_PLUGIN_SOURCE, else a cached
                         clone of duncan4123/beads-backend-postgres.
   --output DIR          Output directory. Default: pack runtime bin.
@@ -88,6 +88,7 @@ fi
 
 [ -f "$plugin_source/go.mod" ] || die "plugin source missing go.mod: $plugin_source"
 [ -d "$plugin_source/cmd/bd-backend-postgres" ] || die "plugin source missing cmd/bd-backend-postgres: $plugin_source"
+[ -d "$plugin_source/cmd/gc-backend-postgres" ] || die "plugin source missing cmd/gc-backend-postgres: $plugin_source"
 
 mkdir -p "$output_dir"
 
@@ -100,7 +101,13 @@ mkdir -p "$cache_root/build" "$cache_root/mod" "$cache_root/tmp"
   GOMODCACHE="${GOMODCACHE:-$cache_root/mod}" \
   GOTMPDIR="${GOTMPDIR:-$cache_root/tmp}" \
   go build -o "$output_dir/bd-backend-postgres" ./cmd/bd-backend-postgres
+  GOCACHE="${GOCACHE:-$cache_root/build}" \
+  GOMODCACHE="${GOMODCACHE:-$cache_root/mod}" \
+  GOTMPDIR="${GOTMPDIR:-$cache_root/tmp}" \
+  go build -o "$output_dir/gc-backend-postgres" ./cmd/gc-backend-postgres
 )
 
 chmod 755 "$output_dir/bd-backend-postgres"
+chmod 755 "$output_dir/gc-backend-postgres"
 echo "built $output_dir/bd-backend-postgres"
+echo "built $output_dir/gc-backend-postgres"

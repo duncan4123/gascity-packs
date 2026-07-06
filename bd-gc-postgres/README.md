@@ -6,17 +6,20 @@ our Beads plugin architecture PR.
 
 The pack provides the setup/provider layer and a build command:
 
-- builds `bd-backend-postgres` from the standalone plugin source containing
-  `cmd/bd-backend-postgres`;
+- builds `bd-backend-postgres` and `gc-backend-postgres` from the standalone
+  plugin source;
 - runs that plugin's `init` method during `gc init`;
 - writes `.beads/metadata.json` with `backend = "postgres"`,
-  `postgres_dsn`, and `postgres_schema`;
+  `postgres_dsn`, `postgres_schema`, and both plugin endpoint commands;
 - writes `.beads/config.local.yaml` with the trusted local plugin command.
 
 The runtime shape matches `bd-gc-dl`: Beads from the plugin architecture PR
 launches a trusted local plugin process over the `beads.backend.v1alpha1`
-newline-delimited JSON protocol. The plugin owns direct Postgres access and
-Beads core talks to it through the plugin adapter.
+newline-delimited JSON protocol. GC launches the companion
+`gc-backend-postgres` process over `gascity.backend.v1alpha1` for native
+fastpath operations such as session/status issue queries. The plugin owns
+direct Postgres access and both Beads core and GC talk to it through plugin
+adapters.
 
 If the runtime plugin binary is missing during `gc init`, the setup hook runs
 the pack build command itself before provisioning Postgres. This keeps init
@@ -77,6 +80,8 @@ export BEADS_PG_PASSWORD=...
 The provider exports `GC_POSTGRES_PASSWORD` as `BEADS_PG_PASSWORD` while running
 plugin init. For local provisioning, it persists the generated password in
 `.beads/.env` so trusted Beads and GC commands can reconnect through the plugin.
+The GC fastpath plugin reads only the Postgres credential keys from this local
+file when the process environment does not already provide them.
 
 ## Build
 
