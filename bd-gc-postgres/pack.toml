@@ -17,7 +17,7 @@ capabilities = ["setup", "provider", "metadata", "backend-plugin", "postgres-aut
 
 [backend_plugins.scope]
 model = "per_scope"
-resource = "schema"
+resource = "database"
 namespace_from = "prefix"
 inherits_city_connection = true
 metadata_owner = "plugin"

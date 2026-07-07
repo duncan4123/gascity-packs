@@ -37,6 +37,34 @@ print(name[:63])
 PY
 }
 
+scope_postgres_database() {
+    explicit="$(first_nonempty GC_POSTGRES_DATABASE BEADS_POSTGRES_DATABASE || true)"
+    if [ -n "$explicit" ]; then
+        sanitize_database "$explicit"
+        return 0
+    fi
+
+    city_database="$(city_metadata_value postgres_database || true)"
+    if [ -z "$city_database" ]; then
+        city_database="gc_$(sanitize_database "$(basename "$(resolve_city_root)")")"
+    fi
+    city_database="$(sanitize_database "$city_database")"
+
+    scope_kind="$(first_nonempty GC_BEADS_SETUP_SCOPE_KIND GC_BEADS_SCOPE_KIND || true)"
+    scope_resource="$(first_nonempty GC_BEADS_SCOPE_RESOURCE || true)"
+    namespace="$(first_nonempty GC_BEADS_SETUP_NAMESPACE GC_BEADS_SCOPE_NAMESPACE || true)"
+    if [ -z "$namespace" ]; then
+        namespace="${1:-}"
+    fi
+    namespace="$(sanitize_database "$namespace")"
+
+    if [ "$scope_resource" = "database" ] && [ "$scope_kind" != "city" ] && [ -n "$namespace" ]; then
+        sanitize_database "${city_database}_${namespace}"
+        return 0
+    fi
+    printf '%s\n' "$city_database"
+}
+
 city_metadata_value() {
     key="$1"
     city_root="$(resolve_city_root)"
@@ -116,15 +144,7 @@ PY
 
 provision_local_postgres() {
     schema="$1"
-    app_database="$(first_nonempty GC_POSTGRES_DATABASE BEADS_POSTGRES_DATABASE || true)"
-    if [ -z "$app_database" ]; then
-        app_database="$(city_metadata_value postgres_database || true)"
-    fi
-    if [ -z "$app_database" ]; then
-        app_database="gc_$(sanitize_database "$(basename "$(resolve_city_root)")")"
-    else
-        app_database="$(sanitize_database "$app_database")"
-    fi
+    app_database="$(scope_postgres_database "$schema")"
 
     app_user="$(first_nonempty GC_POSTGRES_USER BEADS_POSTGRES_USER || true)"
     if [ -z "$app_user" ]; then
@@ -288,7 +308,13 @@ op_init() {
     if [ "$postgres_url_source" = "metadata" ] && [ -z "$postgres_password" ] && ! postgres_dsn_has_password "$postgres_url"; then
         postgres_url=""
     fi
-    if [ -z "$postgres_url" ]; then
+    scope_resource="$(first_nonempty GC_BEADS_SCOPE_RESOURCE || true)"
+    explicit_postgres_url="$(first_nonempty GC_POSTGRES_URL BEADS_POSTGRES_URL || true)"
+    provision_scope_database=false
+    if [ "$scope_resource" = "database" ] && [ -z "$explicit_postgres_url" ]; then
+        provision_scope_database=true
+    fi
+    if [ -z "$postgres_url" ] || [ "$provision_scope_database" = "true" ]; then
         provision_local_postgres "$postgres_schema"
         postgres_url="$provisioned_postgres_url"
         postgres_password="${BEADS_PG_PASSWORD:-$postgres_password}"
