@@ -224,7 +224,7 @@ schema = 1
 [[pack]]
   name = "bd-gc-dl"
   description = "Plugin-backed DoltLite backend pack for Gas City and Beads."
-  source = "https://github.com/duncan4123/gascity-packs.git//bd-gc-dl#bd-gc-dl-plugin-interface"
+  source = "https://github.com/duncan4123/gascity-packs/tree/main/bd-gc-dl"
   source_kind = "git"
 
   [[pack.plugin]]
@@ -233,19 +233,53 @@ schema = 1
     display_name = "DoltLite"
     capabilities = ["setup", "provider", "metadata", "fastpath", "store-health"]
 
-  [[pack.release]]
-    version = "0.1.0"
-    ref = "bd-gc-dl-plugin-interface"
-    commit = "10c1a022a676f4be2cff5b7f499bd2a02d3de49a"
-    hash = "sha256:a3e326d72fa1d0ce8593f15ad4aa41d8bea0813d1f2df737d12911e1a32a1bae"
-    description = "Initial plugin-backed DoltLite backend pack."
 
   [[pack.release]]
     version = "0.1.1"
-    ref = "bd-gc-dl-plugin-interface"
+    ref = "main"
     commit = "e183a7dae4a8f551f8f09e0983dacb493badc5b7"
     hash = "sha256:6522c57b0e440b783fa74e9af79c8180be0ec8760c3bc0856a6a67cc6787dddc"
     description = "Document plugin-v20260706.1 backend plugin release for fresh init installs."
+
+[[pack]]
+  name = "bd-gc-postgres"
+  description = "Plugin-backed Postgres Beads backend for Gas City. Installs a trusted bd-backend-postgres process and configures backend=postgres metadata during gc init."
+  source = "https://github.com/duncan4123/gascity-packs/tree/bd-gc-postgres-publish/bd-gc-postgres"
+  source_kind = "git"
+
+  [[pack.plugin]]
+    kind = "beads-backend"
+    backend = "postgres"
+    display_name = "Postgres"
+    capabilities = ["setup", "provider", "metadata", "backend-plugin", "postgres-auth", "sql-backend", "fastpath", "gascity-fastpath", "native-read-store", "no-version-control"]
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "bd-gc-postgres-publish"
+    commit = "8147678b49afa679c54746f97c591b20e486673d"
+    hash = "sha256:43e88dc31922bc03a92fcaa7dc2ab652df8ce47f23d6b004ef76a5db1776f90a"
+    description = "Initial Postgres backend plugin pack. Builds bd-backend-postgres from duncan4123/beads-backend-postgres and configures plugin-backed Beads metadata for Gas City."
+
+  [[pack.release]]
+    version = "0.1.1"
+    ref = "bd-gc-postgres-publish"
+    commit = "5a2c762d8161e9c9db10d7ef5a7931f8dfc4aa00"
+    hash = "sha256:f91da51fe200b6cd890bdd664b916f0772efbf4750366a54363a9664d4abd7b4"
+    description = "Adds default local Postgres provisioning for gc init: creates the database, login role, generated password, city schema, metadata, and local plugin trust config."
+
+  [[pack.release]]
+    version = "0.1.2"
+    ref = "bd-gc-postgres-publish"
+    commit = "332de1d435b001a84398c13167012db574b286e0"
+    hash = "sha256:974a44431988db93c9c6aeccc034044a1d14afec792346fc1ec9ea57b8406136"
+    description = "Builds the missing Postgres backend plugin binary during gc init before provisioning the local database."
+
+  [[pack.release]]
+    version = "0.1.3"
+    ref = "bd-gc-postgres-publish"
+    commit = "4e235de19c2abc9a95d4dfececc43eb9831b5503"
+    hash = "sha256:6a0da9e61d995ca8e891e2eea9915f3297efd5cb5bdd27a7f80125b1e2dee752"
+    description = "Adds the GC Postgres fastpath endpoint, builds gc-backend-postgres with the Beads plugin, and writes gascity_backend metadata during gc init."
 
 [[pack]]
   name = "beads-doltlite"
