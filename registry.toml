@@ -251,7 +251,7 @@ schema = 1
 [[pack]]
   name = "bd-gc-postgres"
   description = "Plugin-backed Postgres Beads backend for Gas City. Installs a trusted bd-backend-postgres process and configures backend=postgres metadata during gc init."
-  source = "https://github.com/duncan4123/gascity-packs/tree/main/bd-gc-postgres"
+  source = "https://github.com/duncan4123/gascity-packs/tree/bd-gc-postgres-publish/bd-gc-postgres"
   source_kind = "git"
 
   [[pack.plugin]]
