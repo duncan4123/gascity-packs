@@ -10,10 +10,10 @@ import (
 	"io/fs"
 )
 
-// packsFS embeds the pack trees consumers depend on. Additional packs
-// join this pattern list as consumers need them.
+// packsFS embeds root-module pack trees consumers depend on. Packs that are
+// nested Go modules, such as bd-gc-dl, expose their own embed package.
 //
-//go:embed all:gastown all:gascity all:bd-gc-dl
+//go:embed all:gastown all:gascity
 var packsFS embed.FS
 
 // Gastown returns the gastown pack content rooted at the pack directory
@@ -26,12 +26,6 @@ func Gastown() fs.FS {
 // at the pack directory (pack.toml at the top level).
 func Gascity() fs.FS {
 	return packSub("gascity")
-}
-
-// BdGcDl returns the plugin-backed DoltLite build pack content rooted at the
-// pack directory (pack.toml at the top level).
-func BdGcDl() fs.FS {
-	return packSub("bd-gc-dl")
 }
 
 func packSub(name string) fs.FS {

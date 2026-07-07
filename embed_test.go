@@ -39,40 +39,18 @@ func TestGascityEmbedsPackContent(t *testing.T) {
 	}
 }
 
-func TestBdGcDlEmbedsPackContent(t *testing.T) {
-	pack := BdGcDl()
-	for _, rel := range []string{
-		"pack.toml",
-		"agents/bd-gc-dl-fixer/agent.toml",
-		"agents/bd-gc-dl-fixer/prompt.template.md",
-		"commands/build/command.toml",
-		"commands/build/help.md",
-		"commands/build/run.sh",
-		"commands/file-fix-task/command.toml",
-		"commands/file-fix-task/help.md",
-		"commands/file-fix-task/run.sh",
-		"skills/bd-gc-dl-build-release/SKILL.md",
-		"skills/bd-gc-dl-migrate/SKILL.md",
-		"template-fragments/bd-gc-dl-handoff.template.md",
-	} {
-		if _, err := fs.Stat(pack, rel); err != nil {
-			t.Errorf("bd-gc-dl pack missing %s: %v", rel, err)
-		}
-	}
-}
-
 func TestEmbedHasNoUnexpectedRoots(t *testing.T) {
 	entries, err := fs.ReadDir(packsFS, ".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{"gastown": true, "gascity": true, "bd-gc-dl": true}
+	want := map[string]bool{"gastown": true, "gascity": true}
 	if len(entries) != len(want) {
 		names := make([]string, 0, len(entries))
 		for _, e := range entries {
 			names = append(names, e.Name())
 		}
-		t.Fatalf("embedded roots = %v, want gastown + gascity + bd-gc-dl", names)
+		t.Fatalf("embedded roots = %v, want gastown + gascity", names)
 	}
 	for _, e := range entries {
 		if !want[e.Name()] {
