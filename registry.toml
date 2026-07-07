@@ -241,10 +241,17 @@ schema = 1
     hash = "sha256:6522c57b0e440b783fa74e9af79c8180be0ec8760c3bc0856a6a67cc6787dddc"
     description = "Document plugin-v20260706.1 backend plugin release for fresh init installs."
 
+  [[pack.release]]
+    version = "0.1.2"
+    ref = "main"
+    commit = "f89dc3dd10f4d4989878ac66c08bdd508ab60edd"
+    hash = "sha256:4019d4d9cc77d28856119ce9bf84085a2bc1879820a77083601b7a353bd1b0d4"
+    description = "Declares the backend plugin scope policy used by GC rig setup."
+
 [[pack]]
   name = "bd-gc-postgres"
   description = "Plugin-backed Postgres Beads backend for Gas City. Installs a trusted bd-backend-postgres process and configures backend=postgres metadata during gc init."
-  source = "https://github.com/duncan4123/gascity-packs/tree/bd-gc-postgres-publish/bd-gc-postgres"
+  source = "https://github.com/duncan4123/gascity-packs/tree/main/bd-gc-postgres"
   source_kind = "git"
 
   [[pack.plugin]]
@@ -280,6 +287,13 @@ schema = 1
     commit = "4e235de19c2abc9a95d4dfececc43eb9831b5503"
     hash = "sha256:6a0da9e61d995ca8e891e2eea9915f3297efd5cb5bdd27a7f80125b1e2dee752"
     description = "Adds the GC Postgres fastpath endpoint, builds gc-backend-postgres with the Beads plugin, and writes gascity_backend metadata during gc init."
+
+  [[pack.release]]
+    version = "0.1.4"
+    ref = "main"
+    commit = "f89dc3dd10f4d4989878ac66c08bdd508ab60edd"
+    hash = "sha256:c067b49872d9d5aee1fdd4c4240deb0ef599b33b5bbe1879ae2c23c22cf42138"
+    description = "Declares the Postgres backend plugin scope policy used by GC rig setup."
 
 [[pack]]
   name = "beads-doltlite"
