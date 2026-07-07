@@ -254,6 +254,13 @@ schema = 1
     hash = "sha256:092355b718d44b926b708682c466809279be8350ea31365a6a22b2b226ce2746"
     description = "Document plugin-v20260708.1 backend plugin release and conformance-tested DoltLite plugin parity."
 
+  [[pack.release]]
+    version = "0.1.4"
+    ref = "main"
+    commit = "dd3e4843fe1cc64518b3289e5f4aa944afda917b"
+    hash = "sha256:9644c9426b6e1eaa4b9f359a2b8241802fc32a23120a4bf9382a4db99e5357ab"
+    description = "Document plugin-v20260708.2 backend plugin release with clean VCS-stamped conformance-tested binaries."
+
 [[pack]]
   name = "bd-gc-postgres"
   description = "Plugin-backed Postgres Beads backend for Gas City. Installs a trusted bd-backend-postgres process and configures backend=postgres metadata during gc init."
