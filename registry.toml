@@ -295,6 +295,13 @@ schema = 1
     hash = "sha256:c067b49872d9d5aee1fdd4c4240deb0ef599b33b5bbe1879ae2c23c22cf42138"
     description = "Declares the Postgres backend plugin scope policy used by GC rig setup."
 
+  [[pack.release]]
+    version = "0.1.5"
+    ref = "main"
+    commit = "a59cd6097bf2190e433fd6b1ef00e47e143383e3"
+    hash = "sha256:451800bc8b93257167f07335c69e50e44f4fbcd234ac907ca0af9511e0a586e7"
+    description = "Uses GC plugin scope namespaces for rig schemas instead of inheriting the city schema."
+
 [[pack]]
   name = "beads-doltlite"
   description = "DoltLite backend operations pack for Gas City beads storage."
