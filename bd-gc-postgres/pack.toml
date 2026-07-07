@@ -15,6 +15,16 @@ prepare_command = ["build", "backend", "--install"]
 bd_compatibility = "beads-backend-plugin-pr4561"
 capabilities = ["setup", "provider", "metadata", "backend-plugin", "postgres-auth", "sql-backend", "fastpath", "gascity-fastpath", "native-read-store", "no-version-control"]
 
+[backend_plugins.scope]
+model = "per_scope"
+resource = "schema"
+namespace_from = "prefix"
+inherits_city_connection = true
+metadata_owner = "plugin"
+routes = "gc-prefix-routes"
+adopt = "validate_or_repair"
+remove = "preserve"
+
 [backend_plugins.beads_endpoint]
 command = ".gc/runtime/packs/bd-gc-postgres/bin/bd-backend-postgres"
 args = ["serve"]

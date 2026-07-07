@@ -22,6 +22,16 @@ store_path = ".beads/doltlite"
 bd_compatibility = "bd-1.0.5"
 capabilities = ["setup", "provider", "metadata", "fastpath", "store-health"]
 
+[backend_plugins.scope]
+model = "per_scope"
+resource = "directory"
+namespace_from = "prefix"
+inherits_city_connection = true
+metadata_owner = "plugin"
+routes = "gc-prefix-routes"
+adopt = "validate_or_repair"
+remove = "preserve"
+
 [backend_plugins.beads_endpoint]
 command = ".gc/runtime/packs/bd-gc-dl/bin/bd-backend-doltlite"
 args = ["serve"]
