@@ -99,7 +99,7 @@ gc bd-gc-dl build backend --install
 Install plugin servers from a known plugin release:
 
 ```bash
-BD_GC_DL_PLUGIN_RELEASE_VERSION=plugin-v20260706.1 \
+BD_GC_DL_PLUGIN_RELEASE_VERSION=plugin-v20260708.1 \
   gc bd-gc-dl build backend --install --skip-local-source
 ```
 
