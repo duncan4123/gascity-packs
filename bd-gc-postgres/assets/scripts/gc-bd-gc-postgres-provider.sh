@@ -246,10 +246,13 @@ op_init() {
 
     postgres_schema="$(first_nonempty GC_POSTGRES_SCHEMA BEADS_POSTGRES_SCHEMA || true)"
     if [ -z "$postgres_schema" ]; then
-        postgres_schema="$(city_metadata_value postgres_schema || true)"
+        postgres_schema="$(first_nonempty GC_BEADS_SETUP_NAMESPACE GC_BEADS_SCOPE_NAMESPACE || true)"
     fi
     if [ -z "$postgres_schema" ] && [ -n "$database" ]; then
         postgres_schema="$(sanitize_database "$database")"
+    fi
+    if [ -z "$postgres_schema" ]; then
+        postgres_schema="$(city_metadata_value postgres_schema || true)"
     fi
     if [ -z "$postgres_schema" ]; then
         postgres_schema="$(sanitize_database "$prefix")"
