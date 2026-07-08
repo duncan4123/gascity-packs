@@ -224,7 +224,7 @@ schema = 1
 [[pack]]
   name = "bd-gc-dl"
   description = "Plugin-backed DoltLite backend pack for Gas City and Beads."
-  source = "https://github.com/duncan4123/gascity-packs/tree/main/bd-gc-dl"
+  source = "https://github.com/duncan4123/gascity-packs.git//bd-gc-dl#main"
   source_kind = "git"
 
   [[pack.plugin]]
@@ -260,6 +260,13 @@ schema = 1
     commit = "dd3e4843fe1cc64518b3289e5f4aa944afda917b"
     hash = "sha256:9644c9426b6e1eaa4b9f359a2b8241802fc32a23120a4bf9382a4db99e5357ab"
     description = "Document plugin-v20260708.2 backend plugin release with clean VCS-stamped conformance-tested binaries."
+
+  [[pack.release]]
+    version = "0.1.5"
+    ref = "main"
+    commit = "7c6d9c78893933ceba5fa531c35904f1a6196678"
+    hash = "sha256:6292897d4cf193013afadf340867ebad7978d681058b14e0af877fb001eed73f"
+    description = "Fix build details JSON escaping for go version metadata."
 
 [[pack]]
   name = "bd-gc-postgres"
