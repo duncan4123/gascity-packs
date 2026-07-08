@@ -417,7 +417,7 @@ install_binary() {
 
 go_version_m() {
   local bin="$1"
-  go version -m "$bin" 2>/dev/null | sed ':a;N;$!ba;s/\\/\\\\/g;s/"/\\"/g;s/\n/\\n/g' || true
+  go version -m "$bin" 2>/dev/null || true
 }
 
 sha256_for() {
@@ -425,7 +425,12 @@ sha256_for() {
 }
 
 json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+  JSON_VALUE="$1" python3 - <<'PY'
+import json
+import os
+
+print(json.dumps(os.environ.get("JSON_VALUE", ""))[1:-1])
+PY
 }
 
 write_build_details() {
@@ -457,7 +462,7 @@ write_build_details() {
     printf '  "tags": "%s",\n' "$(json_escape "$tags")"
     printf '  "doltlite_lib": "%s",\n' "$(json_escape "$doltlite_lib")"
     printf '  "go_version": "%s",\n' "$(json_escape "$go_version")"
-    printf '  "go_version_m": "%s"\n' "$(go_version_m "${installed_to:-$output}")"
+    printf '  "go_version_m": "%s"\n' "$(json_escape "$(go_version_m "${installed_to:-$output}")")"
     printf '}\n'
   } > "$file"
   echo "wrote $file"
