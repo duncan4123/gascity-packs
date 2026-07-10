@@ -1,6 +1,8 @@
 
 Resolve `<source-anchor-id>` using the same rules as `prepare-worktree`. Read `work_dir` from the source anchor and verify the implementation commit and
-summary evidence are present in that worktree. Write per-item summary to
+summary evidence are present in that JJ workspace. Verify
+`gc.docs.source_workspace_path` equals `work_dir`, then use `jj -R <work_dir>`
+to verify the recorded change and commit IDs. Write per-item summary to
 {{summary_path}} when set. If `summary_path` is not set, first use
 `gc.implementation.summary_path` from the preceding implementation step when it
 is present; otherwise use `{{artifact_root}}/task-<source-anchor-id>-summary.md`.

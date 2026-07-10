@@ -1,13 +1,14 @@
 This is the `implementation-base` methodology contract implementation step.
 
 Concrete methodology packs override this step to apply their native
-implementation discipline. Work only inside the prepared worktree and preserve
+implementation discipline. Work only inside the prepared workspace and preserve
 the source anchor for the close step.
 
-Default fallback behavior must still enforce the worktree contract: resolve the
+Default fallback behavior must still enforce the workspace contract: resolve the
 source anchor from workflow metadata, read `work_dir` from that source anchor,
-and `cd "$WORKTREE"` before source reads, edits, tests, hashes, or commits.
-`gc.work_dir` is the launcher rig root, not the implementation worktree. When
+verify it with `jj -R "$WORKSPACE" workspace root`, and `cd "$WORKSPACE"`
+before source reads, edits, tests, hashes, or JJ operations.
+`gc.work_dir` is the launcher rig root, not the implementation workspace. When
 reading beads with `bd show --json`, handle both an object and a one-element
 list before reading metadata.
 

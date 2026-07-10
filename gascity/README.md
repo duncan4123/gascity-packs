@@ -284,7 +284,7 @@ flowchart TD
 
     subgraph ItemFormula["do-work item formulas: one formula instance per implementation bead"]
         direction TB
-        SeparatePrep["prepare-worktree<br/>do-work"]:::base --> Implement["implement owned work<br/>gc.implementation-worker"]:::basic
+        SeparatePrep["prepare workspace<br/>do-work"]:::base --> Implement["implement owned work<br/>gc.implementation-worker"]:::basic
         SharedImplement["implement shared item<br/>do-work-item"]:::base
         Implement --> CloseItem["close source anchor<br/>do-work"]:::base
     end
@@ -704,7 +704,7 @@ Stable advanced steps:
 `do-work` steps `prepare-worktree`, `implement`, `close-source-anchor`;
 `do-work-item` step `implement-item`
 
-Basic example: require local test selection and worktree discipline.
+Basic example: require local test selection and workspace discipline.
 
 Create `assets/workflows/do-work/implement.md`:
 

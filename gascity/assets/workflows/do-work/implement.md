@@ -2,8 +2,10 @@
 Resolve `<source-anchor-id>` using the same rules as `prepare-worktree`. For a
 synthetic drain-unit convoy, the source anchor is the original drain member in
 `gc.drain_member_id`, not the synthetic convoy id. Read `work_dir` from the source anchor, never read `work_dir` from the synthetic drain-unit convoy,
-validate that it is an absolute existing git worktree, set `WORKTREE` to that
-path, then `cd "$WORKTREE"` before reading or editing source files. If
+validate that it is an absolute existing JJ workspace, set `WORKSPACE` to that
+path, then `cd "$WORKSPACE"` before reading or editing source files. Confirm
+`gc.docs.source_workspace_path` equals `work_dir` and verify the checkout with
+`jj -R "$WORKSPACE" workspace root`. If
 `work_dir` is missing, invalid, or points at the launcher checkout, fail this step before editing.
 
 Do not infer the source anchor from dependency ids such as the
@@ -14,18 +16,20 @@ metadata `gc.input_convoy_id`. Read that input convoy with `bd show
 first element before reading metadata. If the input convoy has
 `gc.synthetic_kind=drain-unit-convoy`, use its `gc.drain_member_id` as the
 source anchor. Otherwise use the input convoy id as the source anchor. Then
-read the source anchor and use only its `work_dir` metadata as `WORKTREE`.
+read the source anchor and use only its `work_dir` metadata as `WORKSPACE`.
 
-`gc.work_dir` is the launcher rig root, not the implementation worktree. Use
+`gc.work_dir` is the launcher rig root, not the implementation workspace. Use
 `gc.work_dir` only later to run `.gc/scripts/checks/build-artifact-valid.sh`.
-After resolving `WORKTREE`, run `cd "$WORKTREE"` and verify `pwd -P` equals
-`$WORKTREE` before any source read, source edit, test, file hash, `git add`, or
-`git commit`. If a command uses the launcher checkout path for source edits,
+After resolving `WORKSPACE`, run `cd "$WORKSPACE"` and verify `pwd -P` equals
+`$WORKSPACE` before any source read, source edit, test, file hash, or JJ command.
+If a command uses the launcher checkout path for source edits,
 verification, hashes, or commits, the step is invalid and must fail.
 
 Do not edit files in the launcher checkout. Implement only the owned source
-anchor boundary, run sandboxed verification from inside the worktree, and make a
-focused commit in the worktree. Leave the source anchor open for
+anchor boundary and run sandboxed verification from inside the workspace.
+Finish the focused JJ change with `jj describe -m <message>`; do not use
+`git add` or `git commit`. Record the resulting JJ change ID and commit ID in
+the implementation summary. Leave the source anchor open for
 `close-source-anchor`; close only this implementation step when done.
 
 Write or update the task summary with these schema-required body sections,

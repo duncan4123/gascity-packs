@@ -164,7 +164,7 @@ this ledger against the `FORMULAS` constant and formula directory.
 | ID | Formula | Type | Required behavior | Evidence |
 | --- | --- | --- | --- | --- |
 | GC-BF-010 | `implement` | Cataloged targeted implementation entrypoint | Validates the input convoy, drains implementation work using an allowed policy, waits for completion, writes validated item-mapped implementation summary evidence, and optionally delegates publishing. | `implement.formula.toml`; `../tests/test_formula_assets.py` |
-| GC-BF-011 | `do-work` | Targeted implementation item helper | Extends `implementation-base`, prepares one item worktree, implements owned work with the selected implementation target, and closes the source anchor after implementation succeeds. | `do-work.formula.toml`; `../tests/test_formula_assets.py` |
+| GC-BF-011 | `do-work` | Targeted implementation item helper | Extends `implementation-base`, prepares one isolated JJ workspace, implements owned work with the selected implementation target, and closes the source anchor after implementation succeeds. | `do-work.formula.toml`; `../tests/test_formula_assets.py` |
 | GC-BF-012 | `do-work-item` | Targeted shared-drain item helper | Extends `implementation-item-base`, runs exactly one shared-drain item with the selected implementation target, and stays internal/single-lane. | `do-work-item.formula.toml`; `../tests/test_formula_assets.py` |
 | GC-BF-013 | `same-session-implement` | Targeted internal shared-drain helper | Documents and executes the pack-facing same-session policy by draining through `do-work-item` with exclusive member access and single-lane sequencing. | `same-session-implement.formula.toml`; `../tests/test_formula_assets.py` |
 

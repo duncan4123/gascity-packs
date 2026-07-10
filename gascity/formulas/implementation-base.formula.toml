@@ -27,7 +27,7 @@ default = ""
 
 [[steps]]
 id = "prepare-worktree"
-title = "Prepare item worktree"
+title = "Prepare item workspace"
 metadata = { "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/implementation-base/prepare-worktree.md"
 

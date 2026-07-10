@@ -3003,7 +3003,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(do_work_item["vars"]["implementation_target"]["default"], "gc.implementation-worker")
         self.assertEqual(do_work_item["steps"][0]["metadata"]["gc.run_target"], "{{implementation_target}}")
 
-    def test_do_work_formula_requires_persisted_item_worktree(self) -> None:
+    def test_do_work_formula_requires_persisted_item_workspace(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
         do_work = tomllib.loads((root / "formulas" / "do-work.formula.toml").read_text(encoding="utf-8"))
         steps = {step["id"]: step for step in do_work["steps"]}
@@ -3018,9 +3018,10 @@ class FormulaAssetTests(unittest.TestCase):
             "do not use the synthetic drain-unit convoy id as `<source-anchor-id>`",
             "never persist `work_dir` on the synthetic drain-unit convoy",
             "hard-fail if the selected source anchor id equals the synthetic input convoy id",
-            "worktrees/<source-anchor-id>",
-            "git worktree add",
-            "bd update <source-anchor-id> --set-metadata work_dir=",
+            ".gc/workspaces/<rig-name>/items/<source-anchor-id>",
+            "jj -R \"$LAUNCHER_ROOT\" workspace add",
+            "gc.docs.source_workspace_path=<absolute workspace path>",
+            "Do not use `git worktree add`",
             "Do not edit source files in the launcher checkout",
         ):
             with self.subTest(step="prepare-worktree", fragment=fragment):
@@ -3031,10 +3032,11 @@ class FormulaAssetTests(unittest.TestCase):
             "Read `work_dir` from the source anchor",
             "never read `work_dir` from the synthetic drain-unit convoy",
             "Do not infer the source anchor from dependency ids",
-            "`gc.work_dir` is the launcher rig root, not the implementation worktree",
+            "`gc.work_dir` is the launcher rig root, not the implementation workspace",
             "if the JSON output is a one-element list, unwrap the",
             "verify `pwd -P` equals",
-            "cd \"$WORKTREE\"",
+            "cd \"$WORKSPACE\"",
+            "jj describe -m <message>",
             "fail this step before editing",
             "Do not edit files in the launcher checkout",
             "Leave the source anchor open",
