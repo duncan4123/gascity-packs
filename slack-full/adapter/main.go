@@ -21,8 +21,18 @@
 //
 //   - SLACK_WORKSPACE_ID      Slack team id (e.g. T01234567).
 //   - SLACK_BOT_TOKEN         xoxb- bot token. Must have chat:write,
-//     reactions:write, files:write, and (for
-//     identity overrides) chat:write.customize.
+//     reactions:write, files:write, (for identity
+//     overrides) chat:write.customize, and the
+//     history scopes for the conversation kinds in
+//     use — channels:history, groups:history,
+//     im:history, mpim:history. schema/apps.schema.json
+//     is the authoritative list and already requires
+//     them, so manifest-driven installs are covered;
+//     this line is what a hand-provisioned token is
+//     built from. History is not optional: /publish
+//     confirms every post by reading it back, so a
+//     token without it reports every delivery as
+//     failed (failure_kind "auth").
 //   - GC_CITY_NAME            Name of the gc city the adapter posts to
 //     (matches [workspace].name in city.toml). Used
 //     to construct /v0/city/{name}/extmsg/inbound and
@@ -240,13 +250,27 @@ var dispatchInflightWG sync.WaitGroup
 // from a test-style cfg without a sem (in which case the dropped-load
 // log line is the intended fail-safe behavior). sec-S-04.
 func (c config) acquireDispatchSlot() (release func(), capacity int, ok bool) {
+	release, capacity, ok = c.tryAcquireDispatchSlot()
+	if !ok {
+		dispatchDroppedTotal.Add(1)
+	}
+	return release, capacity, ok
+}
+
+// tryAcquireDispatchSlot attempts to take a dispatch slot WITHOUT counting
+// a failed acquire as a drop. The legacy inbound path wraps this via
+// acquireDispatchSlot (a miss there is a genuine dropped delivery). The
+// company path uses this directly: a company receipt that finds no slot
+// stays durably pending for the sweep — backpressure, not a drop — so
+// counting it would pollute dispatch_dropped_total and mask real legacy
+// loss (F10).
+func (c config) tryAcquireDispatchSlot() (release func(), capacity int, ok bool) {
 	sem := c.dispatchSem
 	semCap := cap(sem)
 	select {
 	case sem <- struct{}{}:
 		return func() { <-sem }, semCap, true
 	default:
-		dispatchDroppedTotal.Add(1)
 		return nil, semCap, false
 	}
 }
@@ -262,7 +286,14 @@ type config struct {
 	accountID           string
 	slackBotToken       string
 	slackSigningKey     string
-	registerOnStart     bool
+	// slackAppID is the switchboard app's own Slack api_app_id (SLACK_APP_ID).
+	// When set, an event_callback whose api_app_id equals it verifies against
+	// the env signing secret ONLY (Phase 4 verification rule 2, the rooms path)
+	// — never the legacy trial set and never a registered agent record that
+	// happens to share the id. Empty preserves the pre-Phase-4 behavior (the
+	// switchboard's events fall through to the legacy lookupSigningSecrets path).
+	slackAppID      string
+	registerOnStart bool
 	// identityStorePath is the JSON file backing the per-session Slack
 	// identity registry (chat:write.customize username/avatar overrides).
 	// Persisted so adapter restarts don't strip identity from running
@@ -417,7 +448,7 @@ type config struct {
 	oauthSlackBaseURL string
 	// cityPath is the on-disk root of the gc city this adapter is bound
 	// to. Sourced from GC_CITY_PATH; required for the rig-target
-	// dispatch path (cby.18.3) which must shell `bd create` inside the
+	// dispatch path (cby.18.3) which must shell `gc bd create` inside the
 	// rig's workdir (read from <cityPath>/.beads/routes.jsonl) and
 	// `gc sling` from the city root. Empty when GC_CITY_PATH is unset;
 	// the rig dispatch path surfaces a fix-it ephemeral in that case.
@@ -433,10 +464,80 @@ type config struct {
 	// SLACK_THREAD_CONTEXT_LIMIT, defaulting to
 	// defaultThreadContextLimit. gc-px8.5.
 	slackThreadContextLimit int
+	// companyDirectoryPath / companyBindingsPath / companyIngressDir are
+	// the Slack company-rooms (Phase 1) registry locations. The two JSON
+	// registries resolve exactly like the six atomic registries
+	// (env override > <GC_CITY_PATH>/.gc/slack/<file> >
+	// /tmp/gc-slack-adapter/<file>); the ingress dir mirrors the
+	// thread_sessions.json resolution with a chat-ingress/ leaf. The
+	// Python CLI (scripts/slack_company_directory.py) resolves the same
+	// files. Sourced from SLACK_COMPANY_DIRECTORY_PATH,
+	// SLACK_COMPANY_BINDINGS_PATH, SLACK_COMPANY_INGRESS_DIR.
+	companyDirectoryPath string
+	companyBindingsPath  string
+	companyIngressDir    string
+	// companyDMBindingsPath / companyAgentAppsPath are the Phase 4 per-agent
+	// DM registries (dm_bindings.json, agent_apps.json), resolved exactly
+	// like the two Phase 1 registries above (env override >
+	// <GC_CITY_PATH>/.gc/slack/<file> > /tmp default). Sourced from
+	// SLACK_COMPANY_DM_BINDINGS_PATH and SLACK_COMPANY_AGENT_APPS_PATH.
+	companyDMBindingsPath string
+	companyAgentAppsPath  string
+	// companyVerifySessions gates the advisory session-existence guard
+	// (Phase 4): when set, delivery checks GET /v0/city/{city}/session/{id}
+	// before the first attempt per (city, session). Advisory only — a guard
+	// error or a 404/409 never terminalizes; it just leaves the target
+	// pending for the sweep. Sourced from SLACK_COMPANY_VERIFY_SESSIONS.
+	companyVerifySessions bool
+	// Phase 2 shared-state directories (secrets/intents/delegations/turns/
+	// locks). Resolved exactly like the Python side: env override >
+	// <GC_CITY_PATH>/.gc/slack/<leaf> > /tmp/gc-slack-adapter/<leaf>. The Go
+	// ingress path reads intents (correlation + stale count), reads/writes
+	// delegation records (result claims), writes current-turn pointers, and
+	// takes advisory locks; the secrets dir is Python-only but resolved here
+	// for parity / config visibility.
+	companySecretsDir     string
+	companyIntentsDir     string
+	companyDelegationsDir string
+	companyTurnsDir       string
+	companyLocksDir       string
+	// companyCityAPIs maps a city-qualified binding's city name to that
+	// city's supervisor API base URL (each city runs its own supervisor on
+	// this host). Parsed from SLACK_COMPANY_CITY_APIS as
+	// "city=http://127.0.0.1:8377,other=http://127.0.0.1:8374". The
+	// adapter's own city never needs an entry.
+	companyCityAPIs map[string]string
+
+	// companySelfBotUserID is the switchboard app's own bot user id,
+	// excluded from wake routing so the switchboard never wakes itself.
+	// Optional (empty OK in Phase 1). Sourced from
+	// SLACK_SWITCHBOARD_BOT_USER_ID.
+	companySelfBotUserID string
+	// companyVisibleAcks gates the config-driven visible-ack reactions
+	// (Phase 3b). Off by default: unset/empty/"0" = off, anything else = on.
+	// Sourced from SLACK_COMPANY_VISIBLE_ACKS.
+	companyVisibleAcks bool
+	// companyGateway owns the durable-admission + delivery path for
+	// imported company rooms. Nil disables the company path entirely —
+	// every inbound then flows through the legacy path byte-for-byte.
+	// Wired in main() before any handler closes over the cfg value.
+	companyGateway *companyGateway
 }
 
 func loadConfig() (config, error) {
 	return loadConfigFromEnv(os.Getenv)
+}
+
+// companyStateDirDefault resolves a Phase 2 shared-state directory default:
+// <GC_CITY_PATH>/.gc/slack/<leaf> when the city path is set, else
+// /tmp/gc-slack-adapter/<leaf>. The env override is applied by the caller.
+// This mirrors the Python company outbound module's path resolution leaf for
+// leaf.
+func companyStateDirDefault(cityPath, leaf string) string {
+	if cityPath != "" {
+		return filepath.Join(cityPath, ".gc", "slack", leaf)
+	}
+	return filepath.Join("/tmp/gc-slack-adapter", leaf)
 }
 
 // loadConfigFromEnv reads adapter configuration from a getenv function. When
@@ -463,6 +564,7 @@ func loadConfigFromEnv(getenv func(string) string) (config, error) {
 		accountID:            getenv("SLACK_WORKSPACE_ID"),
 		slackBotToken:        getenv("SLACK_BOT_TOKEN"),
 		slackSigningKey:      getenv("SLACK_SIGNING_SECRET"),
+		slackAppID:           getenv("SLACK_APP_ID"),
 		registerOnStart:      envOrFn("REGISTER_ON_START", "true") == "true",
 		identityStorePath:    envOrFn("IDENTITY_STORE_PATH", "/tmp/gc-slack-adapter/identities.json"),
 		handlePrefix:         envOrFn("HANDLE_PREFIX", "@"),
@@ -505,6 +607,67 @@ func loadConfigFromEnv(getenv func(string) string) (config, error) {
 	cfg.roomLaunchPath = envOrFn("GC_SLACK_ROOM_LAUNCH_FILE", defaultRoomLaunchPath)
 	cfg.subteamAliasStorePath = envOrFn("SLACK_SUBTEAM_ALIAS_FILE", defaultSubteamAliasPath)
 	cfg.userAliasStorePath = envOrFn("SLACK_USER_ALIAS_FILE", defaultUserAliasPath)
+
+	// Company-rooms (Phase 1) registry + ingress paths. The two JSON
+	// registries follow the same city-rooted-then-/tmp default with an
+	// env override as the six atomic registries; the ingress dir mirrors
+	// thread_sessions.json resolution with a chat-ingress/ leaf. These
+	// MUST match scripts/slack_company_directory.py file for file.
+	defaultCompanyDirectoryPath := "/tmp/gc-slack-adapter/company_directory.json"
+	defaultCompanyBindingsPath := "/tmp/gc-slack-adapter/company_bindings.json"
+	defaultCompanyDMBindingsPath := "/tmp/gc-slack-adapter/dm_bindings.json"
+	defaultCompanyAgentAppsPath := "/tmp/gc-slack-adapter/agent_apps.json"
+	defaultCompanyIngressDir := "/tmp/gc-slack-adapter/chat-ingress"
+	if cfg.cityPath != "" {
+		defaultCompanyDirectoryPath = filepath.Join(cfg.cityPath, ".gc", "slack", "company_directory.json")
+		defaultCompanyBindingsPath = filepath.Join(cfg.cityPath, ".gc", "slack", "company_bindings.json")
+		defaultCompanyDMBindingsPath = filepath.Join(cfg.cityPath, ".gc", "slack", "dm_bindings.json")
+		defaultCompanyAgentAppsPath = filepath.Join(cfg.cityPath, ".gc", "slack", "agent_apps.json")
+		defaultCompanyIngressDir = filepath.Join(cfg.cityPath, ".gc", "slack", "chat-ingress")
+	}
+	cfg.companyDirectoryPath = envOrFn("SLACK_COMPANY_DIRECTORY_PATH", defaultCompanyDirectoryPath)
+	cfg.companyBindingsPath = envOrFn("SLACK_COMPANY_BINDINGS_PATH", defaultCompanyBindingsPath)
+	cfg.companyDMBindingsPath = envOrFn("SLACK_COMPANY_DM_BINDINGS_PATH", defaultCompanyDMBindingsPath)
+	cfg.companyAgentAppsPath = envOrFn("SLACK_COMPANY_AGENT_APPS_PATH", defaultCompanyAgentAppsPath)
+	cfg.companyIngressDir = envOrFn("SLACK_COMPANY_INGRESS_DIR", defaultCompanyIngressDir)
+	cfg.companySelfBotUserID = getenv("SLACK_SWITCHBOARD_BOT_USER_ID")
+	if raw := getenv("SLACK_COMPANY_CITY_APIS"); raw != "" {
+		cfg.companyCityAPIs = make(map[string]string)
+		for _, pair := range strings.Split(raw, ",") {
+			pair = strings.TrimSpace(pair)
+			if pair == "" {
+				continue
+			}
+			name, base, ok := strings.Cut(pair, "=")
+			name, base = strings.TrimSpace(name), strings.TrimRight(strings.TrimSpace(base), "/")
+			if !ok || name == "" || base == "" || strings.ContainsAny(name, "/?#% \t") ||
+				(!strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://")) {
+				return cfg, fmt.Errorf("SLACK_COMPANY_CITY_APIS: invalid entry %q (want city=http(s)://host:port)", pair)
+			}
+			cfg.companyCityAPIs[name] = base
+		}
+	}
+	// Visible-ack gate: off unless the env var is a non-empty value other
+	// than "0" (the same truthiness the rest of the company config uses).
+	if v := strings.TrimSpace(getenv("SLACK_COMPANY_VISIBLE_ACKS")); v != "" && v != "0" {
+		cfg.companyVisibleAcks = true
+	}
+	// Advisory session-existence guard (Phase 4): same truthiness convention.
+	// Default off — the guard must never reduce availability below flag-off.
+	if v := strings.TrimSpace(getenv("SLACK_COMPANY_VERIFY_SESSIONS")); v != "" && v != "0" {
+		cfg.companyVerifySessions = true
+	}
+
+	// Phase 2 shared-state directories. Same resolution precedence as the
+	// registries above, with the Python leaf names (secrets/,
+	// company-delegation-intents/, company-delegations/, company-current-turn/,
+	// locks/). These MUST match scripts/slack_company_outbound.py file for
+	// file.
+	cfg.companySecretsDir = envOrFn("SLACK_COMPANY_SECRETS_DIR", companyStateDirDefault(cfg.cityPath, "secrets"))
+	cfg.companyIntentsDir = envOrFn("SLACK_COMPANY_INTENTS_DIR", companyStateDirDefault(cfg.cityPath, "company-delegation-intents"))
+	cfg.companyDelegationsDir = envOrFn("SLACK_COMPANY_DELEGATIONS_DIR", companyStateDirDefault(cfg.cityPath, "company-delegations"))
+	cfg.companyTurnsDir = envOrFn("SLACK_COMPANY_TURNS_DIR", companyStateDirDefault(cfg.cityPath, "company-current-turn"))
+	cfg.companyLocksDir = envOrFn("SLACK_COMPANY_LOCKS_DIR", companyStateDirDefault(cfg.cityPath, "locks"))
 
 	// Retention controls. Defaults: keep inbound files for 7 days,
 	// sweep every hour. Setting either to "0" disables the janitor.
@@ -638,6 +801,19 @@ type publishReceipt struct {
 	MessageID    string          `json:"message_id,omitempty"`
 	Delivered    bool            `json:"delivered"`
 	FailureKind  string          `json:"failure_kind,omitempty"`
+	// Metadata carries out-of-band facts about a delivery that the four
+	// named fields above cannot express — currently only "truncated". gc
+	// does not decode this body into its public PublishReceipt directly: it
+	// unmarshals into a fixed intermediate shim, wirePublishReceipt
+	// (gascity internal/extmsg/http_adapter.go:140-157), whose six fields
+	// are copied across one by one in toPublishReceipt. `metadata` is one
+	// of those six and reaches PublishReceipt.Metadata; any key outside
+	// that set is silently discarded at gc's boundary, so widening this
+	// struct with a new top-level field would produce a value no gc
+	// consumer can ever observe. Measured against gc's real code, not
+	// inferred. The request side already uses this idiom
+	// (publishRequest.Metadata).
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 type externalActor struct {
@@ -654,7 +830,12 @@ type externalActor struct {
 type externalAttachment struct {
 	ProviderID string `json:"provider_id"`
 	URL        string `json:"url"`
-	MIMEType   string `json:"mime_type,omitempty"`
+	// mime_type is REQUIRED on the gc side (extmsg.ExternalAttachment):
+	// omitting the key gets the whole inbound message rejected with 422,
+	// so it is deliberately NOT omitempty. Producers derive a non-empty
+	// value via attachmentMIMEType; an empty string here is at worst a
+	// degraded value, never a missing required key.
+	MIMEType string `json:"mime_type"`
 }
 
 type externalInboundMessage struct {
@@ -699,6 +880,15 @@ type slackPostMessageResp struct {
 	TS      string `json:"ts,omitempty"`
 	Channel string `json:"channel,omitempty"`
 	Error   string `json:"error,omitempty"`
+	// Slack reports non-fatal problems here instead of failing the call. The
+	// one that matters to us is "message_truncated": Slack truncates text past
+	// slackMaxMessageLength rather than rejecting it, and returns ok:true, so
+	// the receipt looks perfect. handlePublish stamps the reference marker at
+	// the very end of the text, so this warning is the only wire signal that a
+	// delivered keyed message is no longer findable by its marker.
+	ResponseMetadata struct {
+		Warnings []string `json:"warnings,omitempty"`
+	} `json:"response_metadata,omitempty"`
 }
 
 // Slack files-upload-v2 API types.
@@ -715,7 +905,8 @@ type slackPostMessageResp struct {
 //
 // The bot token requires the `files:write` scope. Without it, step 1 returns
 // {ok: false, error: "missing_scope"} and the failure propagates as
-// FailureKind="permanent" with the auth error logged.
+// FailureKind="auth" with the auth error logged — both upload steps classify
+// through mapSlackError, which maps missing_scope onto gc's `auth` kind.
 
 type slackGetUploadURLResp struct {
 	OK        bool   `json:"ok"`
@@ -865,31 +1056,51 @@ type slackEventEnvelope struct {
 	Challenge string          `json:"challenge,omitempty"`
 	TeamID    string          `json:"team_id,omitempty"`
 	APIAppID  string          `json:"api_app_id,omitempty"`
+	EventID   string          `json:"event_id,omitempty"`
 	Event     json.RawMessage `json:"event,omitempty"`
 }
 
 // slackFile is a subset of Slack's file object, just the fields we need
-// to download the bytes and pass useful metadata up to gc.
+// to download the bytes and pass useful metadata up to gc. Filetype, Size,
+// and URLPrivateDownload feed the company file-hydration path (snippet
+// content inlined into the frozen reminder); the download URL is preferred
+// over url_private for content fetches because Slack marks it with the
+// Content-Disposition that yields the raw bytes rather than an HTML wrapper.
 type slackFile struct {
-	ID         string `json:"id"`
-	Name       string `json:"name,omitempty"`
-	Title      string `json:"title,omitempty"`
-	URLPrivate string `json:"url_private,omitempty"`
-	MIMEType   string `json:"mimetype,omitempty"`
+	ID                 string `json:"id"`
+	Name               string `json:"name,omitempty"`
+	Title              string `json:"title,omitempty"`
+	URLPrivate         string `json:"url_private,omitempty"`
+	URLPrivateDownload string `json:"url_private_download,omitempty"`
+	MIMEType           string `json:"mimetype,omitempty"`
+	Filetype           string `json:"filetype,omitempty"`
+	// Subtype is set for recordings made inside Slack ("slack_audio"
+	// voice clips, "slack_video" video clips), which carry NO
+	// mimetype/filetype — the only hint attachmentMIMEType has for an
+	// extension-less one.
+	Subtype string `json:"subtype,omitempty"`
+	Size    int    `json:"size,omitempty"`
 }
 
 type slackMessageEvent struct {
-	Type        string      `json:"type"`
-	Subtype     string      `json:"subtype,omitempty"`
-	User        string      `json:"user,omitempty"`
-	BotID       string      `json:"bot_id,omitempty"`
-	Text        string      `json:"text,omitempty"`
-	Channel     string      `json:"channel,omitempty"`
-	TS          string      `json:"ts,omitempty"`
-	ThreadTS    string      `json:"thread_ts,omitempty"`
-	EventTS     string      `json:"event_ts,omitempty"`
-	ChannelType string      `json:"channel_type,omitempty"`
-	Files       []slackFile `json:"files,omitempty"`
+	Type        string          `json:"type"`
+	Subtype     string          `json:"subtype,omitempty"`
+	User        string          `json:"user,omitempty"`
+	BotID       string          `json:"bot_id,omitempty"`
+	Text        string          `json:"text,omitempty"`
+	Channel     string          `json:"channel,omitempty"`
+	TS          string          `json:"ts,omitempty"`
+	ThreadTS    string          `json:"thread_ts,omitempty"`
+	EventTS     string          `json:"event_ts,omitempty"`
+	ChannelType string          `json:"channel_type,omitempty"`
+	Files       []slackFile     `json:"files,omitempty"`
+	Blocks      json.RawMessage `json:"blocks,omitempty"`
+	// AppID / BotProfile corroborate a bot author's bots.info resolution
+	// (Phase 2c); Metadata carries delegation / result correlation
+	// breadcrumbs on company posts.
+	AppID      string          `json:"app_id,omitempty"`
+	BotProfile json.RawMessage `json:"bot_profile,omitempty"`
+	Metadata   json.RawMessage `json:"metadata,omitempty"`
 }
 
 func main() {
@@ -1012,6 +1223,40 @@ func main() {
 	// win at runtime — this is purely observability.
 	logCrossStoreOverlapWarnings(channelMapReg, rigMapReg)
 
+	// Company-rooms (Slack company-rooms Phase 1) wiring. The two CLI-
+	// written registries load with the never-fatal contract (a corrupt or
+	// invalid file installs a nil snapshot and disables company routing
+	// while legacy traffic keeps flowing). The durable ingress store is a
+	// hard prerequisite for admission, but its construction failure is NOT
+	// a legacy fallthrough: the gateway is wired even when the store cannot
+	// be created, and runs degraded (barrier stays closed, company-room
+	// admissible events get 503 without x-slack-no-retry, /healthz reports
+	// the store error, startRecovery retries construction). companyGW must
+	// be set on cfg BEFORE handleSlackEvents closes over the cfg value below.
+	companyDirStore := &companyDirectoryStore{}
+	if err := companyDirStore.Load(cfg.companyDirectoryPath); err != nil {
+		log.Printf("company directory: initial load surfaced %v (routing disabled until a valid file is imported)", err)
+	}
+	companyBindStore := &companyBindingsStore{}
+	if err := companyBindStore.Load(cfg.companyBindingsPath, companyDirStore.Snapshot()); err != nil {
+		log.Printf("company bindings: initial load surfaced %v", err)
+	}
+	receipts, rerr := NewIngressReceiptStore(cfg.companyIngressDir)
+	if rerr != nil {
+		log.Printf("WARN: company ingress store %q: %v — gateway starting DEGRADED (company events 503, never legacy; construction retried)",
+			cfg.companyIngressDir, rerr)
+	}
+	companyGW := newCompanyGateway(cfg, companyDirStore, companyBindStore, receipts)
+	if rerr != nil {
+		companyGW.setStoreError(rerr)
+	}
+	cfg.companyGateway = companyGW
+	companyHealthStatus.Store(companyGW)
+	log.Printf("company gateway: directory=%s bindings=%s dm_bindings=%s agent_apps=%s ingress=%s self_bot=%q dir_loaded=%v bindings_loaded=%v dm_bindings_loaded=%v registered_agent_apps=%d verify_sessions=%v store_ready=%v",
+		cfg.companyDirectoryPath, cfg.companyBindingsPath, cfg.companyDMBindingsPath, cfg.companyAgentAppsPath, cfg.companyIngressDir, cfg.companySelfBotUserID,
+		companyDirStore.Snapshot() != nil, companyBindStore.Snapshot() != nil,
+		companyGW.dmBindStore.Snapshot() != nil, companyGW.agentApps.Snapshot().Len(), cfg.companyVerifySessions, receipts != nil)
+
 	// Public mux: only /slack/events + /slack/interactions
 	// (HMAC-verified) and /healthz. Bound to 0.0.0.0 by default so
 	// Tailscale Funnel can reach it.
@@ -1035,6 +1280,15 @@ func main() {
 	internalMux.HandleFunc("DELETE /identity", handleIdentityDelete(identityReg))
 	internalMux.HandleFunc("POST /handle-alias", handleHandleAlias(aliasReg))
 	internalMux.HandleFunc("DELETE /handle-alias", handleHandleAliasDelete(aliasReg))
+	// Company-rooms operator surface: the receipt listing + redrive endpoints
+	// (Phase 3b) backing the `gc slack company-status` / `company-redrive` verbs,
+	// plus the Phase 5 body-redaction hook (`gc slack company-redact`).
+	// Registered only when the company gateway is wired.
+	if cfg.companyGateway != nil {
+		internalMux.HandleFunc("/internal/company/receipts", cfg.companyGateway.handleCompanyReceipts)
+		internalMux.HandleFunc("/internal/company/redrive", cfg.companyGateway.handleCompanyRedrive)
+		internalMux.HandleFunc("/internal/company/redact", cfg.companyGateway.handleCompanyRedact)
+	}
 	internalMux.HandleFunc("/healthz", handleHealthz)
 
 	publicSrv := &http.Server{
@@ -1075,6 +1329,13 @@ func main() {
 		cityName:  cfg.cityName,
 	}, threadReg, aliasReg)
 
+	// Company-rooms startup recovery barrier + periodic sweep. Until the
+	// barrier opens, company-admissible events receive 503 (retryable);
+	// legacy routes, /healthz, interactions, and the internal listener
+	// serve immediately (they never consulted the gateway). The recovery
+	// pass and sweep are no-ops when the gateway is nil.
+	companyGW.startRecovery(janitorCtx)
+
 	errCh := make(chan error, 2)
 	go func() {
 		log.Printf("public listener serving on %s (Slack events)", cfg.publicListen)
@@ -1109,6 +1370,11 @@ func main() {
 	defer signal.Stop(hupCh)
 	go runReloadLoop(reloadStop, hupCh, func() {
 		logReloadOutcome(appsReg, channelMapReg, rigMapReg, roomLaunchReg, subteamAliases, userAliases)
+		// Company stores reload on the same SIGHUP but OUTSIDE the atomic
+		// six-registry set: a stale/invalid company file retains its own
+		// last-known-good snapshot (handled inside StageReload) and never
+		// blocks the six above, which have already committed.
+		companyGW.reloadOnSIGHUP()
 	})
 
 	stop := make(chan os.Signal, 1)
@@ -1160,7 +1426,25 @@ func registerAdapter(cfg config) error {
 		Capabilities: adapterCapabilities{
 			SupportsChildConversations: false,
 			SupportsAttachments:        true,
-			MaxMessageLength:           40000, // Slack's chat.postMessage limit
+			// Reserve room for the marker handlePublish appends to keyed
+			// messages. Slack does not reject text over its ceiling — it
+			// truncates from the end and still answers ok:true, with a
+			// "message_truncated" warning in response_metadata — so the
+			// reservation is not overflow protection, it is what keeps the
+			// trailing marker inside the 40,000 window for callers that size
+			// against this advertised capability. Nothing in gc reads
+			// MaxMessageLength today, so handlePublish also enforces the same
+			// budget itself rather than trusting the advertisement.
+			//
+			// The reservation is uniform because a capability is advertised
+			// once per adapter while the stamp decision is per request: only
+			// keyed publishes are stamped, but there is no way to express
+			// "20 bytes less, but only when you send an idempotency key". So
+			// unkeyed publishes — the majority — also give up the 20 bytes.
+			// Harmless while no gc-side sizer exists; if one lands and the
+			// reserve is worth recovering, it needs a per-call capability,
+			// not a different constant here.
+			MaxMessageLength: slackMaxMessageLength - referenceMarkerOverhead,
 		},
 	})
 	// PathEscape cityName so URL-significant characters cannot alter
@@ -1195,13 +1479,13 @@ func registerAdapter(cfg config) error {
 // minutes later is not silently swallowed.
 const publishDedupTTL = 2 * time.Minute
 
-// publishDedupCache remembers delivered publish receipts keyed by the
-// caller-supplied idempotency key, so a retry after a delivered-but-
-// timed-out POST returns the original receipt instead of posting a second
-// Slack message (gpk-lbhl). Only delivered receipts are cached: a retry
-// after a genuine (non-delivered) failure must still re-attempt delivery,
-// so failures are never remembered. An empty idempotency key disables
-// dedup for that call.
+// publishDedupCache remembers publish receipts keyed by the caller-supplied
+// idempotency key, so a retry after a delivered-but-timed-out POST returns the
+// original receipt instead of posting a second Slack message (gpk-lbhl). A
+// retry after a genuine failure must still re-attempt delivery, so failures are
+// never remembered — see publishReceiptBlocksRepost for where the line falls
+// now that a write Slack accepted can still fail its readback. An empty
+// idempotency key disables dedup for that call.
 type publishDedupCache struct {
 	mu      sync.Mutex
 	entries map[string]publishDedupEntry
@@ -1240,11 +1524,35 @@ func (c *publishDedupCache) Get(key string) (publishReceipt, bool) {
 	return e.receipt, true
 }
 
-// Put records a delivered receipt under key and sweeps expired entries so
-// the map stays bounded under churn. Empty keys and non-delivered receipts
-// are ignored.
+// publishReceiptBlocksRepost reports whether a retry on the same idempotency
+// key must be answered from this receipt instead of posting again.
+//
+// A delivered receipt replays outright. The harder case is a write Slack
+// accepted — ok:true with a real ts — whose readback then failed. If the read
+// leg itself was unavailable, or the token cannot read history at all, nothing
+// is known about the message except that Slack took it, so re-posting would
+// duplicate a message that is very probably in the channel. Those receipts are
+// remembered and re-verified (replayPublishReceipt) rather than replayed as-is.
+//
+// readback_unconfirmed stays strict and is never remembered: there the read
+// path answered and the message was not in the channel, so the key must be
+// free to post again.
+func publishReceiptBlocksRepost(receipt publishReceipt) bool {
+	if receipt.Delivered {
+		return true
+	}
+	switch receipt.Metadata[receiptMetadataKeyReadback] {
+	case slackReadbackUnavailable, slackReadbackAuth:
+		return receipt.MessageID != ""
+	}
+	return false
+}
+
+// Put records a receipt a retry must not re-post (publishReceiptBlocksRepost)
+// under key and sweeps expired entries so the map stays bounded under churn.
+// Empty keys and receipts that leave the key free to post again are ignored.
 func (c *publishDedupCache) Put(key string, receipt publishReceipt) {
-	if key == "" || !receipt.Delivered {
+	if key == "" || !publishReceiptBlocksRepost(receipt) {
 		return
 	}
 	c.mu.Lock()
@@ -1256,6 +1564,90 @@ func (c *publishDedupCache) Put(key string, receipt publishReceipt) {
 			delete(c.entries, k)
 		}
 	}
+}
+
+// Delete forgets key. It is how a remembered posted-but-unconfirmed receipt is
+// released once a later readback proves the message is not in the channel: the
+// key has to be free to post again at that point.
+func (c *publishDedupCache) Delete(key string) {
+	if key == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.entries, key)
+}
+
+// referenceSuffix derives the low-visibility marker embedded in outbound
+// publish text so a later reader can find the exact message in Slack channel
+// history. The in-process publishDedupCache only survives publishDedupTTL and
+// process restarts, so it cannot provide durable delivery evidence.
+//
+// The digest is a forward contract with the gas-city delivery-state
+// reconciler tracked as dr-3msk6.3, which has not landed:
+// messaging_state_reconciler.py exists at no ref in that repo yet, so this
+// side is currently the only one pinning the format. When the Python reader
+// lands it must embed this same vector verbatim — "dr-3msk6.3-test-vector"
+// maps to "50e90a583c36" — and cite it back by repo, path, and commit. Until
+// then TestReferenceSuffixMatchesCrossLanguageTestVector is the sole
+// executable guard of the agreement.
+func referenceSuffix(idempotencyKey string) string {
+	digest := sha256.Sum256([]byte(idempotencyKey))
+	return hex.EncodeToString(digest[:])[:12]
+}
+
+const (
+	// slackMaxMessageLength is Slack's chat.postMessage ceiling.
+	slackMaxMessageLength = 40000
+	// referenceMarkerOverhead is the two-newline separator plus the fixed-width
+	// marker appended by handlePublish for keyed messages.
+	referenceMarkerOverhead = 2 + len("_ref:") + 12 + len("_")
+)
+
+// referenceMarker is appended to outbound text when an idempotency key is
+// present and the marker is both meaningful and survivable. Slack message
+// metadata would be preferable, but requires app scopes the adapter does not
+// have.
+//
+// Readback contract, for whatever reads these markers back. This comment is
+// the normative statement of the scheme; the CHANGELOG entry and the stamp
+// guard in handlePublish point here rather than restating it, so there is one
+// place to edit when the contract changes:
+//
+//   - Marker absence means UNKNOWN, never undelivered. Everything posted
+//     before this change is unmarked; keyed publishes with empty text are not
+//     stamped; text that cannot fit the marker under Slack's ceiling is posted
+//     unstamped (see handlePublish); and keyed file publishes are outside the
+//     contract entirely — handlePublishFile ignores IdempotencyKey and uploads
+//     without a marker, so a reader sweeping "all keyed outbound" will not
+//     find file deliveries.
+//   - The scan surface is not conversations.history alone. A keyed publish
+//     carrying reply_to_message_id is posted with thread_ts, and history does
+//     not return thread replies — the adapter reads its own threads back
+//     through conversations.replies for exactly this reason (thread_context.go,
+//     company_hydration.go). The one Slack shape that would put a reply in
+//     history is a thread_broadcast copy, and this adapter never sets
+//     reply_broadcast (docs/company-rooms.md, "reply_broadcast is never set"),
+//     so no threaded delivery is reachable from history here. A reader
+//     sweeping history alone therefore finds no marker for any threaded
+//     delivery and, by the rule above, must call that UNKNOWN rather than
+//     undelivered; to resolve those it must walk conversations.replies for
+//     each parent whose reply_count is non-zero.
+//     TestHandlePublishStampsThreadRepliesWhichHistoryDoesNotReturn pins the
+//     thread_ts half of this — the half that lives in this repo.
+//   - A delivered message can still lose its marker after the fact: Slack
+//     truncates text past its ceiling from the end and answers ok:true. The
+//     stamp guard makes that unreachable for stamped messages, and the
+//     publish receipt reports metadata["truncated"]="true" when Slack warns,
+//     so a reader that keeps receipts can tell this case apart from an
+//     unstamped post instead of inferring it.
+//   - The scheme is slack-full-only. The slack-channel sibling accepts keyed
+//     publishes and even derives a key when the caller omits one, but stamps
+//     nothing; slack-mini has no idempotency surface at all. A reader must not
+//     expect markers from either. Porting the marker to slack-channel is
+//     deliberate follow-up work, not an oversight here.
+func referenceMarker(idempotencyKey string) string {
+	return "_ref:" + referenceSuffix(idempotencyKey) + "_"
 }
 
 func handlePublish(cfg config, reg *identityRegistry, userAliases *userAliasMap, dedup *publishDedupCache) http.HandlerFunc {
@@ -1307,6 +1699,63 @@ func handlePublish(cfg config, reg *identityRegistry, userAliases *userAliasMap,
 			Text:     rewrittenText,
 			ThreadTS: req.ReplyToMessageID,
 		}
+		// Stamp only when the marker is both meaningful and survivable.
+		//
+		// Empty text: a keyed publish carrying no text failed loudly at base —
+		// Slack answers no_text, the receipt is Delivered:false with
+		// FailureKind "permanent". Stamping unconditionally posts a
+		// marker-only message, which Slack accepts, converting that visible
+		// failure into Delivered:true plus a real MessageID for a payload that
+		// delivered nothing — and dedup then caches that receipt, so a
+		// legitimate retry on the same key replays "delivered" instead of
+		// re-posting. `gc slack publish --idempotency-key K --body-file <empty
+		// file>` arrives here with exactly that shape, because _load_body
+		// tests the truthiness of the path, not the file contents.
+		//
+		// Over the ceiling: Slack truncates text past slackMaxMessageLength
+		// from the end rather than rejecting it, and the marker is the tail of
+		// the string, so stamping an oversized message delivers a mangled
+		// partial marker that matches nothing on readback. Skipping keeps the
+		// caller's text whole (trimming it to make room would trade their
+		// content for our bookkeeping) and leaves an honest absence, which the
+		// readback contract already requires readers to treat as unknown. That
+		// contract is stated normatively on referenceMarker; this comment only
+		// covers why the stamp is skipped, so the two cannot drift apart.
+		//
+		// Both are measured on rewrittenText because that is what is actually
+		// posted: the alias rewrite can expand @handle into <@U…>, so a caller
+		// that sized itself to the advertised capability can still land over
+		// the budget here. len is bytes while Slack counts characters; for
+		// multibyte text that over-counts, which can only make this skip a
+		// marker that would have fit, never stamp one that will not.
+		//
+		// Only the fit check has a reachable input distinguishing rewrittenText
+		// from req.Text, and the alias-rewrite case in
+		// TestHandlePublishSkipsReferenceMarkerWhenItCannotFitUnderSlackCeiling
+		// pins it. The emptiness check cannot be told apart the same way today:
+		// rewrite returns text unchanged when it is empty, and parseUserAliasMap
+		// rejects any target slackMentionFor does not recognize, so no loadable
+		// alias map can rewrite non-empty text to "". rewrittenText is still the
+		// right operand — it is what gets posted — but that half is defensive,
+		// and a test asserting it would have to hand-build a map the loader
+		// cannot produce, which would pin an unreachable state rather than a
+		// behavior.
+		stampedMarker := ""
+		if req.IdempotencyKey != "" && rewrittenText != "" {
+			if len(rewrittenText)+referenceMarkerOverhead <= slackMaxMessageLength {
+				stampedMarker = referenceMarker(req.IdempotencyKey)
+				post.Text += "\n\n" + stampedMarker
+			} else {
+				// rewritten=, not text=: this is the post-rewrite length the
+				// budget was measured against, while the main publish log
+				// below reports the request length under text=. Two adjacent
+				// lines of one request carrying the same label with different
+				// quantities is what makes a grep on text= ambiguous.
+				log.Printf("publish: rewritten=%dch leaves no room for the reference marker (ceiling=%d overhead=%d) idem=%s conv=%s -> posting unstamped; this delivery is not readable back",
+					len(rewrittenText), slackMaxMessageLength, referenceMarkerOverhead,
+					req.IdempotencyKey, req.Conversation.ConversationID)
+			}
+		}
 		identityApplied := ""
 		if reg != nil {
 			if rec, ok := reg.Get(identitySessionID); ok {
@@ -1316,17 +1765,34 @@ func handlePublish(cfg config, reg *identityRegistry, userAliases *userAliasMap,
 				identityApplied = rec.Username
 			}
 		}
-		log.Printf("publish: conv=%s text=%dch reply_to=%s idem=%s session=%s as=%q mentions_rewritten=%t",
-			req.Conversation.ConversationID, len(req.Text), req.ReplyToMessageID,
+		// text= is the request as received; posted= is what actually reaches
+		// Slack, after the alias rewrite and the marker stamp. They diverge by
+		// the marker on a keyed publish and by the rewrite otherwise, and
+		// posted= is the number that matters at Slack's ceiling — logging only
+		// the pre-stamp length is what would make a length-related outcome
+		// look inexplicable from the logs.
+		log.Printf("publish: conv=%s text=%dch posted=%dch reply_to=%s idem=%s session=%s as=%q mentions_rewritten=%t",
+			req.Conversation.ConversationID, len(req.Text), len(post.Text), req.ReplyToMessageID,
 			req.IdempotencyKey, identitySessionID, identityApplied, rewrittenText != req.Text)
 
-		// Idempotent replay: if this idempotency key already produced a
-		// delivered receipt, return it without re-posting. This is the
-		// chokepoint that absorbs a retry after a delivered-but-timed-out
-		// POST (gpk-lbhl) — the original Slack message stands, no duplicate.
-		if cached, ok := dedup.Get(req.IdempotencyKey); ok {
-			log.Printf("publish: dedup hit idem=%s conv=%s -> returning cached receipt (no re-post)",
-				req.IdempotencyKey, req.Conversation.ConversationID)
+		// The readback's subject: this conversation, the text actually posted,
+		// and the marker if one was stamped. messageTS is filled in once Slack
+		// answers with a ts (or, on the replay path, from the remembered
+		// receipt).
+		target := slackReadbackTarget{
+			channel:      req.Conversation.ConversationID,
+			threadTS:     req.ReplyToMessageID,
+			expectedText: post.Text,
+			marker:       stampedMarker,
+		}
+
+		// Idempotent replay: if this idempotency key already produced a receipt
+		// that must not be re-posted, answer from it. This is the chokepoint
+		// that absorbs a retry after a delivered-but-timed-out POST (gpk-lbhl)
+		// — the original Slack message stands, no duplicate.
+		if cached, ok := replayPublishReceipt(cfg.slackBotToken, dedup, req.IdempotencyKey, target); ok {
+			log.Printf("publish: dedup hit idem=%s conv=%s delivered=%t -> returning cached receipt (no re-post)",
+				req.IdempotencyKey, req.Conversation.ConversationID, cached.Delivered)
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(cached)
 			return
@@ -1353,12 +1819,47 @@ func handlePublish(cfg config, reg *identityRegistry, userAliases *userAliasMap,
 				receipt.FailureKind = "permanent"
 			}
 		default:
-			receipt.Delivered = true
 			receipt.MessageID = slackResp.TS
+			// A delivered-but-truncated message is still ok:true with a real
+			// message_id, so none of the receipt's named fields can show it. On
+			// a keyed publish the marker is the tail of the text, so truncation
+			// is precisely the case where delivery succeeded but readback will
+			// not find it. Log it for the operator and put it on the receipt
+			// for the caller: a log line cannot be observed by the reconciler
+			// this scheme exists to serve, and it is the caller — not this
+			// process — that knows whether the message was keyed. Routed
+			// through metadata because that is the only additive channel gc
+			// actually carries through; see publishReceipt.Metadata.
+			for _, warning := range slackResp.ResponseMetadata.Warnings {
+				if warning != "message_truncated" {
+					continue
+				}
+				log.Printf("publish: slack truncated the posted text (posted=%dch ceiling=%d) idem=%s conv=%s ts=%s -> any reference marker did not survive",
+					len(post.Text), slackMaxMessageLength, req.IdempotencyKey,
+					req.Conversation.ConversationID, slackResp.TS)
+				if receipt.Metadata == nil {
+					receipt.Metadata = map[string]string{}
+				}
+				receipt.Metadata["truncated"] = "true"
+			}
+			// The truncation warning is recorded before the readback so the
+			// wire fact survives either outcome: it is what Slack reported
+			// about this write, while Delivered below is what the read API can
+			// confirm. Truncation also fails the readback, so a truncated
+			// publish now reports Delivered:false with FailureKind "permanent"
+			// (metadata["readback"]="readback_unconfirmed") *and*
+			// metadata["truncated"] — strictly more than either half could say
+			// alone. Permanent is the honest kind there: the same oversized
+			// payload truncates identically on every retry, so re-sending it
+			// can only add another visible partial message.
+			target.messageTS = slackResp.TS
+			confirmPublishReceipt(cfg.slackBotToken, &receipt, target)
 		}
-		// Remember delivered receipts so a subsequent retry with the same
-		// idempotency key replays this receipt instead of re-posting. Put
-		// ignores empty keys and non-delivered receipts.
+		// Remember any receipt a retry must not re-post — delivered, or posted
+		// with the read leg unavailable — so a subsequent retry with the same
+		// idempotency key replays it. Put ignores empty keys and the receipts
+		// that carry no evidence Slack took the message
+		// (publishReceiptBlocksRepost).
 		dedup.Put(req.IdempotencyKey, receipt)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(receipt)
@@ -1370,13 +1871,23 @@ func handlePublish(cfg config, reg *identityRegistry, userAliases *userAliasMap,
 // req.Conversation.ConversationID, optionally threaded under
 // req.ReplyToMessageID. The bot token requires the `files:write` scope —
 // without it, Slack returns {ok: false, error: "missing_scope"} and the
-// receipt's FailureKind is "permanent".
+// receipt's FailureKind is "auth" (mapSlackError classifies missing_scope as
+// auth, so a consumer branching retry policy on this doc must read `auth`).
 //
 // Slack's files.completeUploadExternal does NOT accept chat:write.customize
 // username/icon overrides, so file posts appear under the default bot
 // identity even when an identity record is registered for the source
 // session. This is a Slack platform limitation, not an adapter bug.
 // The identity lookup still happens for log parity with /publish.
+//
+// Delivery evidence here is weaker than /publish's, deliberately and for now:
+// /publish reads its message back and only then sets Delivered (see
+// confirmPublishReceipt), while this path still reports Delivered on Slack's
+// accepted write. The two emit the same receipt schema, so a consumer cannot
+// tell verified delivery from accepted delivery by the receipt alone — treat a
+// delivered /publish-file receipt as "Slack accepted the upload". Closing the
+// gap means reading back the completed post's ts the same way; it is not done
+// here because this change is scoped to the /publish contract.
 func handlePublishFile(cfg config, reg *identityRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -1830,15 +2341,27 @@ func handleReact(cfg config) http.HandlerFunc {
 }
 
 func postReactionToSlack(token string, req slackReactionsAddReq) (*slackReactionsAddResp, error) {
+	return postReactionMethod(http.DefaultClient, token, "reactions.add", req)
+}
+
+// postReactionMethod is the single Slack reactions POST path, parameterized by
+// method ("reactions.add" | "reactions.remove") and HTTP client. handleReact
+// (add, DefaultClient) and the company visible-ack path (add/remove over the
+// gateway's timeout-bounded client) both route through here, so there is no
+// second reactions POST implementation.
+func postReactionMethod(client *http.Client, token, method string, req slackReactionsAddReq) (*slackReactionsAddResp, error) {
+	if client == nil {
+		client = http.DefaultClient
+	}
 	body, _ := json.Marshal(req)
-	httpReq, err := http.NewRequest(http.MethodPost, slackAPIBase+"/reactions.add", bytes.NewReader(body))
+	httpReq, err := http.NewRequest(http.MethodPost, slackAPIBase+"/"+method, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 
-	httpResp, err := http.DefaultClient.Do(httpReq)
+	httpResp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -1854,7 +2377,28 @@ func postReactionToSlack(token string, req slackReactionsAddReq) (*slackReaction
 	return &sr, nil
 }
 
+// slackPostTimeout bounds the write leg. /publish now spends its budget on a
+// write and then a read, and gc gives the adapter 30s for the whole call, so an
+// untimed post client could burn the entire budget and leave gc to time out
+// after Slack had already accepted the message — the shape that produces a
+// duplicate on the caller's retry. See slackReadbackTiming for the arithmetic
+// the two legs share.
+const slackPostTimeout = 10 * time.Second
+
+var slackPostHTTPClient = &http.Client{Timeout: slackPostTimeout}
+
 func postToSlack(token string, req slackPostMessageReq) (*slackPostMessageResp, error) {
+	return postMessageWithClient(slackPostHTTPClient, token, req)
+}
+
+// postMessageWithClient is the single Slack chat.postMessage path, parameterized
+// by HTTP client. postToSlack (DefaultClient) and the company visible-ack failure
+// reply (the gateway's timeout-bounded client) both route through here, so there
+// is no second chat.postMessage implementation.
+func postMessageWithClient(client *http.Client, token string, req slackPostMessageReq) (*slackPostMessageResp, error) {
+	if client == nil {
+		client = http.DefaultClient
+	}
 	body, _ := json.Marshal(req)
 	httpReq, err := http.NewRequest(http.MethodPost, slackAPIBase+"/chat.postMessage", bytes.NewReader(body))
 	if err != nil {
@@ -1863,7 +2407,7 @@ func postToSlack(token string, req slackPostMessageReq) (*slackPostMessageResp, 
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 
-	httpResp, err := http.DefaultClient.Do(httpReq)
+	httpResp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -1890,19 +2434,23 @@ func handleSlackEvents(cfg config, aliasReg *handleAliasRegistry, threadReg *thr
 			http.Error(w, "read body", http.StatusBadRequest)
 			return
 		}
-		// Resolve the candidate signing secrets BEFORE HMAC. Body is
-		// unsigned bytes by definition until verified — that's the
-		// whole point of the signature — so we parse only the small
-		// team_id field to choose which key(s) to trial-verify with.
-		// Standard Slack multi-tenant pattern. No team_id in body
-		// (e.g. malformed) falls through to env fallback inside
-		// lookupSigningSecrets.
-		teamID := parseTeamIDFromEventsBody(body)
-		secrets := lookupSigningSecrets(cfg.appsRegistry, cfg.slackSigningKey, teamID)
+		// Resolve the signing secret(s) BEFORE HMAC. Body is unsigned bytes by
+		// definition until verified, so we parse only the small type +
+		// api_app_id + team_id head to pick the Phase 4 verification path (env
+		// secret for the switchboard/legacy, the app's OWN secret for a
+		// registered agent app, trial for the url_verification handshake).
+		head := parseEventHead(body)
 		ts := r.Header.Get("X-Slack-Request-Timestamp")
 		sig := r.Header.Get("X-Slack-Signature")
-		if !verifySlackSignatureMulti(secrets, ts, body, sig) {
-			log.Printf("slack signature verify FAILED team_id=%q candidates=%d", clipTeamIDForLog(teamID), len(secrets))
+		// Resolve the agent-apps registration snapshot ONCE per request so the
+		// HMAC decision and the DM admission gate agree even if a SIGHUP swaps
+		// the registry between them (m7): a mid-request register/deregister can
+		// no longer route an event verified as an agent-app DM into the legacy
+		// dispatcher, nor admit a legacy-trial-verified event as an owner DM.
+		agentApps := cfg.companyGateway.agentAppsSnapshot()
+		if !verifyInboundEvent(cfg, agentApps, head, body, ts, sig) {
+			log.Printf("slack signature verify FAILED type=%q api_app_id=%q team_id=%q",
+				clipTeamIDForLog(head.Type), clipTeamIDForLog(head.APIAppID), clipTeamIDForLog(head.TeamID))
 			http.Error(w, "invalid signature", http.StatusUnauthorized)
 			return
 		}
@@ -1917,6 +2465,18 @@ func handleSlackEvents(cfg config, aliasReg *handleAliasRegistry, threadReg *thr
 		if env.Type == "url_verification" && env.Challenge != "" {
 			w.Header().Set("Content-Type", "text/plain")
 			_, _ = w.Write([]byte(env.Challenge))
+			return
+		}
+
+		// Company-rooms durable admission (Slack company-rooms Phase 1d).
+		// When the event targets an imported company room, the gateway
+		// owns the HTTP response (200 on admit/duplicate/non-admissible,
+		// 503 without x-slack-no-retry on store failure or a closed
+		// startup barrier) and delivery proceeds asynchronously. Every
+		// other event — no gateway, no directory, non-company channel,
+		// non-message type — falls through to the legacy path below
+		// byte-for-byte.
+		if cfg.companyGateway.tryHandleEvent(w, r, env, agentApps) {
 			return
 		}
 
@@ -1954,6 +2514,105 @@ func parseTeamIDFromEventsBody(body []byte) string {
 		return ""
 	}
 	return head.TeamID
+}
+
+// eventHead is the minimal pre-HMAC view of a /slack/events body: the fields
+// that select the Phase 4 verification path. Parsed from unsigned bytes, so it
+// carries no trust — it only routes the request to the right secret.
+type eventHead struct {
+	Type     string `json:"type"`
+	APIAppID string `json:"api_app_id"`
+	TeamID   string `json:"team_id"`
+}
+
+// parseEventHead extracts the type / api_app_id / team_id head. Returns a zero
+// value on any decode failure; every downstream branch fails closed on the
+// zero value (no api_app_id match, empty candidate list). Body is already
+// capped at 1 MiB upstream.
+func parseEventHead(body []byte) eventHead {
+	var h eventHead
+	_ = json.Unmarshal(body, &h)
+	return h
+}
+
+// verifyInboundEvent implements the Phase 4 verification order (event POSTs).
+// Fail-closed at every step; the switchboard/legacy path stays byte-for-byte
+// the existing rooms behavior (lookupSigningSecrets). agentApps is the caller's
+// once-per-request registration snapshot (m7): the SAME value must be handed to
+// tryHandleEvent so verification and admission never disagree across a SIGHUP.
+//
+//  1. url_verification: no api_app_id in the handshake — trial-HMAC across the
+//     env secret (+ any apps.json secret) and ALL registered agent secrets;
+//     echo on any match. Side-effect-free, so a trial is acceptable here and
+//     ONLY here.
+//  2. event_callback, api_app_id == SLACK_APP_ID (the switchboard's own app):
+//     verify against the env signing secret ONLY (the rooms path, unchanged).
+//     This branch is authoritative and takes precedence over any registered
+//     agent record that happens to carry the same api_app_id — the switchboard
+//     identity is pinned to the env secret, never a file-registered one. Empty
+//     SLACK_APP_ID disables the pin and lets the switchboard fall to rule 4.
+//  3. event_callback, api_app_id == a registered agent app: verify against
+//     exactly that record's secret. A mismatch — including a signature valid
+//     under a DIFFERENT registered app's secret — is a strict-bind reject
+//     (401, counter company_dm_sig_reject). The bind check is authoritative;
+//     no fallback (rule 12 spoof defense).
+//  4. otherwise (an unknown api_app_id): the legacy lookupSigningSecrets path,
+//     UNCHANGED — except a legacy trial that matches a secret which is ALSO a
+//     registered agent secret is rejected, because registration opts an app
+//     into strict binding permanently.
+func verifyInboundEvent(cfg config, agentApps *AgentApps, head eventHead, body []byte, ts, sig string) bool {
+	if head.Type == "url_verification" {
+		candidates := lookupSigningSecrets(cfg.appsRegistry, cfg.slackSigningKey, head.TeamID)
+		candidates = append(candidates, agentApps.SigningSecrets()...)
+		return verifySlackSignatureMulti(candidates, ts, body, sig)
+	}
+	// Rule 2: the switchboard's own api_app_id pins to the env secret only. It
+	// is checked BEFORE the registered-agent lookup so a registered record
+	// sharing SLACK_APP_ID can never shadow the env-secret path (spec §Verify
+	// order rule 2/3 precedence). A mismatch here is a plain 401 (the rooms
+	// path), not a company_dm_sig_reject.
+	if head.Type == "event_callback" && cfg.slackAppID != "" && head.APIAppID == cfg.slackAppID {
+		return verifySlackSignature(cfg.slackSigningKey, ts, body, sig)
+	}
+	if rec, ok := agentApps.Get(head.APIAppID); ok {
+		if verifySlackSignature(rec.SigningSecret, ts, body, sig) {
+			return true
+		}
+		// Strict binding: an event claiming a registered app must verify under
+		// that app's own secret or be rejected, even if it verifies under some
+		// other registered app's secret (the cross-app spoof).
+		cfg.companyGateway.recordDMSigReject()
+		return false
+	}
+	// The legacy trial set is the env/apps.json candidates PLUS every registered
+	// agent secret, so a match on a registered secret is DETECTED (not silently
+	// unmatched) and explicitly rejected: that app opted into strict binding via
+	// registration, so it may never be admitted through the unknown-api_app_id
+	// carve-out. A match on a non-registered legacy candidate is accepted.
+	candidates := lookupSigningSecrets(cfg.appsRegistry, cfg.slackSigningKey, head.TeamID)
+	candidates = append(candidates, agentApps.SigningSecrets()...)
+	matched, ok := firstMatchingSecret(candidates, ts, body, sig)
+	if !ok {
+		return false
+	}
+	if agentApps.isRegisteredSecret(matched) {
+		cfg.companyGateway.recordDMSigReject()
+		return false
+	}
+	return true
+}
+
+// firstMatchingSecret trials each candidate secret against the HMAC and
+// returns the first that verifies (and true). Fail-closed semantics per
+// verifySlackSignature. Used by the legacy verification path so the caller can
+// inspect WHICH secret matched (the strict-bind rejection above).
+func firstMatchingSecret(secrets []string, ts string, body []byte, sig string) (string, bool) {
+	for _, s := range secrets {
+		if verifySlackSignature(s, ts, body, sig) {
+			return s, true
+		}
+	}
+	return "", false
 }
 
 // verifySlackSignatureMulti trials each candidate secret against the
@@ -2325,7 +2984,10 @@ func downloadSlackFiles(cfg config, channel, ts string, files []slackFile) []ext
 		out = append(out, externalAttachment{
 			ProviderID: f.ID,
 			URL:        "file://" + dest,
-			MIMEType:   f.MIMEType,
+			// Never f.MIMEType verbatim: Slack-native recordings (voice
+			// clips, video clips) carry an empty mimetype, and gc requires
+			// the field — see attachmentMIMEType.
+			MIMEType: attachmentMIMEType(f),
 		})
 	}
 	return out

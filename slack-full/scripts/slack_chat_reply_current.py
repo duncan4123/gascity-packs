@@ -8,6 +8,13 @@ The lookup order:
    current session, and reply to the same conversation.
 3. If neither yields a target, fall back to the session's saved
    extmsg binding.
+
+Threading: when the latest inbound in the conversation this session
+last heard from was a thread reply, the reply inherits its thread_ts
+and lands in the same thread — including when --conversation-id names
+the same conversation explicitly (gp-i62). --reply-to /
+--thread-current still override the anchor, and --no-thread forces a
+channel-level post.
 """
 
 from __future__ import annotations
@@ -21,6 +28,7 @@ import sys
 from typing import Any
 
 import slack_intake_common as common
+import slack_mrkdwn
 
 
 def _derive_idempotency_key(
@@ -43,11 +51,17 @@ def _derive_idempotency_key(
 def _load_body(args: argparse.Namespace) -> str:
     if args.body and args.body_file:
         raise SystemExit("pass --body OR --body-file, not both")
+    body = ""
     if args.body:
-        return args.body
-    if args.body_file:
-        return pathlib.Path(args.body_file).read_text(encoding="utf-8")
-    raise SystemExit("either --body or --body-file is required")
+        body = args.body
+    elif args.body_file:
+        body = pathlib.Path(args.body_file).read_text(encoding="utf-8")
+    else:
+        raise SystemExit("either --body or --body-file is required")
+    if not args.raw:
+        # gp-o42: tilde pairs render as strikethrough in Slack mrkdwn.
+        body = slack_mrkdwn.escape_accidental_mrkdwn(body)
+    return body
 
 
 def _slack_kind_from_channel_id(cid: str, fallback: str = "dm") -> str:
@@ -73,12 +87,12 @@ def _resolve_conversation(
 ) -> dict[str, str]:
     """Pick which Slack conversation to publish into."""
     explicit = (args.conversation_id or "").strip()
-    user_set_kind = args.kind != _DEFAULT_KIND
+    user_set_kind = args.kind is not None
     if explicit:
         workspace = os.environ.get("SLACK_WORKSPACE_ID", "").strip()
         if not workspace:
             raise SystemExit("SLACK_WORKSPACE_ID must be set when using --conversation-id")
-        kind = args.kind if user_set_kind else _slack_kind_from_channel_id(explicit, args.kind)
+        kind = args.kind if user_set_kind else _slack_kind_from_channel_id(explicit, _DEFAULT_KIND)
         return {
             "scope_id": common.gc_city_name(),
             "provider": "slack",
@@ -91,7 +105,7 @@ def _resolve_conversation(
         payload = event.get("payload") or {}
         cid = (payload.get("conversation_id") or "").strip()
         if cid:
-            kind = args.kind if user_set_kind else _slack_kind_from_channel_id(cid, args.kind)
+            kind = args.kind if user_set_kind else _slack_kind_from_channel_id(cid, _DEFAULT_KIND)
             return {
                 "scope_id": common.gc_city_name(),
                 "provider": "slack",
@@ -106,7 +120,7 @@ def _resolve_conversation(
             "provider": binding.get("provider", "slack"),
             "account_id": binding.get("account_id", os.environ.get("SLACK_WORKSPACE_ID", "")),
             "conversation_id": binding.get("conversation_id", ""),
-            "kind": binding.get("kind", args.kind),
+            "kind": binding.get("kind", _DEFAULT_KIND),
         }
     raise SystemExit(
         "no inbound event and no binding found for this session; "
@@ -116,6 +130,79 @@ def _resolve_conversation(
 _DEFAULT_KIND = "dm"
 
 
+def _maybe_company_reply(args: argparse.Namespace) -> int | None:
+    """Company-context path: post via the acting agent's own token.
+
+    Additive and inert for non-company sessions. Whenever this session has an
+    active company current-turn pointer we divert by the turn ``kind``:
+
+      * ``peer_delegation`` → post a delegation result into the human root
+        thread (``gc_delegation_result`` gate, requester the only live mention);
+      * ``peer_result`` → post a synthesis into the root with no live mentions;
+      * ``ambient`` / ``thread_ambient`` / ``targeted`` / ``peer_input`` →
+        post an ordinary reply into the room's thread root with no live
+        mentions.
+
+    Only the *absence* of a company pointer returns ``None`` so the legacy path
+    runs byte-for-byte; a session with any company pointer answers into the
+    room (the legacy resolution the company delivery path never feeds).
+    """
+    session_name = os.environ.get("GC_SESSION_NAME", "").strip()
+    if not session_name:
+        if (getattr(args, "turn_ref", "") or "").strip():
+            raise SystemExit(
+                "--turn-ref requires GC_SESSION_NAME so the immutable company "
+                "turn can be verified against its bound agent session")
+        return None
+    try:
+        import slack_company_outbound as outbound  # type: ignore
+    except ImportError:
+        return None
+    # `--kind room|dm|mpim` overrides which pointer this reply acts on when more
+    # than one turn is live; anything else (thread / unset) leaves the
+    # newest-by-delivered-at default. A non-company value is ignored here and
+    # left to the legacy conversation-kind path.
+    kind_override = args.kind if args.kind in ("room", "dm", "mpim") else ""
+    origin_ts = (getattr(args, "origin_ts", "") or "").strip()
+    turn_ref = (getattr(args, "turn_ref", "") or "").strip()
+    try:
+        source = outbound.resolve_reply_pointer_source(
+            session_name, kind_override=kind_override, turn_ref=turn_ref)
+        if source is None:
+            return None  # no company pointer — fall through to the legacy path
+        body = _load_body(args)
+        if source == "dm":
+            result = outbound.post_company_dm_reply(
+                body=body, origin_ts=origin_ts, session_name=session_name,
+                turn_ref=turn_ref)
+        elif source == "mpim":
+            result = outbound.post_company_mpim_reply(
+                body=body, origin_ts=origin_ts, session_name=session_name,
+                turn_ref=turn_ref)
+        else:
+            turn = (outbound.read_turn_ref(session_name, turn_ref)
+                    if turn_ref else outbound.read_current_turn(session_name))
+            kind = turn.get("kind") if turn is not None else None
+            if kind == "peer_delegation":
+                result = outbound.post_peer_result(
+                    body=body, origin_ts=origin_ts, session_name=session_name,
+                    turn_ref=turn_ref)
+            elif kind == "peer_result":
+                result = outbound.post_peer_synthesis(
+                    body=body, origin_ts=origin_ts, session_name=session_name,
+                    allow_partial=bool(getattr(args, "allow_partial", False)),
+                    turn_ref=turn_ref)
+            else:  # ambient / thread_ambient / targeted / peer_input → root reply
+                result = outbound.post_company_root_reply(
+                    body=body, origin_ts=origin_ts, session_name=session_name,
+                    turn_ref=turn_ref)
+    except (outbound.OutboundError, outbound.TransientPostError,
+            outbound.DefinitivePostError) as exc:
+        raise SystemExit(f"company reply failed: {exc}") from exc
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description="Reply to the latest Slack inbound event seen by the current session",
@@ -123,19 +210,48 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--session", default="", help="Override session id")
     parser.add_argument("--conversation-id", default="",
                         help="Override Slack channel/DM id")
-    parser.add_argument("--kind", default=_DEFAULT_KIND,
+    parser.add_argument("--kind", default=None,
                         help=("Conversation kind (dm/room/thread). When omitted, "
                               "auto-detected from channel id prefix (C/G=room, "
-                              "D=dm). Default fallback: dm"))
+                              "D=dm; default fallback dm). Company rooms: on a "
+                              "session with more than one live current-turn "
+                              "pointer, 'room'/'dm'/'mpim' overrides which the "
+                              "reply acts on (default: newest by delivered-at)."))
     parser.add_argument("--reply-to", default="",
                         help="Slack message ts to reply to (threaded reply)")
+    parser.add_argument(
+        "--origin-ts", default="",
+        help=("Company rooms: pin a specific turn ts when a newer wake has "
+              "overwritten the current-turn pointer (mismatch is a hard error)."))
+    parser.add_argument(
+        "--turn-ref", default="",
+        help=("Company messages: immutable turn reference from the authenticated "
+              "Slack reminder. Selects that exact channel/thread even when a "
+              "newer message woke the same session."))
+    parser.add_argument(
+        "--allow-partial", action="store_true",
+        help=("Company rooms: on a peer_result (synthesis) turn, synthesize the "
+              "currently-materialized compatible delegations even when the "
+              "frozen snapshot is not ready (records allow_partial in the "
+              "report). Ignored for non-synthesis turns."))
     parser.add_argument(
         "--thread-current",
         action="store_true",
         help=(
-            "Thread the reply under the latest inbound message routed to "
-            "this session (resolved via gc transcript). Cannot be combined "
-            "with --reply-to. If no recent inbound is found, fails fast."
+            "Thread the reply under the latest inbound message in the "
+            "conversation this session last heard from (resolved via gc "
+            "transcript; a thread-reply inbound anchors at its thread "
+            "root). Cannot be combined with --reply-to. If no recent "
+            "inbound is found, fails fast."
+        ),
+    )
+    parser.add_argument(
+        "--no-thread",
+        action="store_true",
+        help=(
+            "Force a channel-level post even when the latest inbound was a "
+            "thread reply (by default the reply inherits that thread_ts). "
+            "Cannot be combined with --reply-to or --thread-current."
         ),
     )
     parser.add_argument("--idempotency-key", default="",
@@ -146,6 +262,12 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--body", default="")
     parser.add_argument("--body-file", default="")
     parser.add_argument(
+        "--raw", action="store_true",
+        help=("Send the body verbatim, skipping the accidental-mrkdwn guard "
+              "(by default, tildes that would pair into unintended Slack "
+              "strikethrough are neutralized; deliberate ~word~ wrapping and "
+              "code spans always pass through)."))
+    parser.add_argument(
         "--via",
         choices=("gc", "adapter"),
         default="gc",
@@ -155,6 +277,10 @@ def main(argv: list[str]) -> int:
               "the message)."),
     )
     args = parser.parse_args(argv)
+
+    company_rc = _maybe_company_reply(args)
+    if company_rc is not None:
+        return company_rc
 
     body = _load_body(args)
 
@@ -172,16 +298,52 @@ def main(argv: list[str]) -> int:
         raise SystemExit("missing slack account_id (SLACK_WORKSPACE_ID env)")
 
     reply_to = args.reply_to
+    if args.no_thread and (reply_to or args.thread_current):
+        raise SystemExit(
+            "--no-thread cannot be combined with --reply-to or --thread-current")
     if args.thread_current:
         if reply_to:
             raise SystemExit("pass --reply-to OR --thread-current, not both")
-        match = common.find_latest_inbound_message_id_for_session(session_id)
+        match = common.find_latest_inbound_thread_for_session(session_id)
         if match is None:
             raise SystemExit(
                 "no recent inbound transcript entry for this session; "
                 "cannot thread without --reply-to <ts>"
             )
-        reply_to = match[0]
+        mid, thread_root, _conv = match
+        # A thread-reply inbound anchors at its thread ROOT, not its own
+        # ts — Slack threads hang off the parent message, and a thread_ts
+        # pointing at a child strands the reply outside the conversation.
+        reply_to = thread_root or mid
+    elif not reply_to and not args.no_thread:
+        # gp-i62: a threaded inbound means the human is talking to this
+        # session IN that thread — "reply to the latest inbound" must land
+        # there, not at channel level. Inherit the inbound's thread_ts,
+        # including when --conversation-id names the conversation
+        # explicitly. Guard on conversation match so an explicit target
+        # pointing elsewhere never borrows a foreign thread anchor, and
+        # stay best-effort: no inbound / unthreaded inbound / transcript
+        # miss / gc outage (--via adapter still works then) all keep the
+        # channel-level behavior.
+        try:
+            match = common.find_latest_inbound_thread_for_session(session_id)
+        except common.GCAPIError as exc:
+            print(f"warning: thread-inheritance lookup failed, posting at "
+                  f"channel level: {exc}", file=sys.stderr)
+            match = None
+        if match is not None:
+            mid, thread_root, inbound_conv = match
+            if thread_root and inbound_conv.get("conversation_id") == conv["conversation_id"]:
+                reply_to = thread_root
+                # The degraded path warns, but the success path rewrites
+                # the reply target silently. Say which anchor was
+                # inherited and which inbound donated it: the lookup takes
+                # the conversation's newest inbound, not provably the one
+                # being answered (see find_latest_inbound_thread_for_session),
+                # so this line is what makes a misthreaded reply
+                # reproducible from a field report.
+                print(f"inheriting thread {thread_root} from inbound {mid}",
+                      file=sys.stderr)
 
     idempotency_key = args.idempotency_key.strip()
     if not idempotency_key:
@@ -214,6 +376,10 @@ def main(argv: list[str]) -> int:
     print(json.dumps({
         "conversation_id": conv["conversation_id"],
         "session_id": session_id,
+        # Empty for a channel-level post; the anchor is reported whether it
+        # came from --reply-to, --thread-current, or inheritance, so the
+        # thread a reply landed in is recoverable from the command output.
+        "reply_to_message_id": reply_to,
         "via": args.via,
         "result": result,
     }, indent=2))

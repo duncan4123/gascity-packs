@@ -34,10 +34,13 @@ REVIEW_GATE = "review"
 BUILD_GATE = "build"
 BUILD_BASIC_GATE = "build-basic"
 GASTOWN_ORCHESTRATION_GATE = "gastown-orchestration"
+SMOKE_GATE = "smoke"
 ALL_GATE = "all"
 GASCITY_PACK = "gascity"
 GASTOWN_PACK = "gastown"
+MODEL_SMOKE_PACKS = ("superpowers", "compound-engineering", "gstack", "bmad", GASTOWN_PACK)
 GASCITY_REMOTE_SOURCE = "https://github.com/gastownhall/gascity.git"
+BEADS_MODULE = "github.com/steveyegge/beads"
 REVIEW_SUBJECT_PATH = Path(".gc/inference-gate/review-subject.diff")
 REVIEW_REPORT_PATH = Path(".gc/inference-gate/review-report.md")
 REVIEW_REPORT_METADATA_KEYS = (
@@ -61,11 +64,12 @@ BUILD_TITLE = "gascity pack inference gate: build-basic"
 BUILD_SOURCE_TITLE = "Implement slugify and make pytest pass"
 GASTOWN_REVIEW_TITLE = "Gastown orchestration gate: review leg"
 GASTOWN_REVIEW_ASSIGNMENT_TITLE = "Review Gastown orchestration gate fixture"
+SMOKE_TITLE_PREFIX = "RC model smoke"
 GASTOWN_ALWAYS_ON_AGENTS = ("mayor", "deacon", "boot", "witness")
 GASTOWN_FORMULA_CONTRACTS = {
     "mol-review-leg": (
         "write the FULL report into the bead notes",
-        "gc bd update \"$WORK_BEAD_ID\" --notes",
+        "gc bd update \"$WORK_BEAD_ID\" --append-notes",
         "gc mail send \"$COORD\"",
         "gc bd update \"$WORK_BEAD_ID\" --status=closed",
     ),
@@ -105,6 +109,9 @@ GASTOWN_BUILD_WORKFLOW_CONTRACTS = {
         "{{lint_command}}",
         "{{build_command}}",
         "{{test_command}}",
+        'COMMITS_AHEAD=$(git rev-list --count "$BASE_REF..HEAD" 2>/dev/null)',
+        "''|*[!0-9]*) HALT_REASON=content_gate_error ;;",
+        "0) HALT_REASON=no_commits ;;",
         "git push origin HEAD",
         "gc bd update \"$WORK_BEAD_ID\" \\",
         "--set-metadata target={{base_branch}}",
@@ -113,7 +120,27 @@ GASTOWN_BUILD_WORKFLOW_CONTRACTS = {
         "gc runtime drain-ack",
     ),
     "mol-refinery-patrol": (
-        "gc bd list ${GC_RIG:+--rig=\"$GC_RIG\"} --assignee=$GC_AGENT --status=open",
+        "gc bd list ${GC_RIG:+--rig=\"$GC_RIG\"} --assignee=$GC_AGENT --status=open,in_progress",
+        # Guarded ancestry decision (issue 374). The guard fetch is pinned in
+        # its unbraced spelling: merge-push's fetch uses "${BRANCH}", so this
+        # fragment witnesses the decision's own site uniquely.
+        'git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"',
+        # Direction-locked: merge-push probes the reverse order, so flipping
+        # the operands here breaks the pin rather than silently inverting the
+        # skip decision.
+        'git merge-base --is-ancestor "origin/$TARGET" "origin/$BRANCH"',
+        # Renaming the capture (e.g. to the zsh-read-only `status`) fails the
+        # gate at commit time instead of the patrol at runtime.
+        "ANCESTOR_RC=$?",
+        # Collective pin over the fail-closed family: deleting or rerouting
+        # both error arms breaks it. A single deleted arm stays satisfied by
+        # the other arm's copy and is witnessed instead by the per-arm
+        # literals in gastown/tests/test_mol_refinery_patrol_rebase_guard.sh.
+        "cannot evaluate rebase ancestry. STOP. Do not mutate bead state.",
+        # Echo-anchored so no prose mention can satisfy it: without this,
+        # collapsing the skip arm would pass every other pin while deleting
+        # the feature.
+        'echo "SKIP-REBASE:',
         "git rebase origin/$TARGET",
         "{{typecheck_command}}",
         "{{lint_command}}",
@@ -136,14 +163,51 @@ GASTOWN_BUILD_WORKFLOW_CONTRACTS = {
         "gc workflow delete-source <bead> --apply && gc workflow reopen-source <bead>",
         "gc bd update <bead> --set-metadata recovered=true",
         "gc session nudge <rig>/{{binding_prefix}}refinery",
-        "--label=warrant",
+        "--labels=warrant",
         "\"gc.routed_to\":\"{{binding_prefix}}dog\"",
+        # recover-orphaned-beads destroys work: it force-closes beads, force-
+        # reassigns them, and deletes worktrees. Every guard standing between a
+        # stale classification and one of those is pinned below, because the
+        # formula is prose and a guard can be dropped in an edit that still
+        # reads as a sensible recipe. Companion executed coverage lives in
+        # gastown/tests/test_mol_witness_patrol_on_main.sh, which lifts the
+        # Step 3 decision block out of this file and runs it.
+        #
+        # One shared liveness-map builder, so Step 1's classification and the
+        # pre-destruction re-check cannot drift apart, and a build failure
+        # returns non-zero rather than an empty map that reads as "all absent".
+        "build_liveness_map() {",
+        "MAP_BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+        'CYCLE_MAP_BUILT_AT="$MAP_BUILT_AT"',
+        # The pre-destruction verdict: starts false, is only promoted by a check
+        # that provably succeeded, and an unusable map skips instead of orphaning.
+        "STILL_ORPHANED=false",
+        "elif ! build_liveness_map; then",
+        # updated_at is a top-level bead field; read off .metadata it is always
+        # empty and the staleness guard silently never fires. Fractional seconds
+        # must be truncated before the compare, and the compare must be strictly
+        # older, so the boundary second falls on the skip side.
+        "jq -r '.[0].updated_at // empty'",
+        'BEAD_UPDATED_AT="${BEAD_UPDATED_AT%%.*}"',
+        'elif ! [[ "$BEAD_UPDATED_AT" < "$CYCLE_MAP_BUILT_AT" ]]; then',
+        # The rebase/squash content test. `-z` plus the quoted array are jointly
+        # load-bearing: drop either and a path with whitespace or a newline
+        # becomes a pathspec matching nothing, `git diff --quiet` exits 0, and an
+        # unmerged branch reads as merged and is force-closed.
+        'done < <(git diff --name-only -z "$MERGE_BASE" "origin/$BRANCH")',
+        'elif git diff --quiet "origin/main" "origin/$BRANCH" -- "${CHANGED[@]}"; then',
+        # All three destructive sites re-state the verdict. Step 3a is not
+        # redundant with Step 3b: it skips to Step 4, so a guard placed only at
+        # the pool reset would never cover it.
+        'if [ "$STILL_ORPHANED" = "true" ] && [ "$ON_MAIN" = "true" ]; then',
+        'if [ "$STILL_ORPHANED" = "true" ] && [ "$HANDOFF_STAGE" = "target_recorded" ] && [ -n "$BRANCH_ON_ORIGIN" ]; then',
+        'if [ "$STILL_ORPHANED" != "true" ]; then',
     ),
     "mol-deacon-patrol": (
         "Work-layer health",
         "queue-starvation-check",
         "gc agents list --json --active",
-        "gc bd create --type=task --label=warrant",
+        "gc bd create --type=task --labels=warrant",
         "\"gc.routed_to\":\"{{binding_prefix}}dog\"",
     ),
     "mol-idea-to-plan": (
@@ -155,6 +219,79 @@ GASTOWN_BUILD_WORKFLOW_CONTRACTS = {
         "gc bd dep add",
     ),
 }
+# Position pins for the polecat branch-content gate, checked in submit-and-exit's
+# parsed order. The gate only prevents a phantom handoff where it stands: after
+# the clean-state check has committed any leftovers (so it cannot fire on work
+# that merely had not been committed yet) and before the push that would create
+# the ref and let the handoff be stamped.
+POLECAT_BRANCH_CONTENT_GATE_ORDER = (
+    ("clean-state commit", 'git commit -m "chore: capture remaining work ($WORK_BEAD_ID)"'),
+    ("branch-content count", 'COMMITS_AHEAD=$(git rev-list --count "$BASE_REF..HEAD" 2>/dev/null)'),
+    ("branch push", "git push origin HEAD"),
+)
+# Required between the count and the push. `git rev-list` failing must halt on
+# its own reason instead of falling through to the push, and the halt must
+# escalate: it parks the bead open, unassigned and unrouted, which no dispatcher
+# tier serves and witness orphan recovery skips, and it pre-empts the refinery's
+# `halt_false_completion`, which does nudge mayor and witness.
+POLECAT_BRANCH_CONTENT_GATE_HALT_PATH = (
+    ("unmeasurable-count arm", "''|*[!0-9]*) HALT_REASON=content_gate_error ;;"),
+    ("empty-branch arm", "0) HALT_REASON=no_commits ;;"),
+    # The two arms above are containment checks, so they pin arm *presence*
+    # only. `case` takes the first match, so a catch-all inserted ahead of
+    # either arm routes past it with both arms still literally present -- and
+    # one placed between them kills `no_commits`, the phantom handoff this gate
+    # exists to catch, while `content_gate_error` keeps working and the gate
+    # still looks alive. Pin the dispatch as one block so arm *order* is fixed
+    # too, and keep the trailing `esac\nif` so nothing can be inserted between
+    # deciding to halt and halting.
+    (
+        "case dispatch",
+        'case "$COMMITS_AHEAD" in\n'
+        "    ''|*[!0-9]*) HALT_REASON=content_gate_error ;;\n"
+        "    0) HALT_REASON=no_commits ;;\n"
+        'esac\nif [ -n "$HALT_REASON" ]; then',
+    ),
+    # Subsumed by the dispatch pin above (which ends with these same two
+    # lines), and kept deliberately: it names the adjacency specifically when
+    # that is what drifted, instead of reporting the whole dispatch as missing.
+    ("halt guard", 'esac\nif [ -n "$HALT_REASON" ]; then'),
+    ("halt_reason stamp", '--set-metadata halt_reason="$HALT_REASON"'),
+    ("mayor and witness escalation", 'for ESCALATE_TARGET in mayor "${GC_RIG:+$GC_RIG/}{{binding_prefix}}witness"; do'),
+    ("escalation nudge", 'gc session nudge "$ESCALATE_TARGET"'),
+    # Anchored to the escalation loop's `done`, which occurs only in this gate.
+    # The checked window runs to the push, so it also spans the auto_push=false
+    # halt further down: a bare "gc runtime drain-ack" fragment is satisfied by
+    # that sibling's copy, and stayed green with this gate's own copy deleted.
+    # The same anchor pins the `exit 1` -- without it the fence ends rc=0 and
+    # the agent walks on to the push it just refused, having already released
+    # the bead.
+    ("halt exit", "    done\n    gc runtime drain-ack\n    exit 1"),
+)
+# mol-polecat-work resolves its base branch once (remote-first, local fallback,
+# else STOP) and carries the result forward. A literal-fragment pin catches
+# deletion of that block but stays green when a later step reintroduces a
+# hard-coded origin ref, or when the STOP arm is inverted into a silent
+# fallback -- which is how gas-e6r put polecats on main. These constants drive
+# a structural lint over the formula's executable shell instead.
+POLECAT_WORK_FORMULA = "mol-polecat-work"
+POLECAT_SHELL_FENCE_INFO = frozenset({"bash", "sh", "shell"})
+# Matches a bare `origin/{{base_branch}}` git ref, but not the fully-qualified
+# `refs/remotes/origin/{{base_branch}}` the resolution block is required to use.
+POLECAT_BARE_ORIGIN_BASE_REF = re.compile(r"(?<!refs/remotes/)\borigin/\{\{base_branch\}\}")
+POLECAT_BASE_REF_ANCHOR = 'if git show-ref --verify --quiet "$BASE_REMOTE"; then'
+POLECAT_BASE_REF_REQUIRED_FRAGMENTS = (
+    'BASE_REMOTE="refs/remotes/origin/{{base_branch}}"',
+    'BASE_LOCAL="refs/heads/{{base_branch}}"',
+    'gc bd update "$WORK_BEAD_ID" --set-metadata base_ref="$BASE_REF"',
+    "metadata.base_ref",
+)
+# The resolution block may only ever name one of the two probed refs. Anything
+# else is a substituted base, which is the defect class this lint exists for.
+POLECAT_BASE_REF_ALLOWED_ASSIGNMENTS = frozenset(
+    {'BASE_REF="$BASE_REMOTE"', 'BASE_REF="$BASE_LOCAL"'}
+)
+POLECAT_BASE_REF_STOP_MESSAGE = "STOP: base branch {{base_branch}} exists neither on origin nor locally."
 METHODOLOGY_FLOW_CONTRACTS = {
     "superpowers": {
         "review_expansion": "superpowers-code-review",
@@ -451,6 +588,14 @@ DEFAULT_GATE = "all"
 DEFAULT_TIMEOUT = "75m"
 DEFAULT_POLL_INTERVAL = "5s"
 BD_LIST_LIMIT = "1000"
+DEFAULT_INFERENCE_MODEL = "kimi-k2.7-code"
+INFERENCE_EXPECTED_MODEL_ENV = "GC_INFERENCE_EXPECTED_MODEL"
+INFERENCE_MODEL_ENV_KEYS = (
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+)
 INHERITED_ENV_KEYS = (
     "PATH",
     "TMPDIR",
@@ -470,8 +615,15 @@ INHERITED_ENV_KEYS = (
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
     "CLAUDE_CODE_EFFORT_LEVEL",
     "CLAUDE_CODE_SUBAGENT_MODEL",
+    INFERENCE_EXPECTED_MODEL_ENV,
     "OLLAMA_API_KEY",
 )
+# Beads Dolt configuration env (BD_DOLT_SHARED_SERVER and friends) is passed
+# through by prefix. Dropping it silently lets owner-level beads settings, for
+# example `dolt.shared-server: true` in ~/.beads/config.yaml, rebind the
+# disposable gate city to a shared Dolt server the caller tried to opt out of.
+# Other bd settings (actor, backups, ...) stay out of the disposable city.
+INHERITED_ENV_PREFIXES = ("BD_DOLT_",)
 REQUIRED_INFERENCE_ENV_KEYS = (
     "OLLAMA_API_KEY",
     "ANTHROPIC_BASE_URL",
@@ -509,6 +661,7 @@ class PackSpec:
     required_review_routes: tuple[str, ...] = ()
     required_build_routes: tuple[str, ...] = ()
     gastown: bool = False
+    smoke_agent: str | None = None
 
 
 class GateError(RuntimeError):
@@ -563,6 +716,7 @@ def make_pack_specs() -> dict[str, PackSpec]:
                 "superpowers.code-quality-reviewer",
                 "superpowers.finisher",
             ),
+            smoke_agent="superpowers.brainstorming",
         ),
         "compound-engineering": PackSpec(
             name="compound-engineering",
@@ -589,6 +743,7 @@ def make_pack_specs() -> dict[str, PackSpec]:
                 "compound-engineering.ce-code-review-synthesizer",
                 "compound-engineering.ce-compound",
             ),
+            smoke_agent="compound-engineering.ce-brainstorm",
         ),
         "gstack": PackSpec(
             name="gstack",
@@ -616,6 +771,7 @@ def make_pack_specs() -> dict[str, PackSpec]:
                 "gstack.security-officer",
                 "gstack.release-engineer",
             ),
+            smoke_agent="gstack.office-hours",
         ),
         "bmad": PackSpec(
             name="bmad",
@@ -642,6 +798,7 @@ def make_pack_specs() -> dict[str, PackSpec]:
                 "bmad.story-implementer",
                 "bmad.bmad-review-synthesizer",
             ),
+            smoke_agent="bmad.prd-writer",
         ),
         GASTOWN_PACK: PackSpec(
             name=GASTOWN_PACK,
@@ -662,13 +819,14 @@ def make_pack_specs() -> dict[str, PackSpec]:
                 "mol-shutdown-dance",
             ),
             gastown=True,
+            smoke_agent="gastown.polecat",
         ),
     }
 
 
 PACK_SPECS = make_pack_specs()
 METHODOLOGY_PACKS = ("superpowers", "compound-engineering", "gstack", "bmad")
-SUPPORTED_PACK_CHOICES = (*PACK_SPECS.keys(), "methodology", "all-supported")
+SUPPORTED_PACK_CHOICES = (*PACK_SPECS.keys(), "methodology", "model-smoke", "all-supported")
 
 
 def toml_string(value: str | Path) -> str:
@@ -677,12 +835,22 @@ def toml_string(value: str | Path) -> str:
     return f'"{escaped}"'
 
 
-def builtin_pack_sources() -> dict[str, str | Path]:
-    gascity_root = discover_gascity_source_root()
-    if gascity_root is not None:
+GASCITY_SOURCE_ROOT_ENV_KEYS = ("GASCITY_SOURCE_ROOT", "GASCITY_REPO_ROOT")
+GASCITY_REMOTE_SOURCE_ROOT = "remote"
+
+
+def builtin_pack_sources(gascity_source_root: Path | None = None) -> dict[str, str | Path]:
+    """Import sources for gc's builtin `core` and `bd` packs.
+
+    With a source root they come from that checkout, which must be the same
+    gascity revision as --gc-bin. Without one they come from the gascity git
+    remote, which is only correct when --gc-bin was built from its default
+    branch.
+    """
+    if gascity_source_root is not None:
         return {
-            "core": gascity_root / "internal" / "bootstrap" / "packs" / "core",
-            "bd": gascity_root / "examples" / "bd",
+            "core": gascity_source_root / "internal" / "bootstrap" / "packs" / "core",
+            "bd": gascity_source_root / "examples" / "bd",
         }
     return {
         "core": f"{GASCITY_REMOTE_SOURCE}//internal/bootstrap/packs/core",
@@ -690,25 +858,86 @@ def builtin_pack_sources() -> dict[str, str | Path]:
     }
 
 
-def discover_gascity_source_root() -> Path | None:
-    candidates: list[Path] = []
-    env_root = os.environ.get("GASCITY_SOURCE_ROOT") or os.environ.get("GASCITY_REPO_ROOT")
-    if env_root:
-        candidates.append(Path(env_root))
-    candidates.extend(
-        [
-            REPO_ROOT / ".gascity-ci",
-            REPO_ROOT.parent / "gascity",
-            Path("/data/projects/gascity"),
-        ]
-    )
-    for candidate in candidates:
-        root = candidate.expanduser().resolve()
-        if (
-            (root / "internal" / "bootstrap" / "packs" / "core" / "pack.toml").is_file()
-            and (root / "examples" / "bd" / "pack.toml").is_file()
-        ):
-            return root
+def resolve_gascity_source_root(value: str | Path | None) -> Path | None:
+    """Validate the explicitly selected gascity source for the builtin packs.
+
+    There is deliberately no discovery. Guessing a sibling or well-known
+    checkout silently paired a release-candidate gc with whatever branch that
+    checkout had out, and the core/bd packs it imported were not the ones the
+    binary under test ships. Returns None for the explicit `remote` opt-in.
+    """
+    if value is None or not str(value).strip():
+        raise GateError(
+            "no gascity source root: pass --gascity-source-root (or set "
+            f"{' / '.join(GASCITY_SOURCE_ROOT_ENV_KEYS)}) to the gascity checkout "
+            "--gc-bin was built from, so the builtin core and bd packs match the "
+            f"binary under test; pass {GASCITY_REMOTE_SOURCE_ROOT!r} to import them from "
+            f"{GASCITY_REMOTE_SOURCE} instead"
+        )
+    if str(value).strip() == GASCITY_REMOTE_SOURCE_ROOT:
+        return None
+    root = Path(value).expanduser().resolve()
+    missing = [
+        pack_rel / "pack.toml"
+        for pack_rel in BUILTIN_PACK_RELS
+        if not (root / pack_rel / "pack.toml").is_file()
+    ]
+    if missing:
+        raise GateError(
+            f"gascity source root {root} is not a gascity source tree; missing "
+            + ", ".join(str(rel) for rel in missing)
+        )
+    not_executable = non_executable_pack_scripts(root)
+    if not_executable:
+        raise GateError(
+            f"gascity source root {root} has pack scripts gc must exec that are not executable "
+            f"({', '.join(str(path.relative_to(root)) for path in not_executable[:5])}"
+            f"{', ...' if len(not_executable) > 5 else ''}); orders and pack commands would exit 126. "
+            "Use a git checkout of the gascity revision, not a Go module cache directory "
+            "(module zips drop file modes)"
+        )
+    return root
+
+
+BUILTIN_PACK_RELS = (
+    Path("internal") / "bootstrap" / "packs" / "core",
+    Path("examples") / "bd",
+)
+PACK_DIR_REFERENCE_RE = re.compile(r"\$(?:PACK_DIR|\{PACK_DIR\})/([A-Za-z0-9_./-]+)")
+# Helpers that pack scripts exec (not source) by path, so no pack TOML names
+# them: reaper.sh, jsonl-export.sh and dolt's _notify.sh run escalate.sh.
+EXECUTED_HELPER_SCRIPTS = (BUILTIN_PACK_RELS[0] / "assets" / "scripts" / "escalate.sh",)
+
+
+def non_executable_pack_scripts(root: Path) -> list[Path]:
+    """Scripts in the builtin core/bd packs that gc execs but lack an exec bit.
+
+    gc imports a local-path pack in place and runs `$PACK_DIR/...` order
+    scripts, `run.sh` entry points of pack commands and doctor checks, and
+    helpers other scripts exec directly, so each must be executable in the
+    source tree.
+    """
+    required: set[Path] = {root / rel for rel in EXECUTED_HELPER_SCRIPTS}
+    for pack_rel in BUILTIN_PACK_RELS:
+        builtin_root = root / pack_rel
+        for toml_path in builtin_root.rglob("*.toml"):
+            pack_dir = next(
+                (parent for parent in toml_path.parents if (parent / "pack.toml").is_file()),
+                builtin_root,
+            )
+            text = toml_path.read_text(encoding="utf-8")
+            for match in PACK_DIR_REFERENCE_RE.finditer(text):
+                required.add(pack_dir / match.group(1))
+        for kind in ("commands", "doctor"):
+            required.update(builtin_root.rglob(f"{kind}/*/run.sh"))
+    return sorted(path for path in required if path.is_file() and not os.access(path, os.X_OK))
+
+
+def default_gascity_source_root() -> str | None:
+    for key in GASCITY_SOURCE_ROOT_ENV_KEYS:
+        value = os.environ.get(key, "").strip()
+        if value:
+            return value
     return None
 
 
@@ -726,13 +955,22 @@ def expand_gate_selection(selection: str, pack_spec: PackSpec | None = None) -> 
     spec = pack_spec or PACK_SPECS[GASCITY_PACK]
     if selection == ALL_GATE:
         return list(spec.default_gates)
+    if selection == SMOKE_GATE and spec.smoke_agent:
+        return [SMOKE_GATE]
     if selection == BUILD_GATE and spec.name == GASCITY_PACK:
         return [BUILD_BASIC_GATE]
     if selection == BUILD_BASIC_GATE and spec.name != GASCITY_PACK:
         raise ValueError(f"{selection!r} is only valid for the gascity pack; use 'build' for {spec.name}")
     if selection in spec.default_gates:
         return [selection]
-    allowed = sorted({*spec.default_gates, ALL_GATE, *(("build",) if spec.build_formula else ())})
+    allowed = sorted(
+        {
+            *spec.default_gates,
+            ALL_GATE,
+            *(("build",) if spec.build_formula else ()),
+            *((SMOKE_GATE,) if spec.smoke_agent else ()),
+        }
+    )
     raise ValueError(f"invalid gate {selection!r} for pack {spec.name}; choose one of {', '.join(allowed)}")
 
 
@@ -745,6 +983,8 @@ def write_gate_workspace(
     pack_binding: str = "gc",
     pack_name: str = GASCITY_PACK,
     gastown: bool = False,
+    include_pack_at_city_scope: bool = True,
+    gascity_source_root: Path | None = None,
     city_name: str,
     rig_name: str,
 ) -> GateWorkspace:
@@ -839,9 +1079,10 @@ def write_gate_workspace(
         "schema = 2",
         "",
     ]
-    for binding, source in builtin_pack_sources().items():
+    for binding, source in builtin_pack_sources(gascity_source_root).items():
         pack_lines.extend([f"[imports.{binding}]", f"source = {toml_string(source)}", ""])
-    pack_lines.extend([f"[imports.{pack_binding}]", f"source = {toml_string(pack_source)}", ""])
+    if include_pack_at_city_scope:
+        pack_lines.extend([f"[imports.{pack_binding}]", f"source = {toml_string(pack_source)}", ""])
     (city_dir / "pack.toml").write_text("\n".join(pack_lines), encoding="utf-8")
 
     materialize_pack_check_scripts(validator_source, rig_dir)
@@ -1003,15 +1244,31 @@ def write_supervisor_config(gc_home: Path) -> None:
     )
 
 
-def build_gate_env(gc_bin: str, workspace: GateWorkspace, inherited: Mapping[str, str] | None = None) -> dict[str, str]:
+def build_gate_env(
+    gc_bin: str,
+    workspace: GateWorkspace,
+    *,
+    bd_bin: str | None = None,
+    inherited: Mapping[str, str] | None = None,
+) -> dict[str, str]:
     source = dict(inherited or os.environ)
     env = {key: source[key] for key in INHERITED_ENV_KEYS if source.get(key)}
+    env.update(
+        {
+            key: value
+            for key, value in source.items()
+            if value and key.startswith(INHERITED_ENV_PREFIXES)
+        }
+    )
     if not env.get("HOME"):
         env["HOME"] = str(Path.home())
 
     shim_dir = install_service_manager_shims(workspace.gc_home)
     gc_bin_dir = str(Path(gc_bin).resolve().parent)
-    env["PATH"] = os.pathsep.join(part for part in (str(shim_dir), gc_bin_dir, env.get("PATH", "")) if part)
+    bd_bin_dir = str(Path(bd_bin).resolve().parent) if bd_bin else ""
+    env["PATH"] = os.pathsep.join(
+        part for part in (str(shim_dir), gc_bin_dir, bd_bin_dir, env.get("PATH", "")) if part
+    )
     env["GC_ACCEPTANCE_GC_BIN"] = gc_bin
     env["GC_HOME"] = str(workspace.gc_home)
     env["XDG_RUNTIME_DIR"] = str(workspace.runtime_dir)
@@ -1022,12 +1279,74 @@ def build_gate_env(gc_bin: str, workspace: GateWorkspace, inherited: Mapping[str
         env["PYTHONPATH"] = pythonpath
     env.setdefault("CLAUDE_CODE_EFFORT_LEVEL", "auto")
     env.setdefault("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1")
+    env.setdefault(INFERENCE_EXPECTED_MODEL_ENV, DEFAULT_INFERENCE_MODEL)
+    # The gate city is disposable and must own its stores. Supervisors inherit
+    # the real HOME, so without this a user-level bd `dolt.shared-server: true`
+    # moves the city and fixture stores into ~/.beads/shared-server, where they
+    # collide with every other city on the host. A caller may still override.
+    env.setdefault("BD_DOLT_SHARED_SERVER", "false")
     write_dolt_global_config(workspace.gc_home)
 
     if env.get("OLLAMA_API_KEY"):
         env.setdefault("ANTHROPIC_BASE_URL", "https://ollama.com")
         env.setdefault("ANTHROPIC_AUTH_TOKEN", env["OLLAMA_API_KEY"])
     return env
+
+
+def beads_module_version(build_metadata: str) -> str | None:
+    """Return the embedded beads module version from `go version -m` output."""
+    for line in build_metadata.splitlines():
+        fields = line.split()
+        if len(fields) < 3 or fields[0] not in {"dep", "mod"} or fields[1] != BEADS_MODULE:
+            continue
+        return fields[2].strip("()")
+    return None
+
+
+def normalized_beads_module_version(version: str) -> str:
+    """Ignore the release archive's build-state marker, not version drift."""
+    return version.removesuffix("+dirty")
+
+
+def require_matching_beads_modules(gc_metadata: str, bd_metadata: str) -> None:
+    gc_version = beads_module_version(gc_metadata)
+    bd_version = beads_module_version(bd_metadata)
+    if (
+        not gc_version
+        or not bd_version
+        or normalized_beads_module_version(gc_version) == normalized_beads_module_version(bd_version)
+    ):
+        return
+    raise GateError(
+        "incompatible gc/bd beads modules: "
+        f"gc embeds {BEADS_MODULE}@{gc_version}, but bd embeds {BEADS_MODULE}@{bd_version}. "
+        "Use --bd-bin (or GC_BEADS_BIN) with a bd binary built from the same beads module as --gc-bin."
+    )
+
+
+def go_build_metadata(binary: str, *, env: Mapping[str, str]) -> str:
+    """Best-effort Go build-info inspection used to catch gc/bd schema skew."""
+    try:
+        result = subprocess.run(
+            ["go", "version", "-m", binary],
+            env=dict(env),
+            text=True,
+            capture_output=True,
+            timeout=parse_duration("15s"),
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout or ""
+
+
+def validate_gc_bd_compatibility(gc_bin: str, bd_bin: str, *, env: Mapping[str, str]) -> None:
+    require_matching_beads_modules(
+        go_build_metadata(gc_bin, env=env),
+        go_build_metadata(bd_bin, env=env),
+    )
 
 
 def pythonpath_with_host_modules(existing: str | None, module_names: Sequence[str]) -> str:
@@ -1129,7 +1448,27 @@ def save_json_object(path: Path, data: Mapping[str, Any]) -> None:
     path.chmod(0o600)
 
 
-def validate_inference_env(env: Mapping[str, str]) -> None:
+def configured_inference_model(env: Mapping[str, str]) -> str:
+    expected_model = str(env.get(INFERENCE_EXPECTED_MODEL_ENV) or "").strip()
+    if not expected_model:
+        raise GateError(f"missing required inference model variable: {INFERENCE_EXPECTED_MODEL_ENV}")
+    if expected_model != DEFAULT_INFERENCE_MODEL:
+        raise GateError(f"{INFERENCE_EXPECTED_MODEL_ENV} must be {DEFAULT_INFERENCE_MODEL}")
+
+    mismatches = [
+        f"{key}={str(env.get(key) or '').strip()}"
+        for key in INFERENCE_MODEL_ENV_KEYS
+        if str(env.get(key) or "").strip() != expected_model
+    ]
+    if mismatches:
+        raise GateError(
+            f"all Claude inference routes must use {INFERENCE_EXPECTED_MODEL_ENV}={expected_model}; "
+            + ", ".join(mismatches)
+        )
+    return expected_model
+
+
+def validate_inference_env(env: Mapping[str, str]) -> str:
     missing = [key for key in REQUIRED_INFERENCE_ENV_KEYS if not str(env.get(key) or "").strip()]
     if missing:
         raise GateError(
@@ -1137,6 +1476,7 @@ def validate_inference_env(env: Mapping[str, str]) -> None:
             + ", ".join(missing)
             + ". Configure the same Ollama-backed Claude variables used by Gas City's nightly Tier C workflow."
         )
+    return configured_inference_model(env)
 
 
 def run_checked(
@@ -1169,6 +1509,50 @@ def run_checked(
     raise subprocess.CalledProcessError(result.returncode, command, output=result.stdout, stderr=result.stderr)
 
 
+def claude_result_payload(output: str) -> Mapping[str, Any]:
+    for line in reversed(output.splitlines()):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and payload.get("type") == "result":
+            return payload
+    raise GateError("Claude preflight did not return a JSON result payload")
+
+
+def normalized_model_usage_name(model_name: object) -> str:
+    return re.sub(r"\[\d+[km]\]$", "", str(model_name).strip(), flags=re.IGNORECASE)
+
+
+def preflight_inference_model(expected_model: str, *, env: Mapping[str, str]) -> None:
+    try:
+        output = run_checked(
+            ["claude", "-p", "--model", expected_model, "--output-format", "json", "Reply with exactly OK."],
+            env=env,
+            timeout=parse_duration("2m"),
+        )
+    except subprocess.CalledProcessError as exc:
+        output = (exc.output or "") + (exc.stderr or "")
+        try:
+            payload = claude_result_payload(output)
+        except GateError as parse_error:
+            raise GateError(f"inference preflight command failed before reporting model usage: {exc.returncode}") from parse_error
+    else:
+        payload = claude_result_payload(output)
+    result = str(payload.get("result") or "").replace("\n", " ").strip()
+    if payload.get("is_error"):
+        raise GateError(f"inference preflight rejected model {expected_model!r}: {result or 'unknown error'}")
+
+    model_usage = payload.get("modelUsage")
+    actual_models = tuple(model_usage) if isinstance(model_usage, Mapping) else ()
+    if expected_model not in {normalized_model_usage_name(model) for model in actual_models}:
+        reported = ", ".join(str(model) for model in actual_models) or "none"
+        raise GateError(
+            f"inference preflight reported modelUsage [{reported}], expected {expected_model!r}; refusing to run a fallback model"
+        )
+    print(f"inference model preflight passed: {expected_model}", flush=True)
+
+
 def initialize_rig_git(rig_dir: Path, *, env: Mapping[str, str]) -> None:
     if (rig_dir / ".git").exists():
         return
@@ -1181,6 +1565,36 @@ def initialize_rig_git(rig_dir: Path, *, env: Mapping[str, str]) -> None:
     run_checked(["git", "config", "user.name", "Gas City Pack Gate"], cwd=rig_dir, env=env)
     run_checked(["git", "add", "."], cwd=rig_dir, env=env)
     run_checked(["git", "commit", "-m", "Add inference gate fixtures"], cwd=rig_dir, env=env)
+    initialize_rig_origin(rig_dir, env=env)
+
+
+def rig_origin_path(rig_dir: Path) -> Path:
+    return rig_dir.parent / f"{rig_dir.name}-origin.git"
+
+
+def initialize_rig_origin(rig_dir: Path, *, env: Mapping[str, str]) -> None:
+    """Give the fixture rig a local bare `origin` with a resolvable default branch.
+
+    do-work's prepare-worktree bases every implementation worktree on the
+    remote default branch (refs/remotes/origin/HEAD) and fails closed with
+    missing_remote_default_branch when there is none; it deliberately refuses
+    to fall back to local HEAD. A fixture rig with no remote therefore fails
+    every build gate before any implementation runs.
+    """
+    origin = rig_origin_path(rig_dir)
+    try:
+        run_checked(["git", "init", "--bare", "-b", "main", str(origin)], env=env)
+    except subprocess.CalledProcessError:
+        run_checked(["git", "init", "--bare", str(origin)], env=env)
+        run_checked(["git", "symbolic-ref", "HEAD", "refs/heads/main"], cwd=origin, env=env)
+    run_checked(["git", "remote", "add", "origin", str(origin)], cwd=rig_dir, env=env)
+    run_checked(["git", "push", "--quiet", "--set-upstream", "origin", "main"], cwd=rig_dir, env=env)
+    run_checked(["git", "remote", "set-head", "origin", "--auto"], cwd=rig_dir, env=env)
+
+
+def should_validate_gastown_orchestration_contract(gates: Sequence[str]) -> bool:
+    """Keep the fast RC smoke to its formula/route compatibility boundary."""
+    return SMOKE_GATE not in gates
 
 
 def initialize_city(
@@ -1226,8 +1640,9 @@ def initialize_city(
             env=env,
             timeout=parse_duration("2m"),
         )
-    if pack_spec.gastown:
+    if pack_spec.gastown and should_validate_gastown_orchestration_contract(gates):
         validate_gastown_orchestration_contract(pack_spec.source)
+        validate_polecat_base_ref_contract(pack_spec.source)
     else:
         validate_methodology_flow_contract(pack_spec)
 
@@ -1237,6 +1652,8 @@ def start_city(gc_bin: str, workspace: GateWorkspace, *, env: Mapping[str, str])
 
 
 def selected_setup_formulas(pack_spec: PackSpec, gates: Sequence[str]) -> list[str]:
+    if SMOKE_GATE in gates:
+        return list(pack_spec.setup_formulas)
     selected: list[str] = []
     if pack_spec.gastown:
         return list(pack_spec.setup_formulas)
@@ -1267,6 +1684,69 @@ def build_artifact_root(pack_spec: PackSpec) -> Path:
     if not pack_spec.build_formula:
         raise GateError(f"pack {pack_spec.name} does not define a build formula")
     return Path(".gc/inference-gate") / pack_spec.name / pack_spec.build_formula
+
+
+def smoke_title(pack_spec: PackSpec) -> str:
+    return f"{SMOKE_TITLE_PREFIX}: {pack_spec.name}"
+
+
+def smoke_target(workspace: GateWorkspace, pack_spec: PackSpec) -> str:
+    if not pack_spec.smoke_agent:
+        raise GateError(f"pack {pack_spec.name} does not define a direct model smoke agent")
+    return f"{workspace.rig_name}/{pack_spec.smoke_agent}"
+
+
+def smoke_task(pack_spec: PackSpec) -> str:
+    acknowledgment = f"PACK_SMOKE_OK: {pack_spec.name}"
+    return (
+        f"{smoke_title(pack_spec)}\n\n"
+        "This is a release-candidate compatibility smoke. Do not start a formula, modify\n"
+        f"project files, or delegate work. Respond with exactly `{acknowledgment}` in the bead\n"
+        "notes, then close this bead using the normal bead tooling. Do not create additional beads.\n"
+    )
+
+
+def launch_smoke_bead(
+    gc_bin: str,
+    workspace: GateWorkspace,
+    *,
+    env: Mapping[str, str],
+    pack_spec: PackSpec,
+) -> str:
+    target = smoke_target(workspace, pack_spec)
+    output = run_checked(
+        [
+            gc_bin,
+            "--city",
+            str(workspace.city_dir),
+            "--rig",
+            workspace.rig_name,
+            "sling",
+            target,
+            "--stdin",
+            "--force",
+            "--no-formula",
+            "--json",
+        ],
+        cwd=workspace.rig_dir,
+        env=env,
+        timeout=parse_duration("2m"),
+        log_output=True,
+        input_text=smoke_task(pack_spec),
+    )
+    bead_id = extract_sling_root_id(output)
+    if bead_id:
+        return bead_id
+    bead = wait_for_root_by_title(
+        gc_bin,
+        workspace,
+        env=env,
+        title=smoke_title(pack_spec),
+        timeout=parse_duration("30s"),
+    )
+    if bead and bead.get("id"):
+        return str(bead["id"])
+    raise GateError(f"could not determine model smoke bead from sling output:\n{output}")
 
 
 def launch_review_formula(gc_bin: str, workspace: GateWorkspace, *, env: Mapping[str, str], pack_spec: PackSpec) -> str:
@@ -1414,6 +1894,7 @@ def list_beads(gc_bin: str, workspace: GateWorkspace, *, env: Mapping[str, str])
                 workspace.rig_name,
                 "bd",
                 "list",
+                "--all",
                 "--json",
                 "--limit",
                 BD_LIST_LIMIT,
@@ -1619,6 +2100,7 @@ def show_bead(gc_bin: str, workspace: GateWorkspace, bead_id: str, *, env: Mappi
                 "show",
                 bead_id,
                 "--json",
+                "--include-comments",
             ],
             env=env,
             timeout=parse_duration("30s"),
@@ -1795,7 +2277,7 @@ def require_expected_review_signal(report_path: Path, *, allow_approved: bool = 
     text = report_path.read_text(encoding="utf-8", errors="replace")
     lower = text.lower()
     has_risk = "shell" in lower and "injection" in lower and "subprocess" in lower
-    has_blocking_status = re.search(r"(?m)^status:\s*(changes_required|blocked)\s*$", text) is not None
+    has_blocking_status = blocking_review_status(text)
     has_approved_status = re.search(r"(?m)^status:\s*approved\s*$", text) is not None
     has_resolution = any(
         marker in lower
@@ -1815,6 +2297,17 @@ def require_expected_review_signal(report_path: Path, *, allow_approved: bool = 
             "review report did not identify and handle the expected shell-injection risk. "
             f"status_ok={has_status} risk_ok={has_risk} resolution_ok={has_resolution} report={report_path}"
         )
+
+
+def blocking_review_status(text: str) -> bool:
+    if re.search(r"(?m)^status:\s*(changes_required|blocked)\s*$", text):
+        return True
+    if "cannot be approved" in text.lower():
+        return True
+    return re.search(
+        r"(?ims)^#{1,6}\s*verdict\b[\s\S]{0,300}\b(iterate|changes_required|changes required|blocked)\b",
+        text,
+    ) is not None
 
 
 def validate_build_basic_result(
@@ -1901,14 +2394,31 @@ def resolve_artifact_path(value: str, *, base: Path) -> Path:
 
 def build_result_candidates(rig_dir: Path, beads: Sequence[Mapping[str, Any]]) -> list[Path]:
     candidates: list[Path] = []
+    rig_root_from_implementation_summary = False
     for bead in beads:
         metadata = bead.get("metadata")
         if not isinstance(metadata, dict):
             continue
-        for key in ("work_dir", "gc.build.work_dir", "gc.implementation.work_dir"):
+        for key in ("work_dir", "gc.work_dir", "gc.build.work_dir", "gc.implementation.work_dir"):
             value = metadata.get(key)
             if isinstance(value, str) and value.strip():
                 candidates.append(Path(value.strip()))
+        for key in ("gc.implementation.summary_path", "gc.build.implementation_summary_path"):
+            value = metadata.get(key)
+            if not isinstance(value, str) or not value.strip():
+                continue
+            for ancestor in Path(value.strip()).parents:
+                if ancestor.name == ".gc":
+                    implementation_root = ancestor.parent
+                    candidates.append(implementation_root)
+                    try:
+                        rig_root_from_implementation_summary = (
+                            rig_root_from_implementation_summary
+                            or implementation_root.resolve() == rig_dir.resolve()
+                        )
+                    except OSError:
+                        pass
+                    break
     worktrees_dir = rig_dir / "worktrees"
     if worktrees_dir.is_dir():
         candidates.extend(sorted(path for path in worktrees_dir.iterdir() if path.is_dir()))
@@ -1920,7 +2430,7 @@ def build_result_candidates(rig_dir: Path, beads: Sequence[Mapping[str, Any]]) -
             resolved = candidate.resolve()
         except OSError:
             continue
-        if resolved == rig_dir.resolve():
+        if resolved == rig_dir.resolve() and not rig_root_from_implementation_summary:
             continue
         if resolved in seen or not resolved.is_dir():
             continue
@@ -2175,7 +2685,7 @@ def create_gastown_review_assignment(gc_bin: str, workspace: GateWorkspace, *, e
     bead_id = find_first_key(extract_json_payload(output), ("id", "bead_id"))
     if bead_id:
         return bead_id
-    raise GateError(f"could not determine Gastown review assignment bead id from bd create output:\n{output}")
+    raise GateError(f"could not determine Gastown review assignment bead id from gc bd create output:\n{output}")
 
 
 def launch_gastown_review_leg(
@@ -2561,6 +3071,239 @@ def validate_gastown_orchestration_contract(pack_source: Path) -> None:
                 missing.append(f"{formula_name}: missing contract fragment {fragment!r}")
     if missing:
         raise GateError("Gastown orchestration contract drifted:\n" + "\n".join(f"- {item}" for item in missing))
+    validate_polecat_branch_content_gate(pack_source)
+
+
+def validate_polecat_branch_content_gate(pack_source: Path) -> None:
+    """Pin the branch-content gate's position and its halt path, not just its text.
+
+    The fragment pins above are substring containment over the whole file, so
+    they catch deletion and nothing else: a gate moved below `git push origin
+    HEAD`, or a halt path that quietly drops its escalation, keeps every pinned
+    fragment while gating nothing. Parse the step instead and require that the
+    commit count is taken after the clean-state commit and before the push, and
+    that everything between the count and the push still fails closed on an
+    unmeasurable branch and still escalates the halt.
+    """
+    problems: list[str] = []
+    path = pack_source / "formulas" / "mol-polecat-work.toml"
+    if not path.is_file():
+        raise GateError(f"mol-polecat-work: missing formula file {path}")
+    try:
+        payload = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise GateError(f"mol-polecat-work: invalid TOML: {exc}") from exc
+
+    steps = [step for step in list_dicts(payload.get("steps")) if step.get("id") == "submit-and-exit"]
+    if len(steps) != 1:
+        raise GateError(f"mol-polecat-work: expected exactly one submit-and-exit step, found {len(steps)}")
+    description = str(steps[0].get("description") or "")
+
+    ordered = [(label, description.find(fragment)) for label, fragment in POLECAT_BRANCH_CONTENT_GATE_ORDER]
+    for label, index in ordered:
+        if index < 0:
+            problems.append(f"submit-and-exit is missing the {label}")
+    if not problems:
+        indexes = [index for _, index in ordered]
+        if indexes != sorted(indexes):
+            found = " then ".join(label for label, _ in sorted(ordered, key=lambda item: item[1]))
+            problems.append(
+                "the branch-content gate must run after the clean-state commit and before the push; found "
+                + found
+            )
+        else:
+            gate_block = description[indexes[1] : indexes[2]]
+            for label, fragment in POLECAT_BRANCH_CONTENT_GATE_HALT_PATH:
+                if fragment not in gate_block:
+                    problems.append(f"the branch-content gate halt path is missing the {label}")
+    if problems:
+        raise GateError(
+            "Gastown polecat branch-content gate drifted:\n" + "\n".join(f"- {item}" for item in problems)
+        )
+
+
+def strip_shell_comment(line: str) -> str:
+    """Drop a trailing `#` comment, ignoring `#` inside single or double quotes."""
+    in_single = False
+    in_double = False
+    for index, char in enumerate(line):
+        if char == "'" and not in_double:
+            in_single = not in_single
+        elif char == '"' and not in_single:
+            in_double = not in_double
+        elif char == "#" and not in_single and not in_double:
+            if index == 0 or line[index - 1].isspace():
+                return line[:index]
+    return line
+
+
+def formula_shell_lines(text: str) -> tuple[list[tuple[int, str]], list[str]]:
+    """Return (line number, comment-stripped source) for fenced shell lines.
+
+    Formula descriptions are markdown; only fenced ```bash blocks are executed.
+    Prose and comments may still discuss a ref the shell must not use, so they
+    are excluded here rather than being matched by the caller's patterns.
+    """
+    lines: list[tuple[int, str]] = []
+    problems: list[str] = []
+    fence_info: str | None = None
+    fence_line = 0
+    for lineno, raw in enumerate(text.splitlines(), start=1):
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            if fence_info is None:
+                fence_info = stripped[3:].strip().lower() or "text"
+                fence_line = lineno
+            else:
+                fence_info = None
+            continue
+        if fence_info in POLECAT_SHELL_FENCE_INFO and stripped:
+            code = strip_shell_comment(raw).strip()
+            if code:
+                lines.append((lineno, code))
+    if fence_info is not None:
+        # An unbalanced fence desynchronises every downstream judgement about
+        # what is executable, so fail closed instead of linting half the file.
+        problems.append(f"unterminated ``` fence opened at line {fence_line}")
+    return lines, problems
+
+
+def polecat_base_ref_block(shell_lines: Sequence[tuple[int, str]]) -> tuple[list[str], list[str]]:
+    """Extract the base-ref resolution `if ... fi`, failing closed on both anchors."""
+    start = next(
+        (index for index, (_, code) in enumerate(shell_lines) if code == POLECAT_BASE_REF_ANCHOR),
+        None,
+    )
+    if start is None:
+        return [], [f"missing base-ref resolution block anchored by {POLECAT_BASE_REF_ANCHOR!r}"]
+    depth = 0
+    block: list[str] = []
+    for _, code in shell_lines[start:]:
+        block.append(code)
+        if code.startswith("if ") or code == "if":
+            depth += 1
+        elif code == "fi" or code.startswith("fi "):
+            depth -= 1
+            if depth == 0:
+                return block, []
+    return [], [f"base-ref resolution block anchored by {POLECAT_BASE_REF_ANCHOR!r} has no matching 'fi'"]
+
+
+def polecat_bare_origin_problems(shell_lines: Sequence[tuple[int, str]]) -> list[str]:
+    """Report executable shell lines that name the bare origin base ref."""
+    problems: list[str] = []
+    for lineno, code in shell_lines:
+        if POLECAT_BARE_ORIGIN_BASE_REF.search(code):
+            problems.append(
+                f"line {lineno}: executable shell uses a bare origin/{{{{base_branch}}}} ref "
+                f"({code!r}); use the resolved base ref instead"
+            )
+    return problems
+
+
+def polecat_base_ref_fragment_problems(text: str) -> list[str]:
+    """Report required resolution and carrier fragments the formula has dropped."""
+    problems: list[str] = []
+    for fragment in POLECAT_BASE_REF_REQUIRED_FRAGMENTS:
+        if fragment not in text:
+            problems.append(f"missing base-ref resolution fragment {fragment!r}")
+    return problems
+
+
+def polecat_base_ref_assignment_problems(block: Sequence[str]) -> list[str]:
+    """Report a resolution block that assigns no base, or a substituted one."""
+    problems: list[str] = []
+    assignments = [code for code in block if code.startswith("BASE_REF=")]
+    if not assignments:
+        problems.append("base-ref resolution block assigns no BASE_REF")
+    for assignment in assignments:
+        if assignment not in POLECAT_BASE_REF_ALLOWED_ASSIGNMENTS:
+            problems.append(
+                f"base-ref resolution block assigns a substituted base: {assignment!r} "
+                f"(allowed: {sorted(POLECAT_BASE_REF_ALLOWED_ASSIGNMENTS)})"
+            )
+    return problems
+
+
+def polecat_base_ref_stop_arm(block: Sequence[str]) -> list[str] | None:
+    """Return the resolution block's `else` arm, or None when it has none.
+
+    Depth tracking is what keeps a nested `if ... fi` inside the arm from
+    ending it: such a nesting's own `fi` returns to depth 1 and is therefore
+    kept, so the STOP assertions below see the whole arm rather than a prefix.
+    """
+    depth = 0
+    stop_arm: list[str] | None = None
+    for code in block:
+        if code.startswith("if ") or code == "if":
+            depth += 1
+        elif code == "fi" or code.startswith("fi "):
+            depth -= 1
+        elif code == "else" and depth == 1:
+            stop_arm = []
+            continue
+        if stop_arm is not None and depth == 1:
+            stop_arm.append(code)
+    return stop_arm
+
+
+def polecat_base_ref_stop_arm_problems(stop_arm: Sequence[str]) -> list[str]:
+    """Report a STOP arm that stopped reporting, or stopped exiting non-zero."""
+    problems: list[str] = []
+    if not any(POLECAT_BASE_REF_STOP_MESSAGE in code for code in stop_arm):
+        problems.append(f"base-ref STOP arm no longer reports {POLECAT_BASE_REF_STOP_MESSAGE!r}")
+    if not any(code.startswith("exit ") and code != "exit 0" for code in stop_arm):
+        problems.append("base-ref STOP arm must exit non-zero rather than fall through to a default base")
+    return problems
+
+
+def polecat_base_ref_problems(text: str) -> list[str]:
+    """Collect every base-ref contract problem in one formula's shell.
+
+    Each per-class helper above owns one decision. This function only sequences
+    them and fails closed at the two points where a later class cannot be
+    judged at all: an unbalanced fence (no trustworthy shell to read) and a
+    resolution block that cannot be located (nothing to assert about).
+    """
+    shell_lines, problems = formula_shell_lines(text)
+    if problems:
+        return problems
+
+    problems.extend(polecat_bare_origin_problems(shell_lines))
+    problems.extend(polecat_base_ref_fragment_problems(text))
+
+    block, block_problems = polecat_base_ref_block(shell_lines)
+    problems.extend(block_problems)
+    if not block:
+        return problems
+
+    problems.extend(polecat_base_ref_assignment_problems(block))
+
+    stop_arm = polecat_base_ref_stop_arm(block)
+    if stop_arm is None:
+        problems.append("base-ref resolution block has no else arm; an unresolvable base must STOP")
+        return problems
+    problems.extend(polecat_base_ref_stop_arm_problems(stop_arm))
+    return problems
+
+
+def validate_polecat_base_ref_contract(pack_source: Path) -> None:
+    """Pin mol-polecat-work's base-ref resolution against reintroduced origin refs.
+
+    Complements the literal-fragment contract above: this reads the formula's
+    executable shell structurally, so a hard-coded ref added to a later step,
+    a substituted base, or a neutralised STOP arm fails the gate even while
+    every pinned fragment is still present.
+    """
+    path = pack_source / "formulas" / f"{POLECAT_WORK_FORMULA}.toml"
+    if not path.is_file():
+        raise GateError(f"{POLECAT_WORK_FORMULA}: missing formula file {path}")
+    problems = polecat_base_ref_problems(path.read_text(encoding="utf-8", errors="replace"))
+    if problems:
+        raise GateError(
+            f"{POLECAT_WORK_FORMULA} base-ref resolution contract drifted:\n"
+            + "\n".join(f"- {item}" for item in problems)
+        )
 
 
 def stop_city(gc_bin: str, workspace: GateWorkspace, *, env: Mapping[str, str]) -> None:
@@ -2572,6 +3315,39 @@ def stop_city(gc_bin: str, workspace: GateWorkspace, *, env: Mapping[str, str]) 
             run_checked(command, env=env, timeout=parse_duration("1m"))
         except Exception as exc:  # pragma: no cover - cleanup best effort
             print(f"cleanup command failed ({shlex.join(command)}): {exc}", file=sys.stderr)
+
+
+def require_smoke_ack(bead: Mapping[str, Any], pack_spec: PackSpec) -> None:
+    expected = f"PACK_SMOKE_OK: {pack_spec.name}"
+    if expected not in {line.strip() for line in bead_notes_text(bead).splitlines()}:
+        raise GateError(f"{pack_spec.name} model smoke closed without required acknowledgment {expected!r}")
+
+
+def run_smoke_gate(
+    gc_bin: str,
+    workspace: GateWorkspace,
+    *,
+    env: Mapping[str, str],
+    pack_spec: PackSpec,
+    timeout: float,
+    poll_interval: float,
+) -> None:
+    bead_id = launch_smoke_bead(gc_bin, workspace, env=env, pack_spec=pack_spec)
+    closed = wait_for_bead_closed(
+        gc_bin,
+        workspace,
+        bead_id,
+        env=env,
+        timeout=timeout,
+        poll_interval=poll_interval,
+    )
+    require_smoke_ack(closed, pack_spec)
+    target = smoke_target(workspace, pack_spec)
+    validate_required_routes(
+        [closed],
+        [target],
+        context=f"{pack_spec.name} model smoke",
+    )
 
 
 def run_review_gate(
@@ -2619,14 +3395,15 @@ def run_build_gate(
         poll_interval=poll_interval,
     )
     validate_build_basic_artifacts(root_bead, rig_dir=workspace.rig_dir, env=env, validator_source=pack_spec.validator_source)
+    workflow_beads = list_beads(gc_bin, workspace, env=env)
     validate_build_basic_result(
         workspace.rig_dir,
-        list_beads(gc_bin, workspace, env=env),
+        [root_bead, *workflow_beads],
         env=env,
         timeout=parse_duration("2m"),
     )
     validate_required_routes(
-        list_beads(gc_bin, workspace, env=env),
+        workflow_beads,
         pack_spec.required_build_routes,
         context=f"{pack_spec.name} build gate",
     )
@@ -2668,6 +3445,8 @@ def expand_pack_selection(selection: str) -> list[str]:
         return list(PACK_SPECS.keys())
     if selection == "methodology":
         return list(METHODOLOGY_PACKS)
+    if selection == "model-smoke":
+        return list(MODEL_SMOKE_PACKS)
     if selection in PACK_SPECS:
         return [selection]
     raise GateError(f"unknown pack selection: {selection}")
@@ -2688,8 +3467,15 @@ def resolve_pack_spec(args: argparse.Namespace, pack_name: str) -> PackSpec:
 
 def run_gate(args: argparse.Namespace, *, pack_name: str | None = None, workdir: Path | None = None) -> None:
     gc_bin = resolve_binary(args.gc_bin)
+    bd_bin = resolve_binary(args.bd_bin)
     selected_pack = pack_name or args.pack
     pack_spec = resolve_pack_spec(args, selected_pack)
+    gascity_source_root = resolve_gascity_source_root(args.gascity_source_root)
+    print(
+        "builtin core/bd packs from: "
+        + (str(gascity_source_root) if gascity_source_root else GASCITY_REMOTE_SOURCE),
+        flush=True,
+    )
 
     gates = expand_gate_selection(args.gate, pack_spec)
     timeout = parse_duration(args.timeout)
@@ -2713,14 +3499,18 @@ def run_gate(args: argparse.Namespace, *, pack_name: str | None = None, workdir:
         pack_binding=pack_spec.binding,
         pack_name=pack_spec.name,
         gastown=pack_spec.gastown,
+        include_pack_at_city_scope=not (pack_spec.gastown and SMOKE_GATE in gates),
+        gascity_source_root=gascity_source_root,
         city_name=city_name_for_pack(args, pack_spec),
         rig_name=args.rig_name,
     )
-    env = build_gate_env(gc_bin, workspace)
+    env = build_gate_env(gc_bin, workspace, bd_bin=bd_bin)
     should_stop = False
     try:
+        validate_gc_bd_compatibility(gc_bin, bd_bin, env=env)
         if not args.skip_inference_env_check and not args.setup_only:
-            validate_inference_env(env)
+            expected_model = validate_inference_env(env)
+            preflight_inference_model(expected_model, env=env)
         should_stop = True
         initialize_city(gc_bin, workspace, pack_spec=pack_spec, gates=gates, env=env)
         if args.setup_only:
@@ -2729,7 +3519,16 @@ def run_gate(args: argparse.Namespace, *, pack_name: str | None = None, workdir:
         start_city(gc_bin, workspace, env=env)
         for gate in gates:
             print(f"running {pack_spec.name} pack inference gate: {gate}", flush=True)
-            if gate == REVIEW_GATE:
+            if gate == SMOKE_GATE:
+                run_smoke_gate(
+                    gc_bin,
+                    workspace,
+                    env=env,
+                    pack_spec=pack_spec,
+                    timeout=timeout,
+                    poll_interval=poll_interval,
+                )
+            elif gate == REVIEW_GATE:
                 run_review_gate(
                     gc_bin,
                     workspace,
@@ -2790,6 +3589,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gc-bin", default=os.environ.get("GC_BIN", "gc"), help="gc binary to exercise")
     parser.add_argument(
+        "--bd-bin",
+        default=os.environ.get("GC_BEADS_BIN", "bd"),
+        help="bd binary that must be schema-compatible with --gc-bin",
+    )
+    parser.add_argument(
         "--pack",
         choices=SUPPORTED_PACK_CHOICES,
         default=GASCITY_PACK,
@@ -2806,13 +3610,22 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="override local pack root that provides build artifact validators and schemas",
     )
+    parser.add_argument(
+        "--gascity-source-root",
+        default=default_gascity_source_root(),
+        help=(
+            "required: gascity git checkout matching --gc-bin (not a Go module cache dir), used for the "
+            "builtin core and bd pack imports; defaults to $GASCITY_SOURCE_ROOT or $GASCITY_REPO_ROOT; "
+            f"{GASCITY_REMOTE_SOURCE_ROOT!r} imports them from the gascity git remote"
+        ),
+    )
     parser.add_argument("--workdir", type=Path, help="directory for the disposable gate city and rig")
     parser.add_argument("--keep-workdir", action="store_true", help="keep the generated workdir after success")
     parser.add_argument("--city-name", default="gascity-pack-inference-gate", help="disposable city name")
     parser.add_argument("--rig-name", default="fixture", help="disposable rig name")
     parser.add_argument(
         "--gate",
-        choices=(ALL_GATE, REVIEW_GATE, BUILD_GATE, BUILD_BASIC_GATE, GASTOWN_ORCHESTRATION_GATE),
+        choices=(ALL_GATE, REVIEW_GATE, BUILD_GATE, BUILD_BASIC_GATE, GASTOWN_ORCHESTRATION_GATE, SMOKE_GATE),
         default=DEFAULT_GATE,
         help="which inference gate to run",
     )

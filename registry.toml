@@ -212,7 +212,7 @@ schema = 1
 [[pack]]
   name = "pr-pipeline"
   description = "Author-side PR discipline as a pack: planning, blast-radius mapping, outgoing-PR scorecard review, and pre-push gating (mol-pr-start / mol-pr-blast-radius / mol-pr-review / mol-pr-ship)."
-  source = "https://github.com/gastownhall/gascity-packs//pr-pipeline"
+  source = "https://github.com/gastownhall/gascity-packs/tree/main/pr-pipeline"
   source_kind = "git"
 
   [[pack.release]]
@@ -225,7 +225,7 @@ schema = 1
 [[pack]]
   name = "contributing"
   description = "The external-contributor lifecycle for gastownhall/gascity — write a good issue, find priority work, plan a PR, map its blast radius, and self-review against the codebase audit. Each step produces an artifact you act on; the pack stops before pushing — opening the PR is your call. Self-contained: gas-city's actual standards (the B-rule adoption-review audit, blast-radius dimensions, test tiers) are baked into the skills; no imports."
-  source = "https://github.com/gastownhall/gascity-packs//contributing"
+  source = "https://github.com/gastownhall/gascity-packs/tree/main/contributing"
   source_kind = "git"
 
   [[pack.release]]
@@ -261,3 +261,96 @@ schema = 1
     commit = "a1490ecf90238f3af52ab2e7f24e30b5b62cbfc2"
     hash = "sha256:c06f30e61407994cef7e16aafecbc71afbbc9f8cdfd0d506146fdf95837333cf"
     description = "Initial oversight-rig release: rig-scoped project-lead + deterministic escalation machinery."
+
+[[pack]]
+  name = "bmad"
+  description = "BMAD Method delivery process (PRD, architecture, epics and stories, readiness, adversarial review) as a Gas City build factory."
+  source = "https://github.com/gastownhall/gascity-packs/tree/main/bmad"
+  source_kind = "git"
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "main"
+    commit = "636fdfaaf54195b293e8e56d5e9c30e4b8d5a9ef"
+    hash = "sha256:cb81d9e35fe4ca2263922e901eac34aec6183d92832aa0695e43ff038462087d"
+    description = "First registry release of the BMAD build factory."
+
+  [[pack.release]]
+    version = "0.1.1"
+    ref = "main"
+    commit = "390cac1a8a0478b6dfde603dae00a43ed9748d13"
+    hash = "sha256:f59ebe28181a208086a7018d1c6df4396894c22be9bd272e025312feb7879a0a"
+    description = "Implementer commits in the source-anchor worktree (only real changes); code review records a validated review report on the workflow root; apply-findings keeps artifacts schema-valid; picks up newer gascity pack commits (do-work now needs an origin remote)."
+
+[[pack]]
+  name = "compound-engineering"
+  description = "Every Inc.'s Compound Engineering methodology as a Gas City build factory, with the widest reviewer-persona fanout in the catalog."
+  source = "https://github.com/gastownhall/gascity-packs/tree/main/compound-engineering"
+  source_kind = "git"
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "main"
+    commit = "636fdfaaf54195b293e8e56d5e9c30e4b8d5a9ef"
+    hash = "sha256:7981abfa28021a99accacc097d32a04e2d28c344f09ebf17e3f0ca51768140af"
+    description = "First registry release of the Compound Engineering build factory."
+
+  [[pack.release]]
+    version = "0.1.1"
+    ref = "main"
+    commit = "390cac1a8a0478b6dfde603dae00a43ed9748d13"
+    hash = "sha256:12bf7fbd2ab86d0fc2a866ac7562bc957908eae408c779e539af3c3d14ede4b9"
+    description = "Implementer commits in the source-anchor worktree; code review and compound resolution record validated report paths on the workflow root; apply-findings keeps artifacts schema-valid and the plan is re-validated after plan review; picks up newer gascity pack commits (do-work now needs an origin remote)."
+
+[[pack]]
+  name = "gstack"
+  description = "garrytan/gstack founder sprint (office hours, autoplan, QA, security, release readiness) as a Gas City build factory."
+  source = "https://github.com/gastownhall/gascity-packs/tree/main/gstack"
+  source_kind = "git"
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "main"
+    commit = "636fdfaaf54195b293e8e56d5e9c30e4b8d5a9ef"
+    hash = "sha256:4f180f1327933239a29918e661c0cd3a54ff3de84ab981324665e776de2eff8f"
+    description = "First registry release of the gstack build factory."
+
+  [[pack.release]]
+    version = "0.1.1"
+    ref = "main"
+    commit = "390cac1a8a0478b6dfde603dae00a43ed9748d13"
+    hash = "sha256:ed74c2b288875a5f563d2b0d2a5afffab048a4136b237fb94d6e7baf60031cba"
+    description = "Implementer commits in the source-anchor worktree; code review records a validated review report on the workflow root; apply-findings keeps artifacts schema-valid and the plan is re-validated after plan review; picks up newer gascity pack commits (do-work now needs an origin remote)."
+
+[[pack]]
+  name = "superpowers"
+  description = "obra/superpowers TDD-first skill library as a Gas City build factory."
+  source = "https://github.com/gastownhall/gascity-packs/tree/main/superpowers"
+  source_kind = "git"
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "main"
+    commit = "636fdfaaf54195b293e8e56d5e9c30e4b8d5a9ef"
+    hash = "sha256:ba0428bf51627bf465a693f2426cf6be0cef70ae81b043fce3ce6761a4772290"
+    description = "First registry release of the superpowers build factory."
+
+  [[pack.release]]
+    version = "0.1.1"
+    ref = "main"
+    commit = "390cac1a8a0478b6dfde603dae00a43ed9748d13"
+    hash = "sha256:4358803ef87a4209a90f0c000fdcc58d7f92d04a9db471474d0b0ce2f0054223"
+    description = "Requirements spec carries requirements.v1 front matter and repairs from validator errors; code review records a validated review report on the workflow root; plan re-validated after plan review; vendors systematic-debugging; picks up newer gascity pack commits (do-work now needs an origin remote)."
+
+[[pack]]
+  name = "runtime-cloudflare"
+  description = "The Cloudflare session runtime, shipped as a pack so it versions independently of the gc binary. Declares [runtimes.cloudflare] backed by the gc-runtime-cloudflare RPP v0 provider, replacing the deleted gascity builtin."
+  source = "https://github.com/gastownhall/gascity-packs/tree/main/runtime-cloudflare"
+  source_kind = "git"
+
+  [[pack.release]]
+    version = "0.1.0"
+    ref = "main"
+    commit = "ffcb02933f878c7c9ac2df470338c28a5e5d829d"
+    hash = "sha256:432a1f917c400a3497f1be7466e0297d108b5e2174eed4d7ae4a87579e45d2d1"
+    description = "First registry release of the Cloudflare session runtime as an RPP v0 pack."

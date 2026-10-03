@@ -150,6 +150,13 @@ Browse the tree for the current set; each pack has its own README.
 - [cass](./cass) adds a shared `cass-search` prompt fragment and Claude skill
   overlay for searching past coding-agent sessions.
 
+### Oversight packs
+
+- [oversight-rig](./oversight-rig) adds one rig-scoped project lead per rig and
+  includes an optional `city-executive-status` skill for maintaining a
+  shareable, Obsidian-compatible portfolio brief. Its status schedules are
+  examples only and remain inactive until configured by the consuming city.
+
 ### Build methodology packs
 
 Raw-framework subagents become Gas City fanouts. The vendored methodology text
@@ -249,6 +256,14 @@ GC=/path/to/gc make registry-validate
 ```
 
 ### Publishing a pack to the registry
+
+> **`registry.toml` describes packs that live in this repository only.** Its
+> `source` must be a `https://github.com/gastownhall/gascity-packs/tree/<ref>/<dir>`
+> URL (or the bare repository URL for a root pack) — anything else is rejected,
+> because the content hash can only be verified against this repository's own
+> history. If your pack lives in **your** repo, you do not need a PR here: publish
+> it directly to the Gas City registry under a scoped `<owner>/<pack>` name and you
+> keep ownership of it.
 
 `registry.toml` is the public catalog. Each `[[pack.release]]` carries a
 content hash that `validate_registry.py` enforces against the pack tree at the
